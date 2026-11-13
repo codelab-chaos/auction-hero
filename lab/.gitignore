@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.cache/
+
+# Generated from the game: scan data and Blizzard's icon art. Rebuild with
+# `npm run refresh`.
+public/data/
+public/icons/
