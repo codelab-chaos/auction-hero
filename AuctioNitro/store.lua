@@ -51,8 +51,16 @@ function Store:GetSaveState()
 	return "never"
 end
 
+-- Saved snapshots this build could not load (an unknown source or schema).
+-- They are written back untouched, so a build that does not understand a
+-- snapshot can never be the reason it disappears.
+local unreadable = {}
+
 local function Persist()
 	local saved = {}
+	for id, snapshot in pairs(unreadable) do
+		saved[id] = snapshot
+	end
 	for id, snapshot in pairs(snapshots) do
 		-- A snapshot already on disk stays whole even if the switch was turned off since.
 		if ns.IsEnabled("persistRows") or not inMemoryOnly[id] then
@@ -83,17 +91,8 @@ function Store:SetActive(sourceId)
 	end
 end
 
--- Drops the active snapshot and falls back to another cached one, if any.
-function Store:Clear()
-	if not activeId then
-		return
-	end
-	snapshots[activeId] = nil
-	inMemoryOnly[activeId] = nil
-	activeId = Newest()
-	Persist()
-	Bus:Fire("SNAPSHOT_CHANGED")
-end
+-- There is deliberately no way to clear a snapshot. A new scan replaces the
+-- last one of its kind, and that is the only way one goes away.
 
 local function IsUsable(saved)
 	return type(saved) == "table" and saved.meta and saved.rows and ns.Schemas[saved.meta.schema] ~= nil
@@ -114,6 +113,8 @@ Bus:On("INIT", function()
 	for id, saved in pairs(db.snapshots) do
 		if IsUsable(saved) and ns.SourceById[id] then
 			snapshots[id] = saved
+		else
+			unreadable[id] = saved
 		end
 	end
 	activeId = snapshots[db.active] and db.active or Newest()

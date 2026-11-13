@@ -38,10 +38,44 @@ function History:Usual(item)
 	return item.median
 end
 
-local function Update(record, median, low, day)
+-- How many daily points an item keeps: the player's choice, else the default.
+function History:GraphDays()
+	return ns.db.graphDays or ns.HistoryRule.graphPoints
+end
+
+-- Sets how many daily points to keep, within the allowed range. Records are
+-- trimmed to a shorter length as scans next touch them, not all at once.
+function History:SetGraphDays(days)
+	local rule = ns.HistoryRule
+	ns.db.graphDays = math.max(rule.graphPointsMin, math.min(rule.graphPointsMax, math.floor(days)))
+	return ns.db.graphDays
+end
+
+-- Adds today's point to a record's graph string, replacing today's earlier
+-- point if there is one, and dropping the oldest past the limit.
+local function AddPoint(packed, day, median, low, units)
+	local point = day .. ":" .. median .. ":" .. low .. ":" .. units
+	if not packed or packed == "" then
+		return point
+	end
+	local points = {}
+	for existing in packed:gmatch("[^;]+") do
+		points[#points + 1] = existing
+	end
+	local lastDay = tonumber(points[#points]:match("^(%d+)"))
+	if lastDay == day then
+		points[#points] = point
+	else
+		points[#points + 1] = point
+	end
+	local first = math.max(1, #points - History:GraphDays() + 1)
+	return table.concat(points, ";", first)
+end
+
+local function Update(record, median, low, units, day)
 	local rule = ns.HistoryRule
 	if not record then
-		return { u = median, m = median, lo = low, hi = median, n = 1, d = 1, f = day, l = day }
+		return { u = median, m = median, lo = low, hi = median, n = 1, d = 1, f = day, l = day, h = AddPoint(nil, day, median, low, units) }
 	end
 	record.u = math.floor(record.u + (median - record.u) * rule.smoothing + 0.5)
 	record.m = median
@@ -52,7 +86,55 @@ local function Update(record, median, low, day)
 		record.d = record.d + 1
 		record.l = day
 	end
+	record.h = AddPoint(record.h, day, median, low, units)
 	return record
+end
+
+-- An item's graph points, oldest first: { day, median, low, units }.
+-- day is days since 1970, so day * 86400 is a time the game can format.
+function History:Points(key)
+	local record = self:Get(key)
+	local points = {}
+	if record and record.h then
+		for day, median, low, units in record.h:gmatch("(%d+):(%d+):(%d+):(%d+)") do
+			points[#points + 1] = { day = tonumber(day), median = tonumber(median), low = tonumber(low), units = tonumber(units) }
+		end
+	end
+	return points
+end
+
+-- The points inside the last `days` days, counted back from the newest point.
+function History:InRange(points, days)
+	local newest = points[#points]
+	local kept = {}
+	if newest then
+		for _, point in ipairs(points) do
+			if point.day > newest.day - days then
+				kept[#kept + 1] = point
+			end
+		end
+	end
+	return kept
+end
+
+-- The headline numbers for a run of points, or nil when there are none:
+--   usual (the newest median), lowest, highest, days,
+--   change: percent the usual price moved from the first point to the last
+function History:Summarize(points)
+	local first, last = points[1], points[#points]
+	if not first then
+		return nil
+	end
+	local lowest, highest = first.low, first.median
+	for _, point in ipairs(points) do
+		lowest = math.min(lowest, point.low)
+		highest = math.max(highest, point.median)
+	end
+	local change
+	if #points > 1 and first.median > 0 then
+		change = math.floor((last.median - first.median) / first.median * 100 + 0.5)
+	end
+	return { usual = last.median, lowest = lowest, highest = highest, change = change, days = #points }
 end
 
 -- Folds one scan's market into the records. Runs inside a job.
@@ -68,7 +150,7 @@ function History:Fold(market)
 
 	for count, item in ipairs(market.items) do
 		if item.median then
-			records[item.key] = Update(records[item.key], item.median, item.min, day)
+			records[item.key] = Update(records[item.key], item.median, item.min, item.units, day)
 		end
 		if count % 200 == 0 then
 			ns.Breathe()

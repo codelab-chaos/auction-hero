@@ -139,6 +139,11 @@ end
 local function TilesFor(entry)
 	local specs = {}
 	local function Add(key, value, on, spec)
+		-- An icon tile with no icon is a blank square that says nothing. That
+		-- happens before the first scan, when there are no items to picture it.
+		if not spec.swatch and not spec.icon then
+			return
+		end
 		spec.on = on
 		spec.onClick = function()
 			Facets.Toggle(state.selection, key, value, not on)

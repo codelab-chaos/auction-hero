@@ -1,6 +1,6 @@
 # The in-game window
 
-The addon's window is the Nitro Lab concept (`lab/src/ui/concept`) rebuilt for the game: same 900 by 600 size, same three tabs, same layout, colors and wording. Open it with `/an`, the AuctioNitro button on the auction house, or the minimap addon menu. It also opens with the auction house.
+The addon's window is the Nitro Lab concept (`lab/src/ui/concept`) rebuilt for the game: same 900 by 600 size, same tabs, same layout, colors and wording. Open it with `/an`, the AuctioNitro button on the auction house, or the minimap addon menu. It also opens with the auction house.
 
 It is drawn from plain textures and text, not the game's stock button art, so it takes its whole look from one theme table.
 
@@ -10,11 +10,18 @@ It is drawn from plain textures and text, not the game's stock button art, so it
 - **Buy:** a left rail of quick toggles (quality swatches, one-hand, two-hand, shield, the eight armor slots), collapsible category checkboxes, search with "I can use", "I can afford" and "Deals", a sortable item list, and an order panel with quantity, total, the five-pip deal meter and what you save.
 - **Sell:** your real bags as a grid (an item spread over several stacks is one choice), sale type, price in gold, silver and copper, the five price rules, price confidence with its facts line, how many to post, duration, and the competition ladder with your auctions slotted in.
 - **Resell:** discount and minimum profit settings, "I can afford" and "Top deals", the list of leads, and the Buy, Relist, Keep plan.
+- **History:** pick an item and see its usual and lowest price as lines and the units for sale as bars, over 7, 14 or 30 days, with a hover readout. It needs two days of scans before it draws.
 - **Debug:** the raw scan views and the event log. Hidden unless the debug switch is on: `/an debug`.
+
+## Posting
+
+Post on the Sell tab puts the chosen item up for auction, one press per post. Picking an item asks the game for its live listings first, the same request the game's own sell form makes. The Auctions tab lists what you have up.
+
+The server does not take a single item (gear and the like) for less than 1 silver. It does not refuse such a post, it never answers, and the auction house stops responding until you log out. The game's own form does the same. The addon will not send a price under that floor (`ns.MinItemPrice` in `data/trading.lua`). Goods sold by the unit have no floor.
 
 ## What is not there yet
 
-**Buying and posting are not wired up.** The Buy and Post buttons are drawn but do nothing, and say so in their tooltips. Every number on screen is real, from your own scans and bags.
+**Buying is not wired up.** The Buy buttons on the Buy and Resell tabs are drawn but do nothing, and say so in their tooltips. Every number on screen is real, from your own scans and bags.
 
 ## Price history
 
@@ -34,7 +41,9 @@ Each full scan is folded into one small record per item (usual price, lowest and
 | `inventory/bags.lua` | What in your bags can be auctioned |
 | `ui/kit.lua` | The building blocks every tab is drawn from |
 | `ui/window.lua` | The window and its tabs |
+| `ui/chart.lua` | Line and bar charts for the History tab |
 | `ui/tabs/*.lua` | One file per tab |
+| `trade/*.lua` | Posting, the sell search, your own auctions |
 
 The scan engine (`feed/`, `store.lua`, `jobs.lua`) is unchanged.
 

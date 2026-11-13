@@ -532,6 +532,82 @@ function Kit.Scroll(parent)
 	return scroll
 end
 
+-- ========= Copy box ========================================================
+-- Addons cannot write to the clipboard, so this is the usual way round it: a
+-- box of selectable text, opened with everything already selected, so Ctrl+C
+-- copies it. Covers its parent; Escape or Close puts it away.
+-- Returns the frame with :Open(title, text).
+function Kit.CopyBox(parent)
+	local cover = CreateFrame("Frame", nil, parent)
+	cover:SetAllPoints()
+	cover:SetFrameLevel(parent:GetFrameLevel() + 50)
+	cover:EnableMouse(true)
+	Kit.Fill(cover, C.window)
+	Kit.Border(cover, C.border)
+	cover:Hide()
+
+	local title = Kit.Text(cover, "normal", C.accent)
+	title:SetPoint("TOPLEFT", 10, -9)
+	local hint = Kit.Text(cover, "small", C.muted)
+	hint:SetPoint("LEFT", title, "RIGHT", 12, 0)
+	hint:SetText(ns.L.COPY_HINT)
+
+	local scroll = Kit.Scroll(cover)
+	scroll:SetPoint("TOPLEFT", 8, -32)
+	scroll:SetPoint("BOTTOMRIGHT", -8, 8)
+	Kit.Fill(scroll, C.input)
+
+	local box = CreateFrame("EditBox", nil, scroll)
+	box:SetMultiLine(true)
+	box:SetAutoFocus(false)
+	box:SetFontObject(Kit.Font(Theme.fontSize.small))
+	box:SetTextColor(unpack(C.text))
+	box:SetTextInsets(6, 6, 4, 4)
+	box:SetMaxLetters(0)
+	scroll:SetScrollChild(box)
+	scroll:SetScript("OnSizeChanged", function(_, width)
+		box:SetWidth(width)
+	end)
+
+	local function SelectAll()
+		box:SetFocus()
+		box:HighlightText()
+	end
+	local close = Kit.Button(cover, { text = ns.L.COPY_CLOSE, onClick = function()
+		cover:Hide()
+	end })
+	close:SetPoint("TOPRIGHT", -8, -5)
+	local again = Kit.Button(cover, { text = ns.L.COPY_SELECT, onClick = SelectAll })
+	again:SetPoint("RIGHT", close, "LEFT", -5, 0)
+
+	-- The text is for reading and copying. Typing puts it back as it was.
+	local shown = ""
+	box:SetScript("OnTextChanged", function(self, userInput)
+		if userInput then
+			self:SetText(shown)
+			self:HighlightText()
+		end
+		scroll:SetContentHeight(self:GetHeight())
+	end)
+	box:SetScript("OnEscapePressed", function()
+		cover:Hide()
+	end)
+	cover:SetScript("OnHide", function()
+		box:ClearFocus()
+	end)
+
+	function cover:Open(heading, text)
+		shown = text
+		title:SetText(heading)
+		box:SetWidth(scroll:GetWidth())
+		box:SetText(text)
+		scroll:SetVerticalScroll(0)
+		self:Show()
+		SelectAll()
+	end
+	return cover
+end
+
 -- ========= List ============================================================
 -- A table with a header and scrolling rows.
 --

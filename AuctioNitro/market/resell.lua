@@ -8,7 +8,32 @@ local _, ns = ...
 local Resell = {}
 ns.Resell = Resell
 
--- Plans a purchase for resale. params: { marginPercent, budget, minProfit }.
+-- How many of an item fit in one bag slot. The game knows; when it cannot say,
+-- the biggest stack anyone has listed is the best evidence there is.
+local function MaxStack(item)
+	local ok, size = pcall(C_Item.GetItemMaxStackSizeByID, item.itemID)
+	if ok and size and size > 0 then
+		return size
+	end
+	local biggest = 1
+	for _, tier in ipairs(item.tiers) do
+		biggest = math.max(biggest, tier.stack)
+	end
+	return biggest
+end
+
+-- How much of an item is for sale, counted the way it fills bags: a stackable
+-- item counts by full stacks (100 that stack to 20 is 5), anything else by
+-- the piece.
+function Resell.MarketSize(item)
+	return math.ceil(item.units / MaxStack(item))
+end
+
+-- Plans a purchase for resale.
+-- params: { marginPercent, budget, minProfit, maxItems }. A plan always takes
+-- the whole cheap load: reselling only works when you buy all of it. maxItems
+-- and budget do not trim a plan, they decide which leads are shown (see
+-- Resell.Leads).
 -- limit caps what is bought: auctions for whole-auction items, units for
 -- commodities. Returns nil when there is nothing worth buying, else:
 --   item, target (unit price to relist at), byUnit
@@ -35,9 +60,6 @@ function Resell.Plan(item, params, limit)
 			local units = worth and tier.units or 0
 			available = available + units
 			local take = math.min(units, limit - buyUnits)
-			if params.budget > 0 then
-				take = math.min(take, math.floor((params.budget - cost) / tier.unit))
-			end
 			take = math.max(0, take)
 			if take > 0 then
 				lines[#lines + 1] = { tier = tier, auctions = 0, units = take }
@@ -49,9 +71,6 @@ function Resell.Plan(item, params, limit)
 			local copies = worth and tier.copies or 0
 			available = available + copies
 			local take = math.min(copies, limit - buyAuctions)
-			if params.budget > 0 then
-				take = math.min(take, math.floor((params.budget - cost) / tier.buyout))
-			end
 			take = math.max(0, take)
 			if take > 0 then
 				lines[#lines + 1] = { tier = tier, auctions = take, units = take * tier.stack }
@@ -86,12 +105,16 @@ function Resell.Plan(item, params, limit)
 end
 
 -- Every item worth flipping, each planned as "buy everything cheap enough"
--- and read on the deal meter. Leads under minPips are left out.
+-- and read on the deal meter. Leads under minPips are left out, and so are
+-- items with more than params.maxItems for sale in all (see MarketSize):
+-- reselling means buying the market out, and nobody buys out 11,000 fish. A load that costs
+-- more than params.budget (0 for no limit) is left out too.
 function Resell.Leads(items, params, minPips)
 	local leads = {}
 	for count, item in ipairs(items) do
 		local lead = Resell.Plan(item, params)
-		if lead and lead.profit >= params.minProfit then
+		local fits = lead and Resell.MarketSize(item) <= (params.maxItems or math.huge) and (params.budget == 0 or lead.cost <= params.budget)
+		if fits and lead.profit >= params.minProfit then
 			lead.deal = ns.Signals:Deal(item, lead.buyUnits, lead.cost)
 			if lead.deal.known and lead.deal.level.pips >= minPips then
 				leads[#leads + 1] = lead

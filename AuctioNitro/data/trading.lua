@@ -70,6 +70,13 @@ ns.PriceRules = {
 }
 ns.DefaultPriceRule = "skip"
 
+-- The lowest price the server takes for an auction of a single item (gear and
+-- the like), in copper. Goods sold by the unit have no such floor. Read from
+-- real scans: of about 100,000 single-item auctions none was under 1 silver,
+-- while goods sold by the unit go down to 1 copper. A post under the floor is
+-- never answered, and the auction house stops responding until you log out.
+ns.MinItemPrice = 100
+
 -- ========= Sale types and durations ========================================
 ns.SaleTypes = {
 	{ id = "buyout", label = L.SALE_BUYOUT, tip = L.SALE_BUYOUT_TIP, buyout = true, bids = false },
@@ -137,10 +144,20 @@ ns.ConfidenceRule = {
 --   lo  lowest price ever seen       hi  highest median ever seen
 --   n   scans that saw the item      d   days that saw it
 --   f   first day seen               l   last day seen (days since 1970)
+--   h   the points a price graph is drawn from: one per day the item was
+--       seen, newest last, packed into one string as
+--       "day:median:lowest:units" joined by ";". Several scans on one day
+--       leave one point, the latest
 ns.HistoryRule = {
 	-- How much a new scan moves the usual price. 0.3 means a new scan counts
 	-- for 30% and everything before it for 70%.
 	smoothing = 0.3,
+	-- How many daily points each item keeps for its graph. Older ones fall off.
+	-- This is the starting value: the player can change it with /an history,
+	-- within the limits below. A point is about 19 bytes.
+	graphPoints = 30,
+	graphPointsMin = 7,
+	graphPointsMax = 180,
 	-- Items not seen for this many days are dropped.
 	forgetDays = 45,
 	-- The usual price comes from history once this many scans have seen the
@@ -188,5 +205,41 @@ ns.DealRule = {
 ns.ResellMargins = { 15, 30, 50 }
 ns.ResellDefaultMargin = 30
 ns.ResellMinListings = 5 -- ignore thin markets
+-- The most units of an item that may be for sale, in all, for it to be shown
+-- as a lead. Reselling means buying the market out and relisting it, so only
+-- small markets are worth showing.
+ns.ResellMaxItems = 10
 ns.ResellMinPips = 4 -- a lead needs at least this deal reading to be listed
 ns.ResellDefaultMinProfit = 5000 -- copper
+
+-- ========= History charts ===================================================
+-- How far back a chart can look, in days, and where it starts.
+ns.HistoryRanges = { 7, 14, 30 }
+ns.HistoryDefaultRange = 30
+
+-- The two price lines. The colors were checked as a pair on the window's dark
+-- panel for color-blind separation and contrast.
+ns.HistorySeries = {
+	{
+		label = L.HISTORY_SERIES_USUAL,
+		color = ns.Theme.Hex("#bf8a2a"),
+		value = function(point)
+			return point.median
+		end,
+	},
+	{
+		label = L.HISTORY_SERIES_LOW,
+		color = ns.Theme.Hex("#4a8fd6"),
+		value = function(point)
+			return point.low
+		end,
+	},
+}
+
+-- One muted color for the units bars: they show an amount, not an identity.
+ns.HistoryUnits = {
+	color = ns.Theme.Hex("#8f7f63"),
+	value = function(point)
+		return point.units
+	end,
+}

@@ -141,7 +141,11 @@ local function IdleStatus()
 		return L.WIN_NEEDS_SCAN
 	end
 	local age = math.max(0, GetServerTime() - (snapshot.meta.time or 0))
-	return L.WIN_SCAN_AGE:format(ns.Duration(age), ns.Comma(snapshot.meta.count or 0), ns.Comma(ns.History:ScanCount()))
+	local scans = ns.History:ScanCount()
+	if scans == 1 then
+		return L.WIN_SCAN_AGE_ONE:format(ns.Duration(age), ns.Comma(snapshot.meta.count or 0))
+	end
+	return L.WIN_SCAN_AGE:format(ns.Duration(age), ns.Comma(snapshot.meta.count or 0), ns.Comma(scans))
 end
 
 local function UpdateScanBar(state)

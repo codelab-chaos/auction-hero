@@ -142,7 +142,7 @@ ns.L = {
 
 	-- Settings
 	SETTING_PERSIST_ROWS = "Keep the raw rows in saved variables",
-	SETTING_PERSIST_ROWS_TIP = "Lets the snapshot survive a reload and be read from the saved variables file. A full scan can make that file large.",
+	SETTING_PERSIST_ROWS_TIP = "Saves the whole scan, not only the price history, so it can be read from the saved variables file. Off by default: a full scan is about 40 MB and slows logging in and out.",
 	SETTING_OPEN_WITH_AH = "Open with the auction house",
 	SETTING_OPEN_WITH_AH_TIP = "Shows this window whenever the auction house opens.",
 	SETTING_LOG_EVENTS = "Record auction house events",
@@ -154,7 +154,7 @@ ns.L = {
 	CMD_HELP = "Commands:",
 	CMD_HELP_TOGGLE = "/an  show or hide the window",
 	CMD_HELP_SCAN = "/an scan | browse | cancel  start or stop a download; /an data  open the scan inspector",
-	CMD_HELP_CLEAR = "/an clear  drop the snapshot being viewed and the log",
+	CMD_HELP_CLEAR = "/an clear log  empty the event log",
 	CMD_HELP_SET = "/an set [name] [on|off]  list or flip a switch",
 	CMD_CLEARED = "Snapshot and log cleared.",
 	CMD_SET_LINE = "%s: %s  (%s)",
@@ -170,6 +170,7 @@ L.WIN_DEBUG = "Data"
 L.WIN_DEBUG_TIP = "The raw scan views: summary, row model, items, rows and the event log."
 L.WIN_NO_SCAN = "No scan yet. Open the auction house and press Scan."
 L.WIN_SCAN_AGE = "Scanned %s ago, %s auctions, %s scans remembered"
+L.WIN_SCAN_AGE_ONE = "Scanned %s ago, %s auctions, 1 scan remembered"
 L.WIN_YOUR_GOLD = "Your gold %s"
 L.TAB_SELL = "Sell"
 
@@ -366,7 +367,7 @@ L.RESELL_DISCOUNT_TIP = "Only buy auctions at least %d%% under the usual price."
 L.RESELL_MIN_PROFIT = "Min profit"
 L.RESELL_MIN_PROFIT_TIP = "Hide leads that would make less than this."
 L.RESELL_AFFORD = "I can afford"
-L.RESELL_AFFORD_TIP = "Only what your gold covers."
+L.RESELL_AFFORD_TIP = "Only loads your gold can buy out in full."
 L.RESELL_TOP = "Top deals"
 L.RESELL_TOP_TIP = "Only five-pip deals: a big discount on a price many sellers agree on."
 L.RESELL_COL_DEAL = "Deal"
@@ -398,5 +399,83 @@ L.RESELL_THE_AUCTIONS = "The auctions"
 -- Debug tab
 L.DEBUG_FULL_SCAN = "Full scan"
 L.DEBUG_BROWSE = "Browse sweep"
-L.DEBUG_CLEAR = "Clear"
+L.DEBUG_CLEAR_LOG = "Clear log"
+L.DEBUG_CONFIRM = "Press again"
+L.CMD_CLEARED_LOG = "The event log was cleared."
+L.CMD_CLEAR_HOW = "/an clear log  empties the event log. Scans and the price history are never cleared."
 L.DEBUG_FILTER = "Filter"
+
+-- Price history length
+L.CMD_HISTORY = "Each item keeps %d days of prices for its graph. /an history <days> changes it (%d to %d)."
+L.CMD_HELP_HISTORY = "/an history [days]  how many days of prices each item keeps"
+
+-- Posting
+L.SELL_DEPOSIT = "Deposit"
+L.SELL_CONFIRM = "Confirm post"
+L.SELL_POSTING_NOW = "Posting..."
+L.POST_NEEDS_AH = "Open the auction house first."
+L.POST_SCANNING = "Wait for the scan to finish."
+L.POST_BUSY = "The auction house is busy. Try again in a moment."
+L.POST_NOT_IN_BAGS = "That item is not in your bags any more."
+L.POST_NOT_SELLABLE = "The auction house will not take that item."
+L.POST_SENDING = "Posting..."
+L.POST_CONFIRM = "The game wants this confirmed. Check the price, then press Confirm post."
+L.POST_DONE = "Posted."
+L.POST_DONE_MANY = "Posted %s auctions."
+L.POST_PROGRESS = "Posted %s of %s..."
+L.POST_STOPPED = "Posting stopped before it finished. Check your auctions."
+L.POST_REFUSED = "The auction house refused the post."
+L.POST_ERROR = "The auction house refused: %s."
+L.POST_NO_ANSWER = "The auction house did not answer, and the item is still in your bags. It was not posted."
+L.POST_BLOCKED = "The game blocked the addon from posting (%s)."
+
+-- Auctions tab
+L.TAB_AUCTIONS = "Auctions"
+L.AUCTIONS_SUMMARY = "%s for sale, %s sold. Buyouts for sale: %s"
+L.AUCTIONS_REFRESH = "Refresh"
+L.AUCTIONS_REFRESH_TIP = "Ask the auction house for your auctions again."
+L.AUCTIONS_NONE = "You have no auctions."
+L.AUCTIONS_NEEDS_AH = "Open the auction house to see your auctions."
+L.AUCTIONS_COL_QUANTITY = "Qty"
+L.AUCTIONS_COL_BID = "Bid"
+L.AUCTIONS_COL_TIME = "Time left"
+L.AUCTIONS_COL_STATUS = "Status"
+L.AUCTIONS_ACTIVE = "For sale"
+L.AUCTIONS_SOLD = "Sold"
+L.POST_FORBIDDEN = "The game does not let addons post (%s)."
+L.CMD_POST_NOTHING = "Open the Sell tab and pick an item with a price first."
+L.RESELL_MAX_BUY = "Max items"
+L.RESELL_MAX_BUY_TIP = "Only show items with this many or fewer for sale in all. Stackable items count by the stack: 100 that stack to 20 count as 5. Reselling means buying them all, then relisting."
+
+-- History tab
+L.TAB_HISTORY = "History"
+L.HISTORY_PICK = "Pick an item to see how its price has moved."
+L.HISTORY_ONE_DAY = "Seen on one day so far. A second day of scans starts the graph."
+L.HISTORY_NOW = "%s for sale now"
+L.HISTORY_DAYS = "%dd"
+L.HISTORY_USUAL = "Usual now"
+L.HISTORY_LOWEST = "Lowest seen"
+L.HISTORY_HIGHEST = "Highest usual"
+L.HISTORY_CHANGE = "Change"
+L.HISTORY_SEEN = "Days seen"
+L.HISTORY_SEEN_OF = "%d of %d"
+L.HISTORY_PRICE = "Price"
+L.HISTORY_FOR_SALE = "For sale"
+L.HISTORY_SERIES_USUAL = "Usual price"
+L.HISTORY_SERIES_LOW = "Lowest price"
+L.HISTORY_HOVER = "Hover a chart to read a day."
+L.HISTORY_READOUT = "%s   usual %s   lowest %s   %s for sale"
+L.HISTORY_COL_USUAL = "Usual"
+L.HISTORY_COL_CHANGE = "Chg"
+
+-- Copying text out of the game
+L.COPY_HINT = "Ctrl+C copies the selected text. Escape closes."
+L.COPY_SELECT = "Select all"
+L.COPY_CLOSE = "Close"
+L.DEBUG_COPY_LOG = "Copy log"
+L.DEBUG_COPY_LOG_TIP = "Opens the whole event log as text, selected and ready for Ctrl+C."
+L.DEBUG_COPY_TITLE = "Event log, %d lines"
+L.RESELL_COL_FOR_SALE = "For sale"
+L.POST_NOT_READY = "The game is still loading this item. Try again in a moment."
+L.POST_NO_DEPOSIT = "You do not have enough gold for the deposit."
+L.SELL_TOO_CHEAP = "The auction house does not take single items for less than %s."

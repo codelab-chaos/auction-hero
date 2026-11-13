@@ -20,13 +20,14 @@ ns.Theme = {
 	window = { width = 900, height = 600 },
 	titleHeight = 30,
 	tabHeight = 27,
-	tabWidth = 78,
+	tabWidth = 84,
 	pad = 8, -- padding around a tab's body, and the gap between its columns
 
 	-- Column widths. The middle column of each tab takes what is left.
 	buy = { rail = 34, sidebar = 176, order = 250 },
 	sell = { bags = 200, competition = 230 },
 	resell = { plan = 290 },
+	history = { list = 280 },
 
 	rowHeight = 25, -- list rows
 	headerHeight = 22, -- list headers

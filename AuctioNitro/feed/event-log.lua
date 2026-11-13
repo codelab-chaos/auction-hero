@@ -6,7 +6,7 @@ local Bus = ns.Bus
 local EventLog = {}
 ns.EventLog = EventLog
 
-local MAX_TEXT = 48
+local MAX_TEXT = 160
 local MAX_KEYS = 8
 
 -- A short, readable description of any value.
@@ -75,6 +75,25 @@ local function Record(event, ...)
 		end
 	end
 	Bus:Fire("LOG_ADDED")
+end
+
+-- Adds a line of our own to the log, beside the game's events. Used to record
+-- what we asked the game to do, so its answer (or silence) can be read in order.
+function EventLog:Note(what, ...)
+	Record("> " .. what, ...)
+end
+
+-- The whole log as plain text, newest first like the Log view, one line per
+-- entry, so the latest lines are at the top and easy to pick out.
+function EventLog:Text()
+	local lines = {}
+	local log = ns.db.log
+	for index = #log, 1, -1 do
+		local entry = log[index]
+		local count = entry.count and (" x" .. entry.count) or ""
+		lines[#lines + 1] = ("%s  %s%s  %s"):format(entry.clock, entry.event, count, entry.detail)
+	end
+	return table.concat(lines, "\n")
 end
 
 function EventLog:Clear()

@@ -12,6 +12,7 @@ local PLAN_LINES = 5 -- price points listed at the bottom of the plan
 
 local state = {
 	margin = ns.ResellDefaultMargin,
+	maxItems = ns.ResellMaxItems,
 	minProfit = ns.ResellDefaultMinProfit,
 	affordOnly = false,
 	topOnly = false,
@@ -20,14 +21,19 @@ local state = {
 	limit = nil, -- auctions (or units) to buy. nil means everything worth buying
 }
 
-local list, plan, prompt, margins, affordButton, topButton, profitInput
+local list, plan, prompt, margins, maxInput, affordButton, topButton, profitInput
 local parts = {}
 local stack
 local leads = {} -- the last list of leads worked out
 local Refresh, PaintPlan
 
 local function Params()
-	return { marginPercent = state.margin, budget = state.affordOnly and GetMoney() or 0, minProfit = state.minProfit }
+	return {
+		marginPercent = state.margin,
+		budget = state.affordOnly and GetMoney() or 0,
+		minProfit = state.minProfit,
+		maxItems = state.maxItems,
+	}
 end
 
 local function SelectedLead()
@@ -45,6 +51,9 @@ local SORT_VALUES = {
 	end,
 	deal = function(lead)
 		return lead.deal.level.pips
+	end,
+	forSale = function(lead)
+		return lead.item.units
 	end,
 	units = function(lead)
 		return lead.buyUnits
@@ -326,10 +335,10 @@ local function Create(parent)
 	local bar = Kit.Panel(parent)
 	bar:SetPoint("TOPLEFT")
 	bar:SetPoint("TOPRIGHT", plan, "TOPLEFT", -pad, 0)
-	bar:SetHeight(36)
+	bar:SetHeight(66)
 
 	local discountLabel = Kit.Text(bar, "normal", C.accent)
-	discountLabel:SetPoint("LEFT", 8, 0)
+	discountLabel:SetPoint("TOPLEFT", 8, -12)
 	discountLabel:SetText(L.RESELL_DISCOUNT)
 	local marginItems = {}
 	for _, percent in ipairs(ns.ResellMargins) do
@@ -349,8 +358,22 @@ local function Create(parent)
 	})
 	margins:SetPoint("LEFT", discountLabel, "RIGHT", 6, 0)
 
+	-- How many of one item to buy at most. Whatever is bought has to be
+	-- relisted and sold, so this keeps a lead to a size worth taking on.
+	local maxLabel = Kit.Text(bar, "normal", C.accent)
+	maxLabel:SetPoint("LEFT", margins, "RIGHT", 16, 0)
+	maxLabel:SetText(L.RESELL_MAX_BUY)
+	maxInput = Kit.Input(bar, { width = 50, numeric = true, maxLetters = 5, justify = "CENTER", onChange = function(text)
+		state.maxItems = math.max(1, tonumber(text) or ns.ResellMaxItems)
+		state.limit = nil
+		Refresh()
+	end })
+	maxInput:SetPoint("LEFT", maxLabel, "RIGHT", 6, 0)
+	maxInput:SetText(tostring(state.maxItems))
+	Kit.Tip(maxInput, { L.RESELL_MAX_BUY, L.RESELL_MAX_BUY_TIP })
+
 	local profitLabel = Kit.Text(bar, "normal", C.accent)
-	profitLabel:SetPoint("LEFT", margins, "RIGHT", 12, 0)
+	profitLabel:SetPoint("TOPLEFT", 8, -42)
 	profitLabel:SetText(L.RESELL_MIN_PROFIT)
 	profitInput = Kit.MoneyInput(bar, { compact = true, onChange = function(copper)
 		state.minProfit = copper
@@ -364,7 +387,7 @@ local function Create(parent)
 		state.topOnly = not state.topOnly
 		Refresh()
 	end })
-	topButton:SetPoint("RIGHT", -6, 0)
+	topButton:SetPoint("BOTTOMRIGHT", -6, 6)
 	affordButton = Kit.Button(bar, { text = L.RESELL_AFFORD, padding = 14, tip = { L.RESELL_AFFORD, L.RESELL_AFFORD_TIP }, onClick = function()
 		state.affordOnly = not state.affordOnly
 		Refresh()
@@ -389,6 +412,11 @@ local function Create(parent)
 			},
 			{ id = "deal", label = L.RESELL_COL_DEAL, width = 50, pips = ns.DealPips, meter = function(lead)
 				return lead.deal
+			end },
+			{ id = "forSale", label = L.RESELL_COL_FOR_SALE, width = 54, align = "RIGHT", color = function()
+				return C.muted
+			end, text = function(lead)
+				return ns.Comma(lead.item.units)
 			end },
 			{ id = "units", label = L.RESELL_COL_BUY, width = 46, align = "RIGHT", text = function(lead)
 				return ns.Comma(lead.buyUnits)

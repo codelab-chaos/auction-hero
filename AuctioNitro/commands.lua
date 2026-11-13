@@ -9,6 +9,7 @@ local function PrintHelp()
 	ns.Print(L.CMD_HELP_CLEAR)
 	ns.Print(L.CMD_HELP_SET)
 	ns.Print(L.CMD_HELP_DEBUG)
+	ns.Print(L.CMD_HELP_HISTORY)
 end
 
 local function PrintSwitch(setting)
@@ -49,10 +50,34 @@ local commands = {
 		ns.Print(on and L.CMD_DEBUG_ON or L.CMD_DEBUG_OFF)
 		ns.Window:Show()
 	end,
-	clear = function()
-		ns.Store:Clear()
-		ns.EventLog:Clear()
-		ns.Print(L.CMD_CLEARED)
+	-- Posts what the Sell tab is showing, from a typed command instead of the
+	-- button. A way to tell whether the game treats the two differently.
+	post = function()
+		local request = ns.SellRequest and ns.SellRequest()
+		if request then
+			ns.Posting:Post(request)
+		else
+			ns.Print(L.CMD_POST_NOTHING)
+		end
+	end,
+	-- How many days of prices each item keeps for its graph: /an history 60.
+	-- With no number it says what the setting is.
+	history = function(days)
+		local number = tonumber(days)
+		if number then
+			ns.History:SetGraphDays(number)
+		end
+		ns.Print(L.CMD_HISTORY:format(ns.History:GraphDays(), ns.HistoryRule.graphPointsMin, ns.HistoryRule.graphPointsMax))
+	end,
+	-- Only the event log can be emptied. Scans and the price history cannot
+	-- be cleared at all.
+	clear = function(what)
+		if what == "log" then
+			ns.EventLog:Clear()
+			ns.Print(L.CMD_CLEARED_LOG)
+		else
+			ns.Print(L.CMD_CLEAR_HOW)
+		end
 	end,
 	set = function(name, value)
 		if not name then

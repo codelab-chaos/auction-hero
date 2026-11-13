@@ -3,6 +3,10 @@
 local _, ns = ...
 
 ns.LoggedEvents = {
+	-- The game refusing something an addon tried to do.
+	"ADDON_ACTION_BLOCKED",
+	"ADDON_ACTION_FORBIDDEN",
+	"UI_ERROR_MESSAGE",
 	"AUCTION_HOUSE_SHOW",
 	"AUCTION_HOUSE_CLOSED",
 	"AUCTION_HOUSE_DISABLED",

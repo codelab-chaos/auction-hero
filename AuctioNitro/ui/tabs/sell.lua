@@ -13,7 +13,6 @@ local C = Theme.color
 local LADDER_ROWS = 9
 local BAG_COLUMNS = 4
 local LABEL_WIDTH = 86 -- the name column of the form's control rows
-local DEFAULT_STACK = 20 -- auctions start at this many units each
 
 local state = {
 	key = nil, -- the chosen bag item
@@ -29,7 +28,7 @@ local state = {
 local bags, form, ladder, bagHint, formHint
 local bagTiles, parts, ladderRows = {}, {}, {}
 local stack
-local Refresh, PaintForm, PaintLadder, PaintSummary
+local Refresh, PaintForm, PaintLadder, PaintSummary, PaintPostButton, PressPost
 
 -- ========= What is being sold ===============================================
 local function Owned()
@@ -51,7 +50,13 @@ local function SaleType()
 	return ns.SaleTypes[1]
 end
 
+-- Whether the chosen item is sold by the unit. The game's own answer wins
+-- when the auction house is open to give one. Otherwise it is our best guess.
 local function IsCommodity()
+	local known = state.key and ns.Posting:IsCommodity(state.key)
+	if known ~= nil then
+		return known
+	end
 	local listed, owned = Listed(), Owned()
 	return (listed or owned) ~= nil and ns.Orders.IsCommodity(listed or owned)
 end
@@ -66,9 +71,20 @@ local function UnitPrice()
 	end
 	for _, rule in ipairs(ns.PriceRules) do
 		if rule.id == state.ruleId then
-			return rule.price(listed, ns.History:Usual(listed))
+			local price = rule.price(listed, ns.History:Usual(listed))
+			-- A rule never suggests less than the server will take.
+			if price and not IsCommodity() then
+				price = math.max(price, ns.MinItemPrice)
+			end
+			return price
 		end
 	end
+end
+
+-- True when a typed price is under what the server takes for a single item.
+local function TooCheap()
+	local unit = UnitPrice()
+	return unit ~= nil and not IsCommodity() and unit < ns.MinItemPrice
 end
 
 local function StartingBid()
@@ -80,7 +96,9 @@ local function StartingBid()
 end
 
 local function Choose(key)
+	ns.Posting:Cancel()
 	state.key = key
+	ns.SellSearch:Request(key)
 	state.customUnit, state.customBid = nil, nil
 	local owned = Owned()
 	local total = owned and owned.total or 1
@@ -88,8 +106,8 @@ local function Choose(key)
 		-- A commodity is one listing of a quantity.
 		state.perAuction, state.auctions = total, 1
 	else
-		state.perAuction = math.max(1, math.min(total, DEFAULT_STACK))
-		state.auctions = math.max(1, math.floor(total / state.perAuction))
+		-- Everything else is sold one to an auction.
+		state.perAuction, state.auctions = 1, total
 	end
 	Refresh()
 end
@@ -197,6 +215,7 @@ local function BuildForm(parent)
 		end,
 		onPick = function(type)
 			state.saleType = type.id
+			ns.Posting:Cancel()
 			Refresh()
 		end,
 	})
@@ -214,6 +233,7 @@ local function BuildForm(parent)
 	parts.price = Kit.MoneyInput(parts.priceRow, {
 		onChange = function(copper)
 			state.customUnit = math.max(1, copper)
+			ns.Posting:Cancel()
 			parts.rules:Refresh()
 			PaintSummary()
 			PaintLadder()
@@ -231,6 +251,7 @@ local function BuildForm(parent)
 		end,
 		onPick = function(rule)
 			state.ruleId = rule.id
+			ns.Posting:Cancel()
 			state.customUnit = nil
 			Refresh()
 		end,
@@ -243,6 +264,7 @@ local function BuildForm(parent)
 		compact = true,
 		onChange = function(copper)
 			state.customBid = math.max(1, copper)
+			ns.Posting:Cancel()
 			PaintSummary()
 		end,
 	})
@@ -275,18 +297,13 @@ local function BuildForm(parent)
 
 	parts.quantityRow = SliderRow(parent, L.SELL_QUANTITY, function(value)
 		state.perAuction = value
+		ns.Posting:Cancel()
 		PaintSummary()
-		PaintLadder()
-	end)
-	parts.eachRow = SliderRow(parent, L.SELL_EACH_AUCTION, function(value)
-		local owned = Owned()
-		state.perAuction = value
-		state.auctions = math.min(state.auctions, math.max(1, math.floor((owned and owned.total or 1) / value)))
-		PaintForm()
 		PaintLadder()
 	end)
 	parts.auctionsRow = SliderRow(parent, L.SELL_AUCTIONS, function(value)
 		state.auctions = value
+		ns.Posting:Cancel()
 		PaintSummary()
 		PaintLadder()
 	end)
@@ -300,7 +317,8 @@ local function BuildForm(parent)
 		end,
 		onPick = function(option)
 			state.duration = option.index
-			parts.duration:Refresh()
+			ns.Posting:Cancel()
+			PaintForm() -- the deposit depends on the duration
 		end,
 	})
 	parts.duration:SetPoint("LEFT", LABEL_WIDTH, 0)
@@ -317,7 +335,69 @@ local function BuildForm(parent)
 	parts.receive:EnableMouse(true)
 	Kit.Tip(parts.receive, { L.SELL_BUYOUT, L.SELL_RECEIVE_TIP })
 
-	parts.post = Kit.Button(parent, { text = L.SELL_POST, look = "action", height = 32, width = 300, tip = { L.TAB_SELL, L.SELL_POST_TIP } })
+	parts.deposit = Kit.Pair(parent)
+	parts.post = Kit.Button(parent, { text = L.SELL_POST, look = "action", height = 32, width = 300, onClick = function()
+		PressPost()
+	end })
+	parts.status = Kit.Note(parent, "small", C.muted)
+	parts.status:SetWidth(400)
+end
+
+-- ========= Posting ==========================================================
+-- The button says what the next press does: post, or confirm when the game
+-- has asked for a second press.
+PaintPostButton = function()
+	local posting = ns.Posting.state
+	local mine = posting.key == state.key
+	if mine and posting.phase == "confirm" then
+		parts.post:SetLabel(L.SELL_CONFIRM)
+		parts.post:SetDisabled(false)
+	elseif mine and posting.phase == "posting" then
+		parts.post:SetLabel(L.SELL_POSTING_NOW)
+		parts.post:SetDisabled(true)
+	else
+		parts.post:SetLabel(state.auctions > 1 and L.SELL_POST_MANY:format(ns.Comma(state.auctions)) or L.SELL_POST)
+		parts.post:SetDisabled(UnitPrice() == nil or Owned() == nil)
+	end
+end
+
+-- What pressing Post would send, or nil when there is nothing to send.
+local function BuildRequest()
+	local owned, unit = Owned(), UnitPrice()
+	if not owned or not unit then
+		return nil
+	end
+	if TooCheap() then
+		return nil -- the form already says the price is too low
+	end
+	local type = SaleType()
+	local commodity = IsCommodity()
+	local bids = not commodity and type.bids
+	if bids and type.buyout and (StartingBid() or 0) >= unit then
+		return nil -- the form already says the bid is too high
+	end
+	return {
+		key = owned.key,
+		commodity = commodity,
+		duration = state.duration,
+		quantity = commodity and state.perAuction or state.auctions,
+		unit = unit,
+		bid = bids and type.buyout and StartingBid() or nil,
+		buyout = commodity or type.buyout,
+	}
+end
+ns.SellRequest = BuildRequest -- for the /an post command
+
+-- One press, one action: start the post, or confirm the one waiting.
+PressPost = function()
+	local posting = ns.Posting.state
+	if posting.phase == "confirm" and posting.key == state.key then
+		return ns.Posting:Confirm()
+	end
+	local request = BuildRequest()
+	if request then
+		ns.Posting:Post(request)
+	end
 end
 
 -- The numbers under the form. Redrawn alone while a slider moves.
@@ -333,10 +413,11 @@ PaintSummary = function()
 	local unit = UnitPrice()
 
 	parts.quantityRow.value:SetText(ns.Comma(state.perAuction) .. " " .. L.SELL_OF:format(ns.Comma(total)))
-	parts.eachRow.value:SetText(L.BUY_LINE_UNITS:format(ns.Comma(state.perAuction)))
 	parts.auctionsRow.value:SetText(ns.Comma(state.auctions) .. " " .. L.SELL_OF:format(ns.Comma(math.max(1, math.floor(total / state.perAuction)))))
-	parts.post:SetLabel(state.auctions > 1 and L.SELL_POST_MANY:format(ns.Comma(state.auctions)) or L.SELL_POST)
-	parts.post:SetDisabled(unit == nil)
+	PaintPostButton()
+	local deposit = ns.Posting:Deposit(owned.key, commodity, state.duration, commodity and state.perAuction or state.auctions)
+	parts.deposit:Set(L.SELL_DEPOSIT, deposit and ns.Money(deposit) or "")
+	parts.deposit.known = deposit ~= nil
 
 	local left = L.SELL_POSTING:format(ns.Comma(posting), ns.Comma(total))
 	if posting < total then
@@ -368,8 +449,11 @@ PaintSummary = function()
 
 	local bid = StartingBid()
 	local bidTooHigh = not commodity and type.buyout and type.bids and bid ~= nil and bid >= unit
-	parts.warning:SetShown(bidTooHigh)
-	if bidTooHigh then
+	local tooCheap = TooCheap()
+	parts.warning:SetShown(bidTooHigh or tooCheap)
+	if tooCheap then
+		parts.warning:SetBody(L.SELL_TOO_CHEAP:format(ns.Money(ns.MinItemPrice)), C.bad)
+	elseif bidTooHigh then
 		parts.warning:SetBody(L.SELL_BID_TOO_HIGH, C.bad)
 	end
 end
@@ -421,12 +505,9 @@ PaintForm = function()
 		parts.quantityRow.slider:SetShownValue(state.perAuction)
 		stack:Add(parts.quantityRow, 8)
 	elseif total > 1 then
-		parts.eachRow.slider:SetRange(total)
-		parts.eachRow.slider:SetShownValue(state.perAuction)
-		stack:Add(parts.eachRow, 8)
-		parts.auctionsRow.slider:SetRange(math.floor(total / state.perAuction))
+		parts.auctionsRow.slider:SetRange(total)
 		parts.auctionsRow.slider:SetShownValue(state.auctions)
-		stack:Add(parts.auctionsRow, 4)
+		stack:Add(parts.auctionsRow, 8)
 	end
 
 	parts.duration:Refresh()
@@ -439,7 +520,16 @@ PaintForm = function()
 		stack:Add(parts.warning, 2)
 	end
 	stack:Add(parts.receive, 2)
+	-- The deposit comes from the game, so it only shows with the auction house open.
+	if parts.deposit.known then
+		stack:Add(parts.deposit, 2)
+	end
 	stack:Add(parts.post, 10)
+	local posting = ns.Posting.state
+	if posting.message and posting.key == owned.key then
+		parts.status:SetBody(posting.message, posting.phase == "failed" and C.bad or (posting.phase == "done" and C.good or C.muted))
+		stack:Add(parts.status, 4)
+	end
 end
 
 -- ========= The competition ==================================================
@@ -577,3 +667,12 @@ local function Create(parent)
 end
 
 ns.Window:RegisterTab({ id = "sell", label = L.TAB_SELL, order = 2, Create = Create })
+
+-- The form follows a post as it goes: sending, confirm, done or refused.
+ns.Bus:On("POSTING_CHANGED", function()
+	if form and ns.charDb.tab == "sell" then
+		ns.Window:RefreshActive()
+	end
+	-- The game is asked for the item's live listings, as its own sell form does.
+	ns.SellSearch:Request(state.key)
+end)

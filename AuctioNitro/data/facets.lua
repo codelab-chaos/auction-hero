@@ -108,7 +108,7 @@ ns.ItemCategories = {
 }
 
 -- The quality facet: its boxes are the swatches at the top of the rail.
-ns.QualityFacet = { id = "quality", label = L.FACET_QUALITY, qualities = { 0, 1, 2, 3, 4 } }
+ns.QualityFacet = { id = "quality", label = L.FACET_QUALITY, qualities = { 0, 1, 2, 3, 4, 5 } } -- poor to legendary
 
 -- The left strip, top to bottom, as sections with a divider between them.
 -- An entry is one of:

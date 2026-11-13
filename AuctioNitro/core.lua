@@ -17,6 +17,8 @@ ns.name = addonName
 --   ANALYSIS_READY             profile, derived data and the market are ready to show
 --   HISTORY_CHANGED            a scan was folded into the price history
 --   BAGS_CHANGED               what the player carries changed
+--   OWNED_CHANGED              the list of the player's own auctions was refreshed
+--   POSTING_CHANGED(state)     a post started, needs confirming, finished or failed
 --   LOG_ADDED                  the event log got a new line
 --   SETTING_CHANGED(id, value) a feature switch was flipped
 local Bus = { handlers = {} }
