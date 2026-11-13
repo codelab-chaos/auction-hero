@@ -41,7 +41,7 @@ export const CONFIDENCE_RULE = {
 
 // ========= Deal ============================================================
 // How good a buy is: how far the price you would pay sits under the item's
-// usual price (its median). It is judged on the whole order, so buying deeper
+// usual price across scans. It is judged on the whole order, so buying deeper
 // into the ladder makes the deal worse.
 //
 // Five steps, one pip each:

@@ -8,6 +8,9 @@ export interface Settings {
 
 export interface LabContext {
   market: Market;
+  markets: Market[]; // unique fresh full scans available by the viewing date
+  asOf: number;
+  useAssumedExpiryBands: boolean;
   settings: Settings;
   budget: () => number; // the budget in copper, 0 when not set
   openItem: (key: string) => void; // show an item in the detail panel

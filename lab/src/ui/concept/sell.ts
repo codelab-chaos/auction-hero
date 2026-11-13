@@ -370,7 +370,7 @@ export function createSellTab(ctx: LabContext): { element: HTMLElement; update: 
       h("div", { class: "muted small" }, "auctions x units each"),
       rows,
       h("div", { class: "cw-note" }, unitsAhead === 0 ? "You would be the cheapest." : `${number(unitsAhead)} units sell before yours.`),
-      h("div", { class: "muted small" }, `${number(item.listings)} auctions, usual price `, money(item.median)),
+      h("div", { class: "muted small" }, `${number(item.listings)} auctions, usual price `, money(item.usual ?? item.median)),
     );
   }
 

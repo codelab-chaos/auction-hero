@@ -14,7 +14,9 @@ ns.name = addonName
 --   SNAPSHOT_CHANGED           the snapshot being viewed changed, or there is none
 --   SAVE_STATE_CHANGED         whether the snapshot will reach the disk changed
 --   ANALYSIS_STATE(running)    the analyzer started or stopped
---   ANALYSIS_READY             profile and derived data are ready to show
+--   ANALYSIS_READY             profile, derived data and the market are ready to show
+--   HISTORY_CHANGED            a scan was folded into the price history
+--   BAGS_CHANGED               what the player carries changed
 --   LOG_ADDED                  the event log got a new line
 --   SETTING_CHANGED(id, value) a feature switch was flipped
 local Bus = { handlers = {} }

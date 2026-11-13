@@ -1,6 +1,7 @@
--- Analyzer: whenever the snapshot changes, runs the profile and derive steps
--- as a job and publishes the result as ns.Analysis.
---   ns.Analysis = { profile = <Profile:Run>, derived = <Derive:Run> }
+-- Analyzer: whenever the snapshot changes, runs the profile, derive and market
+-- steps as a job and publishes the result as ns.Analysis.
+--   ns.Analysis = { profile = <Profile:Run>, derived = <Derive:Run>, market = <Market:Build> }
+-- A new scan's market is also folded into the price history.
 local _, ns = ...
 local Bus = ns.Bus
 
@@ -18,12 +19,18 @@ Bus:On("SNAPSHOT_CHANGED", function()
 
 	Bus:Fire("ANALYSIS_STATE", true)
 	ns.Jobs:Run(function()
-		return ns.Profile:Run(snapshot), ns.Derive:Run(snapshot)
-	end, function(profile, derived)
+		local full = ns.Store:GetSourceSnapshot("replicate")
+		local market = full and ns.Market:Build(full)
+		local folded = ns.History:Fold(market)
+		return ns.Profile:Run(snapshot), ns.Derive:Run(snapshot), market, folded
+	end, function(profile, derived, market, folded)
+		if folded then
+			Bus:Fire("HISTORY_CHANGED")
+		end
 		if mine ~= generation then
 			return
 		end
-		ns.Analysis = { profile = profile, derived = derived }
+		ns.Analysis = { profile = profile, derived = derived, market = market }
 		Bus:Fire("ANALYSIS_STATE", false)
 		Bus:Fire("ANALYSIS_READY")
 	end, function(message)

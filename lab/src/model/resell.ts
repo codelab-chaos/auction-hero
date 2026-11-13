@@ -5,8 +5,8 @@
 // one auction per click and a stack cannot be split, so a plan never asks for
 // "some units": it asks for these auctions, at these prices.
 //
-// This reads one snapshot. A median can be propped up by auctions that will
-// never sell, so treat the results as leads to check, not as promises.
+// Stock comes from the latest snapshot; the usual price comes from history.
+// Listing prices can be propped up by auctions that never sell.
 import { ASSUMPTIONS } from "../config/catalog";
 import type { MarketItem, Tier } from "./market";
 
@@ -48,7 +48,7 @@ export interface ResellLead {
 // Plans a purchase of up to auctionLimit auctions, cheapest first. Returns
 // null when the item has no usual price to resell at, or nothing cheap enough.
 export function planResell(item: MarketItem, params: ResellParams, auctionLimit = Infinity): ResellLead | null {
-  const target = item.median;
+  const target = item.usual ?? item.median;
   if (target === null || item.listings - item.bidOnly < params.minListings) return null;
   const ceiling = target * (1 - params.marginPercent / 100);
 

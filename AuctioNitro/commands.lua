@@ -25,19 +25,21 @@ end
 
 local commands = {
 	[""] = function()
-		ns.Panel:Toggle()
+		ns.Window:Toggle()
 	end,
 	scan = function()
-		ns.Panel:Show()
+		ns.Window:Show()
 		ns.Downloader:Start("replicate")
 	end,
 	browse = function()
-		ns.Panel:Show()
+		ns.Window:Show()
 		ns.Downloader:Start("browse")
 	end,
 	cancel = function()
 		ns.Downloader:Cancel()
+		ns.Trade:Cancel()
 	end,
+	data = function() ns.Panel:Toggle() end,
 	clear = function()
 		ns.Store:Clear()
 		ns.EventLog:Clear()
@@ -82,5 +84,5 @@ end
 
 -- Click target for the minimap addon menu (see AddonCompartmentFunc in the TOC).
 function AuctioNitro_OnAddonCompartmentClick()
-	ns.Panel:Toggle()
+	ns.Window:Toggle()
 end

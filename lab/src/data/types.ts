@@ -10,6 +10,8 @@ export interface ScanMeta {
   rows: number; // auctions in the scan, before collapsing copies
   incompleteRows: number; // rows whose name never arrived
   hasItemTypes: boolean; // false for scans made before the addon exported types
+  stale?: boolean; // the server did not return a fresh list
+  timeLeftBands?: Record<string, { min: number; max: number | null }>;
 }
 
 export interface ItemRecord {

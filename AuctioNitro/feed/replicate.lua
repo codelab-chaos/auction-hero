@@ -94,6 +94,18 @@ end
 ns.Fetchers.replicate = function(source, ctx)
 	local schema = ns.Schemas[source.schema]
 	local info = { returns = 0, incomplete = 0 }
+	-- Save the actual client boundaries for offline expiry estimates. Raw
+	-- replicate bands are 1..4; the modern API takes the named enum values.
+	local bands = Enum.AuctionHouseTimeLeftBand
+	if bands and C_AuctionHouse.GetTimeLeftBandInfo then
+		info.timeLeftBands = {}
+		for raw, name in ipairs({ "Short", "Medium", "Long", "VeryLong" }) do
+			local ok, low, high = pcall(C_AuctionHouse.GetTimeLeftBandInfo, bands[name])
+			if ok and type(low) == "number" and type(high) == "number" and low >= 0 and high >= low then
+				info.timeLeftBands[tostring(raw)] = { min = low, max = high }
+			end
+		end
+	end
 
 	-- Ask, then wait for the server to say the list is ready.
 	local seen = updates

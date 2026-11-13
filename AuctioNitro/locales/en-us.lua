@@ -153,10 +153,110 @@ ns.L = {
 	-- Commands
 	CMD_HELP = "Commands:",
 	CMD_HELP_TOGGLE = "/an  show or hide the window",
-	CMD_HELP_SCAN = "/an scan | browse | cancel  start or stop a download",
+	CMD_HELP_SCAN = "/an scan | browse | cancel  start or stop a download; /an data  open the scan inspector",
 	CMD_HELP_CLEAR = "/an clear  drop the snapshot being viewed and the log",
 	CMD_HELP_SET = "/an set [name] [on|off]  list or flip a switch",
 	CMD_CLEARED = "Snapshot and log cleared.",
 	CMD_SET_LINE = "%s: %s  (%s)",
 	CMD_SET_UNKNOWN = "No switch called %s.",
 }
+
+-- ========= The trading window ==============================================
+local L = ns.L
+
+L.WIN_SCAN = "Scan"
+L.WIN_SCAN_TIP = "Download every auction. Reported to be limited to once every 15 minutes."
+L.WIN_DEBUG = "Data"
+L.WIN_DEBUG_TIP = "The raw scan views: summary, row model, items, rows and the event log."
+L.WIN_NO_SCAN = "No scan yet. Open the auction house and press Scan."
+L.WIN_SCAN_AGE = "Scanned %s ago, %s auctions, %s scans remembered"
+L.WIN_YOUR_GOLD = "Your gold %s"
+L.TAB_SELL = "Sell"
+
+-- Sell tab
+L.SELL_BAGS = "Your bags"
+L.SELL_BAGS_EMPTY = "Nothing in your bags can be auctioned."
+L.SELL_PICK = "Pick something from your bags."
+L.SELL_HAVE = "You have %s"
+L.SELL_HAVE_STACKS = "You have %s in %d stacks"
+L.SELL_SALE = "Sale"
+L.SELL_PRICE_EACH = "Price each"
+L.SELL_BID_EACH = "Starting bid each"
+L.SELL_STARTING_BID = "Starting bid"
+L.SELL_EACH = "each"
+L.SELL_QUANTITY = "Quantity"
+L.SELL_EACH_AUCTION = "Each auction"
+L.SELL_AUCTIONS = "Auctions"
+L.SELL_DURATION = "Duration"
+L.SELL_OF = "of %s"
+L.SELL_ALL = "All"
+L.SELL_POSTING = "Posting %s of %s"
+L.SELL_KEEPING = ", keeping %s"
+L.SELL_EACH_AUCTION_PRICE = "each auction %s"
+L.SELL_BUYOUT = "Buyout"
+L.SELL_ALL_BUYOUTS = "All buyouts"
+L.SELL_BID = "Starting bid"
+L.SELL_ALL_BIDS = "All starting bids"
+L.SELL_RECEIVE = "You receive if all sell, after the %d%% cut"
+L.SELL_RECEIVE_BIDS = "You receive at least, after the %d%% cut"
+L.SELL_RECEIVE_TIP = "Assumes the auction house keeps this share. The deposit is not included."
+L.SELL_BID_TOO_HIGH = "The starting bid has to be under the buy now price."
+L.SELL_NO_PRICE = "Nobody is selling this, so there is no price to go by. Type one."
+L.SELL_POST = "Post auction"
+L.SELL_POST_MANY = "Post %s auctions"
+L.SELL_POST_TIP = "Posting is not wired up yet. This screen is read-only for now."
+L.SELL_COMPETITION = "The competition"
+L.SELL_COMPETITION_KEY = "auctions x units each"
+L.SELL_YOU = "You: %s x %s"
+L.SELL_YOU_UNITS = "You: %s"
+L.SELL_LADDER_ROW = "%s x %s"
+L.SELL_CHEAPEST = "You would be the cheapest."
+L.SELL_AHEAD = "%s units sell before yours."
+L.SELL_MARKET = "%s auctions, usual price %s"
+L.SELL_NOT_LISTED = "Nobody else is selling this."
+
+-- Sale types
+L.SALE_BUYOUT = "Buy now"
+L.SALE_BUYOUT_TIP = "A set price. The first buyer to pay it gets the item at once. What nearly everyone uses."
+L.SALE_BOTH = "Buy now + bids"
+L.SALE_BOTH_TIP = "A buy now price, and a lower starting bid. If nobody pays the buy now price, the highest bidder wins when the time runs out."
+L.SALE_BIDS = "Bids only"
+L.SALE_BIDS_TIP = "No buy now price. The highest bidder wins when the time runs out, so it never sells at once."
+
+-- Durations
+L.DURATION_SHORT = "Short"
+L.DURATION_SHORT_TIP = "The shortest listing. The lowest deposit."
+L.DURATION_MEDIUM = "Medium"
+L.DURATION_MEDIUM_TIP = "The middle listing length."
+L.DURATION_LONG = "Long"
+L.DURATION_LONG_TIP = "The longest listing, and the usual choice: the most time to sell."
+
+-- Price rules
+L.RULE_MATCH = "Match"
+L.RULE_MATCH_TIP = "The same price as the cheapest auction. Yours sells after it does."
+L.RULE_UNDERCUT = "Undercut"
+L.RULE_UNDERCUT_TIP = "1 copper under the cheapest auction. First in line, for almost nothing."
+L.RULE_QUICK = "Quick sale"
+L.RULE_QUICK_TIP = "5% under the cheapest auction. Still the cheapest after someone undercuts you by a copper."
+L.RULE_SKIP = "Skip lowballs"
+L.RULE_SKIP_TIP = "Ignores stray auctions under half the usual price, then goes 1 copper under the first real one."
+L.RULE_USUAL = "Usual price"
+L.RULE_USUAL_TIP = "The price most units are listed around. Slow, for when you can wait."
+
+-- Price confidence
+L.CONFIDENCE = "Price confidence"
+L.CONFIDENCE_NONE = "No price"
+L.CONFIDENCE_LOW = "Low"
+L.CONFIDENCE_FAIR = "Fair"
+L.CONFIDENCE_GOOD = "Good"
+L.CONFIDENCE_HIGH = "High"
+L.CONFIDENCE_FACTS = "auctions: %s | %s usual | scans: %s | sales: %s"
+L.CONFIDENCE_NO_SHARE = "0%"
+L.REASON_NONE_FOR_SALE = "None for sale, so no price to go by"
+L.REASON_ONE_AUCTION = "Only 1 auction"
+L.REASON_AUCTIONS = "%s auctions"
+L.REASON_SCATTERED = "Prices scattered: %d%% near usual"
+L.REASON_NEAR_USUAL = "%d%% priced near usual"
+L.REASON_ONE_SCAN = "Seen in 1 scan: more scans raise confidence"
+L.REASON_SCANS = "Seen in %s scans over %s days"
+L.REASON_NO_SALES = "Listings, not sales"

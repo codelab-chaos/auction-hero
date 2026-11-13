@@ -21,7 +21,7 @@ const LADDER_COLUMNS: Column<LadderRow>[] = [
   { id: "copies", label: "Auctions", align: "right", render: (row) => number(row.copies) },
   { id: "running", label: "Units so far", align: "right", tip: "Units you would hold after buying down to this row.", render: (row) => number(row.runningUnits) },
   { id: "cost", label: "Cost so far", align: "right", render: (row) => money(row.runningCost) },
-  { id: "time", label: "Time left", render: (row) => TIME_BANDS[row.timeLeft] ?? String(row.timeLeft) },
+  { id: "time", label: "Time left at scan", render: (row) => TIME_BANDS[row.timeLeft] ?? String(row.timeLeft) },
 ];
 
 function ladder(item: MarketItem): LadderRow[] {
@@ -56,6 +56,10 @@ export function renderItemDetail(panel: HTMLElement, item: MarketItem | null, ct
     fact("Units", number(item.units)),
     fact("Lowest", money(item.min)),
     fact("Median", money(item.median)),
+    fact("Usual across scans", money(item.usual ?? item.median)),
+    fact("Scans seen", number(item.scansSeen ?? 1)),
+    fact("Units with uncertain expiry", number(item.expiryUncertainUnits ?? 0)),
+    fact("Units with unknown expiry", number(item.expiryUnknownUnits ?? 0)),
     fact("Highest", money(item.max)),
     fact("All buyouts", money(item.value)),
   );

@@ -9,6 +9,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.mjs",
     "import": "node scripts/import-scan.mjs",
     "icons": "node scripts/fetch-icons.mjs",
     "refresh": "node scripts/import-scan.mjs && node scripts/fetch-icons.mjs"

@@ -56,7 +56,7 @@ export function confidenceLine(confidence: Confidence): string {
 
 // How far to trust a price read off this item's ladder.
 // scansSeen is how many scans the item has appeared in, once history exists.
-export function priceConfidence(item: MarketItem, scansSeen = 1): Confidence {
+export function priceConfidence(item: MarketItem, scansSeen = item.scansSeen ?? 1): Confidence {
   const auctions = item.listings - item.bidOnly;
   if (auctions <= 0 || item.median === null) {
     return {
@@ -73,8 +73,9 @@ export function priceConfidence(item: MarketItem, scansSeen = 1): Confidence {
     if (auctions >= step.auctions) depth = step.score;
   }
 
-  const low = item.median * (1 - CONFIDENCE_RULE.agreementBand);
-  const high = item.median * (1 + CONFIDENCE_RULE.agreementBand);
+  const usual = item.usual ?? item.median;
+  const low = usual * (1 - CONFIDENCE_RULE.agreementBand);
+  const high = usual * (1 + CONFIDENCE_RULE.agreementBand);
   let agreeing = 0;
   for (const tier of item.tiers) {
     if (tier.unit >= low && tier.unit <= high) agreeing += tier.units;
@@ -121,10 +122,11 @@ export interface Deal extends Signal {
 // How good it is to buy an order of this item. units and cost describe the
 // whole order, so buying deeper into the ladder weakens the deal.
 export function deal(item: MarketItem, units: number, cost: number): Deal {
+  const usual = item.usual ?? item.median;
   const unitPrice = units > 0 ? cost / units : null;
   const confidenceAt = (id: string): number => CONFIDENCE_LEVELS.find((level) => level.id === id)?.min ?? 0;
   const confidence = priceConfidence(item);
-  if (unitPrice === null || item.median === null || confidence.score < confidenceAt(DEAL_RULE.needsConfidence)) {
+  if (unitPrice === null || usual === null || confidence.score < confidenceAt(DEAL_RULE.needsConfidence)) {
     return {
       known: false,
       saving: null,
@@ -135,7 +137,7 @@ export function deal(item: MarketItem, units: number, cost: number): Deal {
     };
   }
 
-  const under = ((item.median - unitPrice) / item.median) * 100;
+  const under = ((usual - unitPrice) / usual) * 100;
   let level: SignalLevel = DEAL_LEVELS.fair;
   if (under < -DEAL_RULE.fairBand) level = DEAL_LEVELS.over;
   else if (under >= DEAL_RULE.resellFrom && confidence.score >= confidenceAt(DEAL_RULE.resellNeeds)) {
@@ -146,13 +148,13 @@ export function deal(item: MarketItem, units: number, cost: number): Deal {
   const percent = Math.round(Math.abs(under));
   const reasons = [
     percent === 0
-      ? `Right at the usual price of ${money(item.median)}.`
-      : `${percent}% ${under > 0 ? "under" : "over"} the usual price of ${money(item.median)}.`,
+      ? `Right at the usual price of ${money(usual)}.`
+      : `${percent}% ${under > 0 ? "under" : "over"} the usual price of ${money(usual)}.`,
   ];
   if (level === DEAL_LEVELS.great) reasons.push("Not many auctions behind that usual price, so check it.");
   return {
     known: true,
-    saving: Math.round(item.median * units - cost),
+    saving: Math.round(usual * units - cost),
     score: Math.max(0, Math.min(100, Math.round(under))),
     level,
     pips: DEAL_PIPS,

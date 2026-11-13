@@ -40,8 +40,9 @@ export const PRICE_RULES: PriceRule[] = [
     label: "Skip lowballs",
     note: "Ignores stray auctions under half the usual price, then goes 1 copper under the first real one. For when a few cheap listings will sell out before yours matters.",
     price: (item) => {
-      if (item.median === null) return null;
-      const floor = item.median * OUTLIER_SHARE_OF_MEDIAN;
+      const usual = item.usual ?? item.median;
+      if (usual === null) return null;
+      const floor = usual * OUTLIER_SHARE_OF_MEDIAN;
       const real = item.tiers.find((tier) => tier.unit >= floor);
       return real ? Math.max(1, real.unit - 1) : null;
     },
@@ -49,7 +50,7 @@ export const PRICE_RULES: PriceRule[] = [
   {
     id: "median",
     label: "Usual price",
-    note: "The price most units are listed around. Slow, for when you can wait.",
-    price: (item) => item.median,
+    note: "The usual price across imported scans, with newer scans carrying more weight. Slow, for when you can wait.",
+    price: (item) => item.usual ?? item.median,
   },
 ];

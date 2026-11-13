@@ -54,6 +54,9 @@ ns.Sources = {
 			-- No owner: the full scan never returns seller or bidder names.
 			timeLeft = "timeLeft",
 			link = "link",
+			icon = "texture",
+			level = "level",
+			levelType = "levelType",
 		},
 	},
 	{

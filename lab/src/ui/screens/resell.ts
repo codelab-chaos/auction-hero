@@ -16,7 +16,7 @@ const COLUMNS: Column<ResellLead>[] = [
   },
   { id: "buy", label: "Buy units", align: "right", width: "90px", sort: (lead) => lead.buyUnits, render: (lead) => number(lead.buyUnits) },
   { id: "cost", label: "Cost", align: "right", width: "120px", sort: (lead) => lead.cost, render: (lead) => money(lead.cost) },
-  { id: "target", label: "Relist at", align: "right", width: "120px", tip: "The median unit price.", sort: (lead) => lead.target, render: (lead) => money(lead.target) },
+  { id: "target", label: "Relist at", align: "right", width: "120px", tip: "The usual unit price across imported scans.", sort: (lead) => lead.target, render: (lead) => money(lead.target) },
   { id: "profit", label: "Profit", align: "right", width: "120px", sort: (lead) => lead.profit, render: (lead) => money(lead.profit) },
   { id: "roi", label: "Return", align: "right", width: "80px", sort: (lead) => lead.roi, render: (lead) => `${number(lead.roi)}%` },
   {
@@ -93,7 +93,7 @@ export function createResellScreen(ctx: LabContext): Screen {
     h(
       "div",
       { class: "hint" },
-      `Leads, not promises. This is one snapshot, a median can be held up by auctions that never sell, and profit assumes a ${ASSUMPTIONS.auctionCut * 100}% cut with no deposit.`,
+      `Uses current stock and accumulated price history. Listing prices do not confirm sales; profit assumes a ${ASSUMPTIONS.auctionCut * 100}% cut with no deposit.`,
     ),
   );
 

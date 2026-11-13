@@ -675,7 +675,7 @@ local function Build()
 	tinsert(UISpecialFrames, "AuctioNitroPanel")
 
 	frame:SetScript("OnShow", function()
-		ns.charDb.shown = true
+		ns.charDb.debugShown = true
 		UpdateSourceButtons()
 		SetIdleStatus()
 		Panel:Refresh(true)
@@ -685,12 +685,12 @@ local function Build()
 		end)
 	end)
 	frame:SetScript("OnHide", function()
-		ns.charDb.shown = false
+		ns.charDb.debugShown = false
 	end)
 
 	UpdateTabs()
 	frame:Hide()
-	if ns.charDb.shown then
+	if ns.charDb.debugShown then
 		frame:Show()
 	end
 end
@@ -698,12 +698,14 @@ end
 function Panel:Toggle()
 	if frame then
 		frame:SetShown(not frame:IsShown())
+		if frame:IsShown() then frame:Raise() end
 	end
 end
 
 function Panel:Show()
 	if frame then
 		frame:Show()
+		frame:Raise()
 	end
 end
 
@@ -749,9 +751,6 @@ end
 
 Bus:On("AH_OPENED", function()
 	OnAuctionHouseToggled()
-	if ns.IsEnabled("openWithAuctionHouse") then
-		Panel:Show()
-	end
 end)
 
 Bus:On("AH_CLOSED", OnAuctionHouseToggled)

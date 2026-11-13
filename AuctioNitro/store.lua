@@ -22,6 +22,10 @@ function Store:GetSnapshot()
 	return snapshots[activeId]
 end
 
+function Store:GetSourceSnapshot(id)
+	return snapshots[id]
+end
+
 -- The sources that have a cached snapshot, in the order of data\sources.lua.
 function Store:GetCachedSources()
 	local cached = {}

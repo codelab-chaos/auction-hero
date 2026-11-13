@@ -1,6 +1,6 @@
 ## Interface: 16001
 ## Title: AuctioNitro
-## Notes: Download the auction house feed and review its data model and what can be derived from it.
+## Notes: Browse, price and trade auctions with scan history and a compact Buy, Sell and Resell interface.
 ## Author: Wizwonk
 ## Version: 0.1.0
 ## AllowLoadGameType: forever
@@ -20,16 +20,26 @@ data\sources.lua
 data\events.lua
 data\summary.lua
 data\views.lua
+data\trading.lua
+data\catalog.lua
 feed\links.lua
 feed\replicate.lua
 feed\browse.lua
 feed\downloader.lua
 feed\event-log.lua
 store.lua
+market\market.lua
+market\history.lua
+market\signals.lua
+market\trading.lua
+inventory.lua
+trade.lua
 analyze\profile.lua
 analyze\derive.lua
 analyze\analyzer.lua
 ui\view-model.lua
 ui\panel.lua
+ui\widgets.lua
+ui\trading-window.lua
 ui\auction-house-button.lua
 commands.lua

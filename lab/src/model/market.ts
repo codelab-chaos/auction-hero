@@ -1,6 +1,6 @@
 // Market: turns a scan file into items with a price ladder and summary numbers.
 // Pure data in, plain objects out. No DOM, no formatting.
-import { DEAL_RULE } from "../config/catalog";
+import { DEAL_RULE } from "../config/catalog.ts";
 import type { ItemRecord, ScanFile, ScanMeta } from "../data/types";
 
 // One rung of an item's price ladder: every auction with the same stack size,
@@ -15,6 +15,10 @@ export interface Tier {
 }
 
 export interface MarketItem extends ItemRecord {
+  scansSeen?: number;
+  usual?: number | null; // price history across imported scans
+  expiryUncertainUnits?: number;
+  expiryUnknownUnits?: number;
   tiers: Tier[]; // cheapest per unit first, buyout auctions only
   listings: number; // auctions, counting copies
   units: number; // units for sale with a buyout
@@ -41,7 +45,8 @@ function weightedMedian(tiers: Tier[], totalUnits: number): number | null {
   return null;
 }
 
-function finish(item: MarketItem): void {
+export function finishMarketItem(item: MarketItem): void {
+  item.min = item.median = item.max = item.deal = null;
   item.tiers.sort((a, b) => a.unit - b.unit || a.stack - b.stack);
   const first = item.tiers[0];
   const last = item.tiers[item.tiers.length - 1];
@@ -83,7 +88,7 @@ export function buildMarket(scan: ScanFile): Market {
     }
   }
 
-  items.forEach(finish);
+  items.forEach(finishMarketItem);
   return { meta: scan.meta, items, byKey: new Map(items.map((item) => [item.key, item])) };
 }
 
