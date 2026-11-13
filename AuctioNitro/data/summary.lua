@@ -55,10 +55,6 @@ ns.SummaryGroups = {
 	{ id = "sellers", label = L.GROUP_SELLERS, by = "owner", order = "count", only = "listings", top = 10 },
 }
 
--- An item counts as a deal when its lowest price sits this far under its median
--- and it has at least this many listings to make the median mean something.
-ns.DealRule = { percent = 30, minListings = 3 }
-
 -- Stack size buckets for the "By stack size" breakdown. Upper bounds, in order.
 -- Anything larger lands in one last bucket.
 ns.StackBuckets = { 1, 5, 10, 20, 100, 200 }

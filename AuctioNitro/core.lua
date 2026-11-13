@@ -63,11 +63,25 @@ function ns.Money(copper)
 	local silver = math.floor(copper / 100) % 100
 	local rest = copper % 100
 	if gold > 0 then
-		return ("|cffffd100%sg|r |cffc7c7cf%02ds|r |cffeda55f%02dc|r"):format(ns.Comma(gold), silver, rest)
+		return ("|cffffd100%sg|r |cffc7c7cf%ds|r |cffeda55f%dc|r"):format(ns.Comma(gold), silver, rest)
 	elseif silver > 0 then
-		return ("|cffc7c7cf%ds|r |cffeda55f%02dc|r"):format(silver, rest)
+		return ("|cffc7c7cf%ds|r |cffeda55f%dc|r"):format(silver, rest)
 	end
 	return ("|cffeda55f%dc|r"):format(rest)
+end
+
+-- Copper -> "12g 34s 56c" with no color codes, for use inside a sentence.
+function ns.PlainMoney(copper)
+	copper = math.floor(copper or 0)
+	local gold = math.floor(copper / 10000)
+	local silver = math.floor(copper / 100) % 100
+	local rest = copper % 100
+	if gold > 0 then
+		return ("%sg %ds %dc"):format(ns.Comma(gold), silver, rest)
+	elseif silver > 0 then
+		return ("%ds %dc"):format(silver, rest)
+	end
+	return ("%dc"):format(rest)
 end
 
 -- Seconds -> "4s", "3m 05s", "2h 10m"

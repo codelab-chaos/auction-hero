@@ -1,207 +1,733 @@
--- lab/src/ui/concept/buy.ts rendered with retained native frames.
-local _,ns=...
-local W,C,M=ns.Widgets,ns.Concept,ns.ConceptModel
-ns.ConceptTabs=ns.ConceptTabs or {}
-function ns.ConceptTabs.Buy(parent,ctx)
-	local page=CreateFrame("Frame",nil,parent); page:SetAllPoints()
-	local height=ctx.height
-	local rail=W.Panel(page); rail:SetSize(34,height); rail:SetPoint("TOPLEFT")
-	local sidebar=W.Panel(page); sidebar:SetSize(176,height); sidebar:SetPoint("TOPLEFT",42,0)
-	local sideScroll=W.Scroll(sidebar,168,height-18); sideScroll:SetPoint("TOPLEFT",9,-9)
-	local center=CreateFrame("Frame",nil,page); center:SetSize(396,height); center:SetPoint("TOPLEFT",226,0)
-	local detail=W.Panel(page); detail:SetSize(250,height); detail:SetPoint("TOPRIGHT")
-	local detailScroll=W.Scroll(detail,230,height-20); detailScroll:SetPoint("TOPLEFT",10,-10)
-	local flow=W.Flow(detailScroll.content,220)
-	local selected,wanted=nil,1
-	local selection,opened,options,groups,tiles,dividers={},{},{},{},{},{}
-	local filter={text="",usableOnly=false,affordableOnly=false,dealsOnly=false}
-	local sortField,descending,sortIndex="units",true,3
-	local list,quantity,Refresh,DrawDetail,DrawFacets
-	local function Items() local market=ctx.Market(); return market and market.items or {} end
-	local function Toggle(key,value,on)
-		selection[key]=selection[key] or {}; selection[key][value]=on and true or nil
-		DrawFacets(); Refresh()
+-- Buy tab: a rail of quick filters, the category checkboxes, the item list,
+-- and an order panel that says what buying a quantity really costs.
+-- The layout and behavior follow the lab's concept (lab/src/ui/concept/buy.ts).
+local _, ns = ...
+local L = ns.L
+local Kit = ns.Kit
+local Theme = ns.Theme
+local C = Theme.color
+local Facets = ns.Facets
+
+local ORDER_LINES = 8 -- price points listed in the order panel
+local HEADER_HEIGHT, OPTION_HEIGHT = 26, 21
+
+-- What the player has chosen. Kept for the session.
+local state = {
+	selection = {}, -- ticked boxes and toggles, see market\facets.lua
+	open = {}, -- facet id -> expanded
+	search = "",
+	toggles = {}, -- quick toggle id -> on
+	sort = { id = "units", descending = true },
+	selectedKey = nil,
+	wanted = 1,
+}
+
+local market, facets, listable, makeFilter -- rebuilt when the market changes
+local rail, sidebar, toolbar, list, order, prompt, searchBox
+local railTiles, sideRows, toggleButtons = {}, {}, {}
+local Refresh
+
+-- ========= Filtering ========================================================
+local function Prepare()
+	local current = ns.Window:Market()
+	if facets and current == market then
+		return
 	end
-	local function SetWanted(value)
-		if ns.Trade:IsBusy() or not ns.Trade:Cancel() then return end
-		wanted=math.max(1,math.floor(value)); DrawDetail()
-	end
-	quantity=W.Quantity(detailScroll.content,220,SetWanted,function() local item=ctx.Find(selected); if item then SetWanted(item.units) end end)
-	local itemIcon=W.Icon(detailScroll.content,32)
-	local dealMeter=W.Signal(detailScroll.content,5,true,150)
-	local action=W.Button(detailScroll.content,"Buy",220,function()
-		local item=ctx.Find(selected); if item then ctx.Buy(item,wanted) end
-	end,"action"); action:SetHeight(28)
-	local refreshPrice=W.Button(detailScroll.content,"Check again",90,function()
-		local item=ctx.Find(selected); if item then ns.Trade:Search(item,wanted) end
-	end)
-	DrawDetail=function()
-		flow:Reset(); quantity:Hide(); itemIcon:Hide(); dealMeter:Hide(); action:Hide(); refreshPrice:Hide()
-		local item=ctx.Find(selected)
-		if not item then
-			flow.y=24; local hint=flow:Text("Pick an item to see what buying it takes.",12,"muted"); hint:SetJustifyH("CENTER")
-		else
-			itemIcon:Show(); itemIcon:SetPoint("TOPLEFT"); itemIcon:SetItem(item)
-			local title=flow:Text(W.ItemText(item),12,nil,16); title:SetWidth(180); title:ClearAllPoints(); title:SetPoint("TOPLEFT",40,0); title:SetJustifyH("LEFT")
-			local available=flow:Text(ns.Comma(item.units).." available",11,"muted",14); available:SetWidth(180); available:ClearAllPoints(); available:SetPoint("TOPLEFT",40,-19)
-			flow.y=44; quantity:SetQuantity(wanted); flow:Place(quantity,24)
-			local order=M:Order(item,wanted); local reading=M:Deal(item,order.units,order.cost)
-			flow:Row("Total",ns.Money(order.cost),15)
-			flow:Row("Average each",ns.Money(order.averageUnit),12,"muted")
-			if reading.known then
-				local meterY=flow.y; flow:Row("Deal","",12)
-				dealMeter:Show(); dealMeter:SetReading(reading); dealMeter:ClearAllPoints(); dealMeter:SetPoint("TOPRIGHT",0,-meterY)
-				flow:Row(reading.saving>=0 and "You save" or "You pay extra",ns.Money(math.abs(reading.saving)),12,reading.saving>=0 and "#76d49b" or "#ff6060")
+	market = current
+	listable = {}
+	if market then
+		for _, item in ipairs(market.items) do
+			if item.units > 0 then
+				listable[#listable + 1] = item
 			end
-			flow:Text(reading.reasons[1],11,"muted")
-			if order.units~=wanted and order.short==0 then flow:Text("You get "..ns.Comma(order.units)..": stacks cannot be split.",11,"muted") end
-			if order.short>0 then flow:Text("Only "..ns.Comma(order.units).." are for sale.",11,"#ff6060") end
-			if order.cost>GetMoney() then flow:Text("More than your gold.",11,"#ff6060") end
-			flow.y=flow.y+4
-			for i=1,math.min(8,#order.lines) do
-				local line=order.lines[i]
-				flow:Row(order.byUnit and (ns.Comma(line.units).." units") or (line.auctions.." x stack of "..line.tier.stack),ns.Money(line.tier.unit).." each",11,"muted")
+		end
+	end
+	facets = Facets:Build(listable)
+	makeFilter = Facets:Filter(facets)
+end
+
+local function FilteredItems()
+	local search = state.search:lower()
+	local passes = makeFilter(state.selection)
+	local gold = GetMoney()
+	local dealFrom = ns.DealBadgeRule.percent
+	local rows = {}
+	for _, item in ipairs(listable) do
+		local keep = (search == "" or item.name:lower():find(search, 1, true) ~= nil)
+			and (not state.toggles.usableOnly or item.usable)
+			and (not state.toggles.dealsOnly or (item.deal ~= nil and item.deal >= dealFrom))
+			and (not state.toggles.affordableOnly or (ns.Orders.CheapestAuction(item) or math.huge) <= gold)
+			and (passes == nil or passes(item))
+		if keep then
+			rows[#rows + 1] = item
+		end
+	end
+	return rows
+end
+
+-- ========= The rail =========================================================
+-- Each tile is a checkbox over a color or an icon, named by its tooltip.
+local function Tile(index)
+	local tile = railTiles[index]
+	if not tile then
+		tile = CreateFrame("Button", nil, rail)
+		tile.fill = Kit.Fill(tile, C.input)
+		tile.art = tile:CreateTexture(nil, "ARTWORK")
+		tile.art:SetPoint("TOPLEFT", 1, -1)
+		tile.art:SetPoint("BOTTOMRIGHT", -1, 1)
+		tile.art:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+		tile.border = Kit.Border(tile, C.inputBorder, "OVERLAY")
+		tile.mark = tile:CreateTexture(nil, "OVERLAY", nil, 2)
+		tile.mark:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+		Kit.Tip(tile, function(self)
+			return { self.tip }
+		end)
+		tile:SetScript("OnClick", function(self)
+			self.onClick()
+		end)
+		railTiles[index] = tile
+	end
+	return tile
+end
+
+-- A quality's color, dimmed toward the window when the swatch is off.
+local function Dim(color)
+	local base = C.window
+	return { color[1] * 0.28 + base[1] * 0.72, color[2] * 0.28 + base[2] * 0.72, color[3] * 0.28 + base[3] * 0.72, 1 }
+end
+
+local function PaintTile(tile, spec, y)
+	local height = spec.swatch and Theme.swatch or Theme.tile
+	tile:ClearAllPoints()
+	tile:SetPoint("TOP", rail, "TOP", 0, -y)
+	tile:SetSize(Theme.tile, height)
+	tile.tip = spec.tip
+	tile.onClick = spec.onClick
+	if spec.swatch then
+		tile.art:Hide()
+		tile.fill:SetColorTexture(unpack(spec.on and spec.color or Dim(spec.color)))
+		tile.border:SetColor(spec.on and C.white or Dim({ spec.color[1] * 2, spec.color[2] * 2, spec.color[3] * 2 }))
+		tile.mark:SetVertexColor(0, 0, 0)
+		tile.mark:ClearAllPoints()
+		tile.mark:SetPoint("CENTER")
+		tile.mark:SetSize(16, 16)
+	else
+		tile.fill:SetColorTexture(unpack(C.input))
+		tile.art:SetTexture(spec.icon)
+		tile.art:SetShown(spec.icon ~= nil)
+		tile.art:SetAlpha(spec.on and 1 or 0.7)
+		tile.border:SetColor(spec.on and C.accent or C.inputBorder)
+		tile.mark:SetVertexColor(1, 1, 1)
+		tile.mark:ClearAllPoints()
+		tile.mark:SetPoint("CENTER")
+		tile.mark:SetSize(26, 26)
+	end
+	tile.mark:SetShown(spec.on)
+	tile:Show()
+	return height
+end
+
+local function FacetById(id)
+	for _, facet in ipairs(facets) do
+		if facet.id == id then
+			return facet
+		end
+	end
+end
+
+-- The tiles of one rail entry (see ns.BuyRail in data\facets.lua).
+local function TilesFor(entry)
+	local specs = {}
+	local function Add(key, value, on, spec)
+		spec.on = on
+		spec.onClick = function()
+			Facets.Toggle(state.selection, key, value, not on)
+			Refresh()
+		end
+		specs[#specs + 1] = spec
+	end
+
+	if entry.quality then
+		local facet = FacetById(ns.QualityFacet.id)
+		local ticked = state.selection[facet.id] or {}
+		for _, option in ipairs(facet.options) do
+			Add(facet.id, option.value, ticked[option.value] == true, {
+				swatch = true,
+				color = Kit.QualityColor(option.quality),
+				tip = L.RAIL_TIP:format(facet.label, option.label),
+			})
+		end
+	elseif entry.refine then
+		local facet = FacetById(entry.refine)
+		if facet and facet.refineOptions then
+			local key = Facets.RefineKey(facet.id)
+			local ticked = state.selection[key] or {}
+			for _, option in ipairs(facet.refineOptions) do
+				Add(key, option.value, ticked[option.value] == true, {
+					icon = option.icon,
+					tip = L.RAIL_TIP:format(facet.refine.label, option.label),
+				})
 			end
-			if #order.lines>8 then flow:Text("and "..(#order.lines-8).." more price points",11,"muted") end
-			local label,message,liveCost=ctx.BuyState(item,"Buy "..ns.Comma(order.units))
-			action:SetText(label); action:SetEnabled(ns.auctionHouseOpen and order.units>0 and not ns.Trade:IsBusy() and (liveCost or order.cost)<=GetMoney())
-			flow:Place(action,28)
-			flow:Text(message or (order.byUnit and "Bought by the unit: one purchase, cheapest sellers first." or (order.purchases==1 and "One auction, one purchase." or (order.purchases.." auctions. One purchase per press."))),11,"muted")
-			if message then refreshPrice:SetEnabled(not ns.Trade:IsBusy()); flow:Place(refreshPrice,24) end
 		end
-		flow:Finish(); detailScroll:SetContentHeight(flow.y)
-	end
-	local function AddTile(key,value,label,color,icon,y,small)
-		local id=key..":"..value; local tile=tiles[id]
-		if not tile then
-			tile=W.Button(rail,"",26,function() Toggle(key,value,not (selection[key] or {})[value]) end)
-			tile.image=tile:CreateTexture(nil,"ARTWORK"); tile.image:SetPoint("TOPLEFT",2,-2); tile.image:SetPoint("BOTTOMRIGHT",-2,2)
-			tile.check=W.Label(tile,"x",1,-1,10,10,"accent"); W.Tip(tile,label); tiles[id]=tile
+	elseif entry.box then
+		local facet = FacetById(entry.of)
+		local ticked = facet and state.selection[facet.id] or {}
+		for _, option in ipairs(facet and facet.options or {}) do
+			if option.label == entry.box then
+				Add(facet.id, option.value, ticked[option.value] == true, { icon = option.icon, tip = option.label })
+			end
 		end
-		tile:Show(); tile:SetHeight(small and 12 or 26); tile:ClearAllPoints(); tile:SetPoint("TOPLEFT",4,-y)
-		local on=(selection[key] or {})[value]; tile:SetActive(on); tile.check:SetShown(on)
-		if color then tile.image:SetColorTexture(W.Color(color)); tile.image:SetAlpha(on and 0.75 or 0.28)
-		else tile.image:SetTexture(icon or "Interface\\Icons\\INV_Misc_QuestionMark"); tile.image:SetAlpha(on and 1 or 0.65) end
-		return y+(small and 16 or 30)
 	end
-	DrawFacets=function()
-		for _,tile in pairs(tiles) do tile:Hide() end
-		for _,divider in ipairs(dividers) do divider:Hide() end
-		local y=7
-		local function Refinements(id)
-			local category; for _,candidate in ipairs(C.categories) do if candidate.id==id then category=candidate; break end end
-			for _,option in ipairs(category.refine.options) do
-				local best,preferred
-				for _,item in ipairs(Items()) do
-					if item.name and item.icon and M:Box(category,item) and category.refine.slotValues[item.equipLoc]==option.value then
-						local isPreferred=category.refine.preferredSubClasses and M.Has(category.refine.preferredSubClasses[option.value],item.subClassID or item.subClassId) or false
-						if not best or (isPreferred and not preferred) or (isPreferred==preferred and item.listings>best.listings) then best,preferred=item,isPreferred end
-					end
+	return specs
+end
+
+local railRules = {}
+local function PaintRail()
+	for _, tile in ipairs(railTiles) do
+		tile:Hide()
+	end
+	for _, rule in ipairs(railRules) do
+		rule:Hide()
+	end
+	local y, used, rules = 6, 0, 0
+	for _, section in ipairs(ns.BuyRail) do
+		local specs = {}
+		for _, entry in ipairs(section) do
+			for _, spec in ipairs(TilesFor(entry)) do
+				specs[#specs + 1] = spec
+			end
+		end
+		if #specs > 0 then
+			if used > 0 then
+				rules = rules + 1
+				local rule = railRules[rules]
+				if not rule then
+					rule = Kit.Rule(rail)
+					rule:SetWidth(20)
+					railRules[rules] = rule
 				end
-				y=AddTile(id.."/refine",option.value,category.refine.label..": "..option.label,nil,best and best.icon,y)
+				rule:ClearAllPoints()
+				rule:SetPoint("TOP", rail, "TOP", 0, -(y + 2))
+				rule:Show()
+				y = y + 8
+			end
+			for _, spec in ipairs(specs) do
+				used = used + 1
+				y = y + PaintTile(Tile(used), spec, y) + 4
 			end
 		end
-		for index,section in ipairs(C.rail) do
-			if index>1 then
-				local divider=dividers[index-1]
-				if not divider then divider=rail:CreateTexture(nil,"ARTWORK"); divider:SetSize(20,1); W.Paint(divider,"line"); dividers[index-1]=divider end
-				divider:ClearAllPoints(); divider:SetPoint("TOPLEFT",7,-y-2); divider:Show(); y=y+11
+	end
+end
+
+-- ========= The category column =============================================
+-- One kind of row draws all three cases: a category header, a box inside an
+-- open category, and a "flat" box that sits straight in the column.
+local function SideRow(index)
+	local row = sideRows[index]
+	if not row then
+		row = CreateFrame("Button", nil, sidebar.content)
+		row.fill = Kit.Gradient(row, C.controlTop, C.controlBottom)
+		row.border = Kit.Border(row, C.inputBorder)
+		row.hover = Kit.Fill(row, C.rowHover, "BORDER")
+		row.hover:Hide()
+		row.check = Kit.Check(row, 14)
+		row.icon = Kit.Icon(row, 16)
+		row.label = Kit.Text(row, "normal", C.text)
+		row.caret = Kit.Caret(row)
+		row.caret:SetPoint("RIGHT", -7, 0)
+		row.count = CreateFrame("Frame", nil, row)
+		row.count:SetSize(18, 14)
+		row.count:SetPoint("RIGHT", row.caret, "LEFT", -6, 0)
+		Kit.Fill(row.count, C.accent)
+		row.countText = Kit.Text(row.count, "small", C.panel, "CENTER")
+		row.countText:SetAllPoints()
+		-- The checkbox of a header has its own click, apart from the expander.
+		row.checkZone = CreateFrame("Button", nil, row)
+		row.checkZone:SetPoint("TOPLEFT")
+		row.checkZone:SetPoint("BOTTOMLEFT")
+		row.checkZone:SetWidth(26)
+		row.checkZone:SetScript("OnClick", function()
+			row.onCheck()
+		end)
+		row:SetScript("OnClick", function(self)
+			self.onClick()
+		end)
+		row:SetScript("OnEnter", function(self)
+			self.hover:SetShown(not self.isHeader)
+			if self.isHeader then
+				self.border:SetColor(C.activeBorder)
 			end
-			for _,entry in ipairs(section) do
-				if entry.refine then Refinements(entry.refine)
-				elseif entry.facet=="quality" then
-					for _,quality in ipairs(C.qualities) do if quality.id<=4 then y=AddTile("quality",tostring(quality.id),"Quality: "..quality.label,quality.color,nil,y,true) end end
-				elseif entry.box then
-					for _,option in ipairs(options[entry.of] or {}) do if option.label==entry.box then y=AddTile(entry.of,option.value,option.label,nil,option.icon,y) end end
+		end)
+		row:SetScript("OnLeave", function(self)
+			self.hover:Hide()
+			self.border:SetColor(C.inputBorder)
+		end)
+		sideRows[index] = row
+	end
+	return row
+end
+
+-- spec: header (bool), label, color, checked, icon, count, open, onClick, onCheck
+local function PaintSideRow(row, spec, y)
+	local height = spec.header and HEADER_HEIGHT or OPTION_HEIGHT
+	row:ClearAllPoints()
+	row:SetPoint("TOPLEFT", sidebar.content, "TOPLEFT", spec.header and 0 or 8, -y)
+	row:SetPoint("TOPRIGHT", sidebar.content, "TOPRIGHT", 0, -y)
+	row:SetHeight(height)
+	row.isHeader = spec.header
+	row.fill:SetShown(spec.header)
+	row.onClick = spec.onClick
+	row.onCheck = spec.onCheck or spec.onClick
+	row.checkZone:SetShown(spec.onCheck ~= nil)
+
+	row.check:ClearAllPoints()
+	row.check:SetPoint("LEFT", spec.header and 7 or 2, 0)
+	row.check:SetState(spec.checked)
+
+	local x = (spec.header and 7 or 2) + 14 + 6
+	row.icon:SetShown(spec.icon ~= nil)
+	if spec.icon then
+		row.icon:ClearAllPoints()
+		row.icon:SetPoint("LEFT", x, 0)
+		row.icon:SetIcon(spec.icon)
+		x = x + 16 + 6
+	end
+	row.label:ClearAllPoints()
+	row.label:SetPoint("LEFT", x, 0)
+	row.label:SetPoint("RIGHT", spec.expander and -40 or -4, 0)
+	row.label:SetText(spec.label)
+	row.label:SetTextColor(unpack(spec.header and C.accent or C.text))
+
+	row.caret:SetShown(spec.expander == true)
+	row.caret:SetOpen(spec.open == true)
+	row.count:SetShown((spec.count or 0) > 0)
+	row.countText:SetText(spec.count or "")
+	-- Rows that are not headers have no box around them.
+	row.border:SetColor(spec.header and C.inputBorder or { 0, 0, 0, 0 })
+	row:Show()
+	return height
+end
+
+local clearButton
+local function PaintSidebar()
+	for _, row in ipairs(sideRows) do
+		row:Hide()
+	end
+	local y, used = 0, 0
+	local function Add(spec)
+		used = used + 1
+		y = y + PaintSideRow(SideRow(used), spec, y)
+	end
+
+	for _, facet in ipairs(facets) do
+		if not facet.rail and #facet.options > 0 then
+			local ticked = state.selection[facet.id] or {}
+			local tickedCount = 0
+			for _, option in ipairs(facet.options) do
+				if ticked[option.value] then
+					tickedCount = tickedCount + 1
 				end
 			end
-		end
-		y=0
-		for _,category in ipairs(C.categories) do
-			local id=category.id; local group=groups[id]; local choices=options[id] or {}
-			if not group then
-				group={options={}}; groups[id]=group
-				group.head=W.Button(sideScroll.content,"",158,function() opened[id]=not opened[id]; DrawFacets() end)
-				group.head:SetHeight(C.metrics.sidebarHeader)
-				group.head.label:ClearAllPoints(); group.head.label:SetPoint("LEFT",26,0); group.head.label:SetJustifyH("LEFT"); group.head.label:SetWidth(119)
-				group.head.label:SetFont("Fonts\\ARIALN.TTF",13)
-				group.arrow=W.Label(group.head,"",0,0,10,11,"muted"); group.arrow:ClearAllPoints(); group.arrow:SetPoint("RIGHT",-5,0)
-				group.badge=W.Panel(group.head,"accent","accent"); group.badge:SetSize(18,16); group.badge:SetPoint("RIGHT",-18,0)
-				group.count=W.Label(group.badge,"",0,-2,18,11,"panel"); group.count:SetJustifyH("CENTER")
-				group.all=W.Check(group.head,"",false,function(on)
-					selection[id]={}; if on then for _,option in ipairs(options[id] or {}) do selection[id][option.value]=true end end
-					DrawFacets(); Refresh()
-				end,14); group.all:SetSize(14,22); group.all:SetPoint("LEFT",6,0)
-			end
-			group.head:Hide(); for _,control in pairs(group.options) do control:Hide() end
-			if #choices>0 then
-				local ticked=selection[id] or {}; local count=0; for _ in pairs(ticked) do count=count+1 end
-				local refined=0; for _ in pairs(selection[id.."/refine"] or {}) do refined=refined+1 end
-				if not category.flat then
-					group.head:Show(); group.head:ClearAllPoints(); group.head:SetPoint("TOPLEFT",0,-y)
-					group.head:SetText(category.label); group.head.label:SetWidth(count+refined>0 and 92 or 117)
-					group.badge:SetShown(count+refined>0); group.count:SetText(count+refined); group.arrow:SetText(opened[id] and "v" or ">")
-					group.all:SetChecked(count==#choices,count>0); y=y+C.metrics.sidebarHeader
+			local function ToggleOption(option)
+				return function()
+					Facets.Toggle(state.selection, facet.id, option.value, not ticked[option.value])
+					Refresh()
 				end
-				if category.flat or opened[id] then
-					for i,option in ipairs(choices) do
-						if not option.inRail then
-							local control=group.options[i]
-							if not control then
-								control=W.Check(sideScroll.content,"",false,function(on) local current=control.option; Toggle(id,current.value,on) end,150,true); group.options[i]=control
-							end
-							control.option=option; control.label:SetText(category.flat and #choices==1 and category.label or option.label)
-							control:SetIcon(option.icon); control:SetChecked(ticked[option.value]); control:ClearAllPoints(); control:SetPoint("TOPLEFT",4,-y); control:Show(); y=y+24
+			end
+
+			if facet.flat then
+				-- No header: each box sits straight in the column. A category
+				-- with one box takes the category's name.
+				for _, option in ipairs(facet.options) do
+					Add({
+						header = true,
+						label = #facet.options == 1 and facet.label or option.label,
+						checked = ticked[option.value] == true,
+						icon = option.icon,
+						onClick = ToggleOption(option),
+					})
+					y = y + 4
+				end
+			else
+				local all = tickedCount == #facet.options
+				local refined = 0
+				for _ in pairs(state.selection[Facets.RefineKey(facet.id)] or {}) do
+					refined = refined + 1
+				end
+				local isOpen = state.open[facet.id] == true
+				Add({
+					header = true,
+					expander = true,
+					label = facet.label,
+					checked = all or (tickedCount > 0 and "some") or false,
+					count = (all and 0 or tickedCount) + refined,
+					open = isOpen,
+					onClick = function()
+						state.open[facet.id] = not isOpen
+						Refresh()
+					end,
+					-- The header's own checkbox ticks every box in the category.
+					onCheck = function()
+						for _, option in ipairs(facet.options) do
+							Facets.Toggle(state.selection, facet.id, option.value, not all)
+						end
+						Refresh()
+					end,
+				})
+				if isOpen then
+					y = y + 2
+					for _, option in ipairs(facet.options) do
+						if not option.inRail then -- it is a tile in the rail
+							Add({ label = option.label, checked = ticked[option.value] == true, icon = option.icon, onClick = ToggleOption(option) })
 						end
 					end
 				end
-				y=y+4
+				y = y + 4
 			end
 		end
-		local any=false; for _,set in pairs(selection) do if next(set) then any=true; break end end
-		if not page.clear then page.clear=W.Button(sideScroll.content,"Clear all",158,function() for key in pairs(selection) do selection[key]=nil end; DrawFacets(); Refresh() end) end
-		page.clear:SetShown(any); page.clear:ClearAllPoints(); page.clear:SetPoint("TOPLEFT",0,-y); if any then y=y+30 end
-		sideScroll:SetContentHeight(y)
 	end
-	local search=W.Edit(center,C.metrics.searchWidth,"",function(text) filter.text=text; Refresh() end); search:SetHeight(26); search:SetPoint("TOPLEFT")
-	search.placeholder=W.Label(search,"Search",6,-6,120,12,"muted")
-	search:SetScript("OnEditFocusGained",function() search.placeholder:Hide() end)
-	search:SetScript("OnEditFocusLost",function() search.placeholder:SetShown(search:GetText()=="") end)
-	local x=C.metrics.searchWidth+5
-	for i,toggle in ipairs(C.toggles) do
-		local id=toggle.id; local button=W.Button(center,toggle.label,C.metrics.buyToggleWidths[i],function(self) filter[id]=not filter[id]; self:SetActive(filter[id]); Refresh() end)
-		button:SetPoint("TOPLEFT",x,0); button:SetHeight(26); x=x+C.metrics.buyToggleWidths[i]+5
+
+	clearButton:SetShown(Facets.AnySelected(state.selection))
+	if clearButton:IsShown() then
+		clearButton:ClearAllPoints()
+		clearButton:SetPoint("TOPLEFT", sidebar.content, "TOPLEFT", 0, -(y + 2))
+		clearButton:SetPoint("TOPRIGHT", sidebar.content, "TOPRIGHT", 0, -(y + 2))
+		y = y + 26
 	end
-	local fields={"name","level","units","min","deal"}
-	list=W.List(center,396,height-32,{
-		{label="Item",text=function(item) return W.ItemText(item,true) end},
-		{label="Lvl",width=44,align="RIGHT",text=function(item) return item.levelType=="REQ_LEVEL_ABBR" and item.level or "" end},
-		{label="Avail",width=64,align="RIGHT",text=function(item) return ns.Comma(item.units) end},
-		{label="Price",width=100,align="RIGHT",text=function(item) return ns.Money(item.min) end},
-		{label="",width=54,align="RIGHT",text=function(item) local value=item.deal; return value and value>=30 and ("|cff76d49b-"..value.."%|r") or "" end},
-	},function(item)
-		if ns.Trade:IsBusy() or not ns.Trade:Cancel() then return end
-		selected=item.key; wanted=1; Refresh()
-	end,function(index)
-		if not fields[index] then return end
-		if sortIndex==index then descending=not descending else descending=index~=1 end
-		sortField,sortIndex=fields[index],index; Refresh()
-	end); list:SetPoint("TOPLEFT",0,-32)
-	Refresh=function()
-		local rows={}
-		for _,item in ipairs(Items()) do if M:Filter(item,filter,GetMoney()) and M:Matches(item,selection) then rows[#rows+1]=item end end
-		W.Sort(rows,sortField,descending,function(item,field) if field=="level" and item.levelType~="REQ_LEVEL_ABBR" then return nil end; return item[field] end); list:SetSort(sortIndex,descending)
-		list:SetRows(rows,selected,C.buyLimit,ctx.Empty("Nothing matches.")); DrawDetail()
-	end
-	local lastMarket
-	function page:Refresh()
-		local market=ctx.Market()
-		if market~=lastMarket then
-			lastMarket=market; for _,category in ipairs(C.categories) do options[category.id]=M:Options(category,Items()) end
-			DrawFacets()
-		end
-		Refresh()
-	end
-	page.list=list; page.selection=selection
-	DrawFacets(); return page
+	sidebar:SetContentHeight(y)
 end
+
+-- ========= The list =========================================================
+local SORT_VALUES = {
+	name = function(item)
+		return item.name
+	end,
+	level = function(item)
+		return item.levelType == "REQ_LEVEL_ABBR" and item.level or nil
+	end,
+	units = function(item)
+		return item.units
+	end,
+	min = function(item)
+		return item.min
+	end,
+	deal = function(item)
+		return item.deal
+	end,
+}
+
+local function PaintList(keepScroll)
+	local rows = FilteredItems()
+	Kit.SortRows(rows, SORT_VALUES[state.sort.id], state.sort.descending)
+	list:SetSort(state.sort.id, state.sort.descending)
+	list:SetRows(rows, keepScroll)
+end
+
+-- ========= The order panel ==================================================
+local parts = {}
+local stack
+
+local function PaintOrder()
+	stack:Reset()
+	local item = market and state.selectedKey and market.byKey[state.selectedKey]
+	prompt:SetShown(item == nil)
+	if not item then
+		return
+	end
+
+	local filled = ns.Orders.Fill(item, state.wanted)
+	local deal = ns.Signals:Deal(item, filled.units, filled.cost)
+	local gold = GetMoney()
+	local overBudget = filled.cost > gold
+
+	parts.icon:SetIcon(item.icon)
+	parts.name:SetText(item.name)
+	parts.name:SetTextColor(unpack(Kit.QualityColor(item.quality)))
+	parts.available:SetText(L.BUY_AVAILABLE:format(ns.Comma(item.units)))
+	stack:Add(parts.head)
+
+	parts.quantity:SetValue(tostring(state.wanted))
+	stack:Add(parts.quantityRow, 8)
+	stack:Add(parts.rule1, 8)
+	parts.total:Set(L.BUY_TOTAL, ns.Money(filled.cost))
+	stack:Add(parts.total, 6)
+	parts.average:Set(L.BUY_AVERAGE, ns.Money(filled.averageUnit))
+	stack:Add(parts.average, 4)
+
+	-- The deal: a meter and what the order saves. With too few auctions to
+	-- know the usual price there is no meter, only a note saying so.
+	if deal.known then
+		parts.dealMeter:SetReading(deal)
+		stack:Add(parts.deal, 2)
+		parts.saving:Set(deal.saving >= 0 and L.BUY_SAVE or L.BUY_EXTRA, ns.Money(math.abs(deal.saving)))
+		parts.saving.right:SetTextColor(unpack(deal.saving >= 0 and C.good or C.bad))
+		stack:Add(parts.saving, 2)
+	end
+	parts.dealNote:SetBody(deal.reasons[1])
+	stack:Add(parts.dealNote, 3)
+
+	if filled.short > 0 then
+		parts.warning:SetBody(L.BUY_SHORT:format(ns.Comma(filled.units)), C.bad)
+		stack:Add(parts.warning, 3)
+	elseif filled.units ~= state.wanted then
+		parts.warning:SetBody(L.BUY_GET_MORE:format(ns.Comma(filled.units)))
+		stack:Add(parts.warning, 3)
+	end
+	if overBudget then
+		parts.budget:SetBody(L.BUY_OVER_BUDGET, C.bad)
+		stack:Add(parts.budget, 3)
+	end
+
+	stack:Add(parts.rule2, 8)
+	for index = 1, ORDER_LINES do
+		local line = filled.lines[index]
+		if line then
+			local what = filled.byUnit and L.BUY_LINE_UNITS:format(ns.Comma(line.units))
+				or L.BUY_LINE_STACKS:format(ns.Comma(line.auctions), ns.Comma(line.tier.stack))
+			parts.lines[index]:Set(what, L.EACH:format(ns.Money(line.tier.unit)))
+			stack:Add(parts.lines[index], index == 1 and 6 or 0)
+		end
+	end
+	if #filled.lines > ORDER_LINES then
+		parts.more:SetBody(L.BUY_MORE_LINES:format(#filled.lines - ORDER_LINES))
+		stack:Add(parts.more, 2)
+	end
+
+	parts.buy:SetLabel(L.BUY_BUTTON:format(ns.Comma(filled.units)))
+	parts.buy:SetDisabled(overBudget or filled.units == 0)
+	stack:Add(parts.buy, 10)
+	local how = L.BUY_BY_UNIT
+	if not filled.byUnit then
+		how = filled.purchases == 1 and L.BUY_ONE_AUCTION or L.BUY_AUCTIONS:format(ns.Comma(filled.purchases), ns.Comma(filled.purchases))
+	end
+	parts.how:SetBody(how)
+	stack:Add(parts.how, 4)
+end
+
+local function SetWanted(value)
+	local item = market and market.byKey[state.selectedKey]
+	state.wanted = math.max(1, math.floor(value or 1))
+	if item then
+		state.wanted = math.min(state.wanted, math.max(1, item.units))
+	end
+	PaintOrder()
+end
+
+local function BuildOrder(parent)
+	local width = Theme.buy.order - 16
+	stack = Kit.Stack(parent, 8)
+
+	prompt = Kit.Note(parent, "normal", C.muted, "CENTER")
+	prompt:SetPoint("TOPLEFT", 16, -30)
+	prompt:SetPoint("TOPRIGHT", -16, -30)
+	prompt:SetWidth(width - 16)
+	prompt:SetBody(L.BUY_PICK)
+
+	parts.head = CreateFrame("Frame", nil, parent)
+	parts.head:SetHeight(34)
+	parts.icon = Kit.Icon(parts.head, 32)
+	parts.icon:SetPoint("LEFT")
+	parts.name = Kit.Text(parts.head, "normal")
+	parts.name:SetPoint("TOPLEFT", 40, -2)
+	parts.name:SetPoint("RIGHT")
+	parts.available = Kit.Text(parts.head, "small", C.muted)
+	parts.available:SetPoint("BOTTOMLEFT", 40, 2)
+
+	parts.quantityRow = CreateFrame("Frame", nil, parent)
+	parts.quantityRow:SetHeight(26)
+	local label = Kit.Text(parts.quantityRow, "normal", C.muted)
+	label:SetPoint("LEFT")
+	label:SetText(L.BUY_QUANTITY)
+	local minus = Kit.Button(parts.quantityRow, { text = "-", width = 26, height = 26, onClick = function()
+		SetWanted(state.wanted - 1)
+	end })
+	minus:SetPoint("LEFT", 62, 0)
+	parts.quantity = Kit.Input(parts.quantityRow, { width = 64, height = 26, numeric = true, justify = "RIGHT", maxLetters = 6, onChange = function(text)
+		SetWanted(tonumber(text) or 1)
+	end })
+	parts.quantity:SetPoint("LEFT", minus, "RIGHT", 4, 0)
+	local plus = Kit.Button(parts.quantityRow, { text = "+", width = 26, height = 26, onClick = function()
+		SetWanted(state.wanted + 1)
+	end })
+	plus:SetPoint("LEFT", parts.quantity, "RIGHT", 4, 0)
+	local all = Kit.Button(parts.quantityRow, { text = L.SELL_ALL, height = 26, onClick = function()
+		local item = market and market.byKey[state.selectedKey]
+		SetWanted(item and item.units or 1)
+	end })
+	all:SetPoint("LEFT", plus, "RIGHT", 4, 0)
+
+	local function Rule()
+		local holder = CreateFrame("Frame", nil, parent)
+		holder:SetHeight(1)
+		Kit.Fill(holder, C.line)
+		return holder
+	end
+	parts.rule1, parts.rule2 = Rule(), Rule()
+
+	parts.total = Kit.Pair(parent, "total", C.text)
+	parts.total:SetHeight(22)
+	parts.average = Kit.Pair(parent)
+	parts.deal = Kit.Pair(parent)
+	parts.deal.left:SetText(L.BUY_DEAL)
+	parts.dealMeter = Kit.Meter(parts.deal, ns.DealPips)
+	parts.dealMeter:SetPoint("RIGHT")
+	parts.deal:EnableMouse(true)
+	Kit.Tip(parts.deal, function()
+		local item = market and market.byKey[state.selectedKey]
+		if not item then
+			return nil
+		end
+		local filled = ns.Orders.Fill(item, state.wanted)
+		local deal = ns.Signals:Deal(item, filled.units, filled.cost)
+		return deal.known and { deal.level.label, unpack(deal.reasons) } or nil
+	end)
+	parts.saving = Kit.Pair(parent)
+
+	local function Note()
+		local note = Kit.Note(parent, "small", C.muted)
+		note:SetWidth(width)
+		return note
+	end
+	parts.dealNote, parts.warning, parts.budget, parts.more, parts.how = Note(), Note(), Note(), Note(), Note()
+
+	parts.lines = {}
+	for index = 1, ORDER_LINES do
+		parts.lines[index] = Kit.Pair(parent, "small")
+		parts.lines[index]:SetHeight(16)
+	end
+
+	parts.buy = Kit.Button(parent, { text = "", look = "action", height = 32, width = width, tip = { L.TAB_BUY, L.BUY_NOT_WIRED } })
+end
+
+-- ========= The tab ==========================================================
+Refresh = function(keepScroll)
+	Prepare()
+	local _, reason = ns.Window:Market()
+	list:SetEmptyText(market and L.BUY_NOTHING or reason)
+	for _, button in pairs(toggleButtons) do
+		button:SetActive(state.toggles[button.id] == true)
+	end
+	if market and state.selectedKey and not market.byKey[state.selectedKey] then
+		state.selectedKey = nil
+	end
+	PaintRail()
+	PaintSidebar()
+	PaintList(keepScroll)
+	PaintOrder()
+end
+
+local function Create(parent)
+	local pad = Theme.pad
+	rail = Kit.Panel(parent)
+	rail:SetPoint("TOPLEFT")
+	rail:SetPoint("BOTTOMLEFT")
+	rail:SetWidth(Theme.buy.rail)
+
+	local side = Kit.Panel(parent)
+	side:SetPoint("TOPLEFT", rail, "TOPRIGHT", pad, 0)
+	side:SetPoint("BOTTOMLEFT", rail, "BOTTOMRIGHT", pad, 0)
+	side:SetWidth(Theme.buy.sidebar)
+	sidebar = Kit.Scroll(side)
+	sidebar:SetPoint("TOPLEFT", 8, -8)
+	sidebar:SetPoint("BOTTOMRIGHT", -8, 8)
+	clearButton = Kit.Button(sidebar.content, { text = L.CLEAR_ALL, size = "small", height = 22, width = 100, onClick = function()
+		state.selection = {}
+		Refresh()
+	end })
+
+	order = Kit.Panel(parent)
+	order:SetPoint("TOPRIGHT")
+	order:SetPoint("BOTTOMRIGHT")
+	order:SetWidth(Theme.buy.order)
+	BuildOrder(order)
+
+	-- The search box and the quick toggles share one row.
+	toolbar = CreateFrame("Frame", nil, parent)
+	toolbar:SetPoint("TOPLEFT", side, "TOPRIGHT", pad, 0)
+	toolbar:SetPoint("TOPRIGHT", order, "TOPLEFT", -pad, 0)
+	toolbar:SetHeight(26)
+	local right
+	for index = #ns.BuyToggles, 1, -1 do
+		local toggle = ns.BuyToggles[index]
+		local button = Kit.Button(toolbar, { text = toggle.label, height = 26, padding = 14, onClick = function()
+			state.toggles[toggle.id] = not state.toggles[toggle.id]
+			Refresh()
+		end })
+		button.id = toggle.id
+		if right then
+			button:SetPoint("RIGHT", right, "LEFT", -5, 0)
+		else
+			button:SetPoint("RIGHT")
+		end
+		right = button
+		toggleButtons[toggle.id] = button
+	end
+	searchBox = Kit.Input(toolbar, { height = 26, placeholder = L.BUY_SEARCH, onChange = function(text)
+		state.search = text
+		PaintList()
+	end })
+	searchBox:SetPoint("LEFT")
+	searchBox:SetPoint("RIGHT", right, "LEFT", -5, 0)
+
+	list = Kit.List(parent, {
+		columns = {
+			{
+				id = "name",
+				label = L.BUY_COL_ITEM,
+				flex = true,
+				icon = function(item)
+					return item.icon
+				end,
+				text = function(item)
+					return item.name
+				end,
+				color = function(item)
+					return Kit.QualityColor(item.quality)
+				end,
+			},
+			{ id = "level", label = L.BUY_COL_LEVEL, width = 30, align = "RIGHT", text = function(item)
+				return item.levelType == "REQ_LEVEL_ABBR" and tostring(item.level or "") or ""
+			end },
+			{ id = "units", label = L.BUY_COL_AVAILABLE, width = 58, align = "RIGHT", text = function(item)
+				return ns.Comma(item.units)
+			end },
+			{ id = "min", label = L.BUY_COL_PRICE, width = 84, align = "RIGHT", text = function(item)
+				return ns.Money(item.min)
+			end },
+			{ id = "deal", label = "", width = 42, align = "RIGHT", badge = function(item)
+				if item.deal and item.deal >= ns.DealBadgeRule.percent then
+					return "-" .. item.deal .. "%"
+				end
+			end },
+		},
+		empty = L.BUY_NOTHING,
+		onClick = function(item)
+			state.selectedKey = item.key
+			state.wanted = 1
+			PaintList(true)
+			PaintOrder()
+		end,
+		isSelected = function(item)
+			return item.key == state.selectedKey
+		end,
+		link = function(item)
+			return item.link
+		end,
+		onSort = function(id)
+			if state.sort.id == id then
+				state.sort.descending = not state.sort.descending
+			else
+				state.sort = { id = id, descending = id ~= "name" } -- numbers start largest first
+			end
+			PaintList()
+		end,
+	})
+	list:SetPoint("TOPLEFT", toolbar, "BOTTOMLEFT", 0, -6)
+	list:SetPoint("BOTTOMRIGHT", order, "BOTTOMLEFT", -pad, 0)
+
+	return { Refresh = function()
+		Refresh(true)
+	end }
+end
+
+ns.Window:RegisterTab({ id = "buy", label = L.TAB_BUY, order = 1, Create = Create })

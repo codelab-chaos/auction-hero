@@ -38,6 +38,11 @@ local function Finish(item)
 		item.min = tiers[1].unit
 		item.max = tiers[#tiers].unit
 		item.median = WeightedMedian(tiers, item.units)
+		-- How far the lowest price sits under the median, for the deal badge.
+		local rule = ns.DealBadgeRule
+		if item.median and item.median > 0 and (item.listings - item.bidOnly) >= rule.minListings then
+			item.deal = math.floor((item.median - item.min) / item.median * 100)
+		end
 	end
 end
 

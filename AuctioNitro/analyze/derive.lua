@@ -152,7 +152,7 @@ local function FinishItem(item)
 		item.minUnit = math.floor(prices[order[1]])
 		item.maxUnit = math.floor(prices[order[count]])
 		item.medianUnit = math.floor(WeightedMedian(prices, item.weights, order))
-		if count >= ns.DealRule.minListings and item.medianUnit > 0 then
+		if count >= ns.DealBadgeRule.minListings and item.medianUnit > 0 then
 			item.deal = math.floor((item.medianUnit - item.minUnit) / item.medianUnit * 100)
 		end
 	end
@@ -311,7 +311,7 @@ function Derive:Run(snapshot)
 		if item.sellers == 1 then
 			totals.singleSeller = totals.singleSeller + 1
 		end
-		if item.deal and item.deal >= ns.DealRule.percent then
+		if item.deal and item.deal >= ns.DealBadgeRule.percent then
 			totals.deals = totals.deals + 1
 		end
 		if position % 50 == 0 then

@@ -90,3 +90,54 @@ function Signals:ConfidenceLine(confidence)
 		ns.Comma(facts.sales)
 	)
 end
+
+-- How good it is to buy an order of this item. units and cost describe the
+-- whole order. Returns a reading like Confidence, plus:
+--   known    false when there is too little to judge by. No meter is shown then
+--   saving   what the order saves against the usual price (negative when over)
+function Signals:Deal(item, units, cost)
+	local rule = ns.DealRule
+	local function ConfidenceAt(id)
+		for _, level in ipairs(ns.ConfidenceLevels) do
+			if level.id == id then
+				return level.min
+			end
+		end
+		return 0
+	end
+	local confidence = self:Confidence(item)
+	local usual = ns.History:Usual(item)
+	if units <= 0 or not usual or confidence.score < ConfidenceAt(rule.needsConfidence) then
+		return { known = false, pips = ns.DealPips, level = { pips = 0, tone = "warn", label = "" }, reasons = { L.DEAL_UNKNOWN } }
+	end
+
+	local unitPrice = cost / units
+	local under = (usual - unitPrice) / usual * 100
+	local level = ns.DealLevels.fair
+	if under < -rule.fairBand then
+		level = ns.DealLevels.over
+	elseif under >= rule.resellFrom and confidence.score >= ConfidenceAt(rule.resellNeeds) then
+		level = ns.DealLevels.resell
+	elseif under >= rule.greatFrom then
+		level = confidence.score >= ConfidenceAt(rule.confidentNeeds) and ns.DealLevels.confident or ns.DealLevels.great
+	end
+
+	local percent = math.floor(math.abs(under) + 0.5)
+	local reasons = {}
+	if percent == 0 then
+		reasons[1] = L.DEAL_AT_USUAL:format(ns.PlainMoney(usual))
+	else
+		reasons[1] = (under > 0 and L.DEAL_UNDER or L.DEAL_ABOVE):format(percent, ns.PlainMoney(usual))
+	end
+	if level == ns.DealLevels.great then
+		reasons[2] = L.DEAL_CHECK
+	end
+
+	return {
+		known = true,
+		saving = math.floor(usual * units - cost + 0.5),
+		level = level,
+		pips = ns.DealPips,
+		reasons = reasons,
+	}
+end

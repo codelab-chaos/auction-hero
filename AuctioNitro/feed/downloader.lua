@@ -38,12 +38,6 @@ function Downloader:Start(sourceId)
 	if not fetch then
 		return false
 	end
-	if ns.Trade then
-		if ns.Trade:IsBusy() or not ns.Trade:Cancel() then
-			Report(source, "failed", { reason = "FAIL_BUSY", keepRunning = true })
-			return false
-		end
-	end
 	if running then
 		Report(source, "failed", { reason = "FAIL_BUSY", keepRunning = true })
 		return false

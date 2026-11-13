@@ -8,6 +8,7 @@ local function PrintHelp()
 	ns.Print(L.CMD_HELP_SCAN)
 	ns.Print(L.CMD_HELP_CLEAR)
 	ns.Print(L.CMD_HELP_SET)
+	ns.Print(L.CMD_HELP_DEBUG)
 end
 
 local function PrintSwitch(setting)
@@ -37,9 +38,17 @@ local commands = {
 	end,
 	cancel = function()
 		ns.Downloader:Cancel()
-		ns.Trade:Cancel()
 	end,
-	data = function() ns.Panel:Toggle() end,
+	-- Shows or hides the Debug tab: /an debug, or /an debug on|off.
+	debug = function(value)
+		local on = not ns.IsEnabled("debug")
+		if value == "on" or value == "off" then
+			on = value == "on"
+		end
+		ns.SetEnabled("debug", on)
+		ns.Print(on and L.CMD_DEBUG_ON or L.CMD_DEBUG_OFF)
+		ns.Window:Show()
+	end,
 	clear = function()
 		ns.Store:Clear()
 		ns.EventLog:Clear()

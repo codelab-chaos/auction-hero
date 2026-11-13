@@ -1,158 +1,579 @@
--- The lab's Sell form, with real bag slots replacing PRETEND_BAG.
-local _,ns=...
-local W,C,M=ns.Widgets,ns.Concept,ns.ConceptModel
-function ns.ConceptTabs.Sell(parent,ctx)
-	local page=CreateFrame("Frame",nil,parent); page:SetAllPoints()
-	local bags=W.Panel(page); bags:SetSize(200,ctx.height); bags:SetPoint("TOPLEFT")
-	W.Label(bags,"Your bags",10,-10,170,12,"accent")
-	local bagScroll=W.Scroll(bags,180,ctx.height-42); bagScroll:SetPoint("TOPLEFT",10,-32)
-	local bagButtons={}
-	local form=W.Panel(page); form:SetSize(434,ctx.height); form:SetPoint("TOPLEFT",208,0)
-	local formScroll=W.Scroll(form,416,ctx.height-18,0); formScroll:SetPoint("TOPLEFT",9,-9)
-	local flow=W.Flow(formScroll.content,416)
-	local competition=W.Panel(page); competition:SetSize(230,ctx.height); competition:SetPoint("TOPRIGHT")
-	local competitionScroll=W.Scroll(competition,210,ctx.height-20); competitionScroll:SetPoint("TOPLEFT",10,-10)
-	local ladder=W.Flow(competitionScroll.content,200)
-	local selected,perAuction,auctions=nil,1,1
-	local ruleId,duration,saleType=C.defaultPriceRule,C.defaultDuration,"buyout"
-	local customUnit,customBid
-	local Refresh,DrawForm,DrawBags
-	local function Bag() return ns.Inventory.byKey[selected] end
-	local function Item()
-		local bag=Bag(); if not bag then return end
-		return ctx.Find(selected) or {key=bag.key,name=bag.name,itemID=bag.itemID,quality=bag.quality,icon=bag.icon,link=bag.link,commodity=bag.commodity,tiers={},units=0,listings=0,bidOnly=0}
-	end
-	local function UnitPrice() local item=Item(); return customUnit or (item and M:Price(item,ruleId)) end
-	local function BidPrice() local unit=UnitPrice(); return customBid or (unit and math.max(1,math.floor(unit*C.startingBidShare))) end
-	local function Change(fn) if ns.Trade:IsBusy() or not ns.Trade:Cancel() then return end; fn(); Refresh() end
-	local icon=W.Icon(formScroll.content,40)
-	local saleRow=CreateFrame("Frame",nil,formScroll.content); saleRow:SetSize(404,26); W.Label(saleRow,"Sale",0,-6,54,11,"muted")
-	local saleButtons={}
-	local x=64
-	for i,option in ipairs(C.saleTypes) do
-		local id=option.id; local b=W.Button(saleRow,option.label,({87,122,91})[i],function() Change(function() saleType=id end) end)
-		b:SetPoint("TOPLEFT",x,0); W.Tip(b,option.note); saleButtons[id]=b; x=x+({87,122,91})[i]+4
-	end
-	local price=W.Money(formScroll.content,0,function(value) Change(function() customUnit=math.max(1,value) end) end)
-	local rules=CreateFrame("Frame",nil,formScroll.content); rules:SetSize(404,24)
-	local ruleButtons={}; x=0
-	for i,rule in ipairs(C.priceRules) do
-		local id=rule.id; local width=({49,65,71,100,99})[i]
-		local b=W.Button(rules,rule.label,width,function() Change(function() ruleId=id; customUnit=nil end) end); b:SetPoint("TOPLEFT",x,0)
-		b.label:SetFont("Fonts\\ARIALN.TTF",11); W.Tip(b,rule.note); ruleButtons[id]=b; x=x+width+4
-	end
-	local bidRow=CreateFrame("Frame",nil,formScroll.content); bidRow:SetSize(404,24)
-	W.Label(bidRow,"Starting bid",0,-5,80,11,"muted")
-	local bid=W.Money(bidRow,0,function(value) Change(function() customBid=math.max(1,value) end) end,true); bid:SetPoint("TOPLEFT",90,0)
-	local meter=W.Meter(formScroll.content,404)
-	local sizeRow=CreateFrame("Frame",nil,formScroll.content); sizeRow:SetSize(404,24)
-	W.Label(sizeRow,"Each auction",0,-4,90,11,"muted")
-	local sizeValue=W.Label(sizeRow,"",266,-4,134,12); sizeValue:SetJustifyH("RIGHT")
-	local size=W.Slider(sizeRow,162,function(value) Change(function() perAuction=value end) end); size:SetPoint("TOPLEFT",98,-2)
-	local countRow=CreateFrame("Frame",nil,formScroll.content); countRow:SetSize(404,24)
-	W.Label(countRow,"Auctions",0,-4,90,11,"muted")
-	local countValue=W.Label(countRow,"",266,-4,134,12); countValue:SetJustifyH("RIGHT")
-	local count=W.Slider(countRow,162,function(value) Change(function() auctions=value end) end); count:SetPoint("TOPLEFT",98,-2)
-	local durationRow=CreateFrame("Frame",nil,formScroll.content); durationRow:SetSize(404,24); W.Label(durationRow,"Duration",0,-5,80,11,"muted")
-	local durationButtons={}
-	for i,option in ipairs(C.durations) do
-		local index=option.index; local b=W.Button(durationRow,option.label,76,function() Change(function() duration=index end) end)
-		b:SetPoint("TOPLEFT",98+(i-1)*80,0); W.Tip(b,option.note); durationButtons[index]=b
-	end
-	local action=W.Button(formScroll.content,"Post auction",416,function()
-		local bag=Bag(); local unit=UnitPrice(); if not bag or not unit then return end
-		ns.Trade:Post(selected,bag.commodity and perAuction*auctions or perAuction,unit,saleType=="bids" and unit or (BidPrice() or unit),duration,saleType)
-	end,"action"); action:SetHeight(32)
-	DrawForm=function()
-		flow:Reset(); ladder:Reset()
-		for _,control in ipairs({icon,saleRow,price,rules,bidRow,meter,sizeRow,countRow,durationRow,action}) do control:Hide() end
-		local bag,item=Bag(),Item()
-		if not bag then
-			flow.y=24; local hint=flow:Text("Pick an item from your bags.",12,"muted"); hint:SetJustifyH("CENTER")
-			ladder:Text("The competition",12,"accent")
-		else
-			perAuction=math.max(1,math.min(perAuction,bag.count)); auctions=math.max(1,math.min(auctions,math.floor(bag.count/perAuction)))
-			if bag.commodity then saleType="buyout" end
-			icon:Show(); icon:SetPoint("TOPLEFT"); icon:SetItem(bag)
-			local title=flow:Text(W.ItemText(bag),13,nil,18); title:SetWidth(356); title:ClearAllPoints(); title:SetPoint("TOPLEFT",48,0); title:SetJustifyH("LEFT")
-			local owned=flow:Text("You have "..ns.Comma(bag.count)..(#bag.slots>1 and (" in "..#bag.slots.." stacks") or ""),11,"muted",16)
-			owned:SetWidth(356); owned:ClearAllPoints(); owned:SetPoint("TOPLEFT",48,-22)
-			flow.y=50
-			for id,button in pairs(saleButtons) do button:SetActive(saleType==id); button:SetEnabled(not bag.commodity or id=="buyout") end
-			flow:Place(saleRow,26)
-			local unit=UnitPrice(); local starting=BidPrice()
-			flow:Text(saleType=="bids" and "Starting bid each" or "Price each",12,"accent",14)
-			price:SetAmount(unit); flow:Place(price,24)
-			for id,button in pairs(ruleButtons) do button:SetActive(not customUnit and ruleId==id); button:SetEnabled(M:Price(item,id)~=nil) end
-			flow:Place(rules,24)
-			if saleType=="both" then bid:SetAmount(starting); flow:Place(bidRow,24) end
-			meter:SetItem(item); flow:Place(meter,38)
-			if bag.count>1 then
-				size:Update(perAuction,bag.count); sizeValue:SetText(ns.Comma(perAuction).." units"); flow:Place(sizeRow,24)
-				local maximum=math.floor(bag.count/perAuction); count:Update(auctions,maximum); countValue:SetText(auctions.." of "..maximum); flow:Place(countRow,24)
-			end
-			for index,button in pairs(durationButtons) do button:SetActive(duration==index) end
-			flow:Place(durationRow,24)
-			local posting=perAuction*auctions; local all=(unit or 0)*posting
-			flow:Text("Posting "..ns.Comma(posting).." of "..ns.Comma(bag.count)..(posting<bag.count and (", keeping "..ns.Comma(bag.count-posting)) or ""),11,"muted")
-			flow:Row(saleType=="bids" and "All starting bids" or (auctions>1 and "All buyouts" or "Buyout"),ns.Money(all),15)
-			flow:Row("After the "..(C.assumptions.auctionCut*100).."% cut",ns.Money(math.floor(all*(1-C.assumptions.auctionCut))),12,"muted")
-			if not unit then flow:Text("Nobody is selling this, so there is no price to go by. Type one.",11,"muted") end
-			local invalid=saleType=="both" and starting and unit and starting>=unit
-			if invalid then flow:Text("The starting bid has to be under the buy now price.",11,"#ff6060") end
-			local state=ns.Trade.state
-			action:SetText(state.phase=="post-confirm" and "Confirm post" or (bag.commodity and ("Post "..ns.Comma(posting).." units") or (auctions>1 and ("Post next auction ("..auctions.." remaining)") or "Post auction")))
-			action:SetEnabled(ns.auctionHouseOpen and unit~=nil and not invalid and not ns.Trade:IsBusy()); flow:Place(action,28)
-			if state.message then flow:Text(state.message,11,state.phase=="error" and "#ff6060" or "muted")
-			elseif not ns.auctionHouseOpen then flow:Text("Open the auction house to post.",11,"muted")
-			elseif bag.commodity then flow:Text("Commodities post as one combined quantity.",11,"muted")
-			elseif auctions>1 then flow:Text("One auction per press.",11,"muted") end
-			ladder:Text("The competition",12,"accent")
-			ladder:Text("auctions x units each",11,"muted")
-			local placed,ahead,shown=not unit,0,0
-			local function You() ladder:Row("You: "..auctions.." x "..perAuction,ns.Money(unit),12,"#76d49b") end
-			for _,tier in ipairs(item.tiers) do
-				if not placed and tier.unit>=unit then You(); placed=true end
-				if not placed then ahead=ahead+tier.units end
-				if shown<9 then ladder:Row(tier.copies.." x "..tier.stack,ns.Money(tier.unit),12); shown=shown+1 end
-			end
-			if not placed then You() end
-			ladder.y=ladder.y+8
-			ladder:Text(unit and (ahead==0 and "You would be the cheapest." or (ns.Comma(ahead).." units sell before yours.")) or ctx.Empty("No competing buyouts."),11,"muted")
-			ladder:Text(item.listings.." auctions, usual price "..ns.Money(M:Usual(item)),11,"muted")
-		end
-		flow:Finish(); ladder:Finish(); formScroll:SetContentHeight(flow.y); competitionScroll:SetContentHeight(ladder.y)
-	end
-	local function Choose(bag)
-		Change(function() selected=bag.key; perAuction=math.min(bag.count,bag.slots[1].count); auctions=math.max(1,math.floor(bag.count/perAuction)); customUnit=nil; customBid=nil end)
-	end
-	DrawBags=function()
-		local slots={}
-		for _,bag in ipairs(ns.Inventory.items) do for _,slot in ipairs(bag.slots) do slots[#slots+1]={item=bag,slot=slot} end end
-		table.sort(slots,function(a,b) if a.slot.bag~=b.slot.bag then return a.slot.bag<b.slot.bag end; return a.slot.slot<b.slot.slot end)
-		for i=1,math.max(16,#slots) do
-			local button=bagButtons[i]
-			if not button then
-				button=W.Button(bagScroll.content,"",40,function(self) if self.value then Choose(self.value) end end)
-				button:SetHeight(40); button.image=button:CreateTexture(nil,"ARTWORK"); button.image:SetPoint("TOPLEFT",3,-3); button.image:SetPoint("BOTTOMRIGHT",-3,3)
-				button.count=W.Label(button,"",0,0,34,12); button.count:ClearAllPoints(); button.count:SetPoint("BOTTOMRIGHT",-3,3); button.count:SetJustifyH("RIGHT")
-				W.Tip(button,nil,function() return button.value end); bagButtons[i]=button
-			end
-			local entry=slots[i]; button.value=entry and entry.item; button:SetActive(entry and entry.item.key==selected)
-			button.image:SetTexture(entry and entry.item.icon); button.count:SetText(entry and entry.slot.count>1 and entry.slot.count or "")
-			button:ClearAllPoints(); button:SetPoint("TOPLEFT",((i-1)%4)*44,-math.floor((i-1)/4)*44); button:Show()
-		end
-		for i=math.max(16,#slots)+1,#bagButtons do bagButtons[i]:Hide() end
-		bagScroll:SetContentHeight(math.ceil(math.max(16,#slots)/4)*44)
-	end
-	Refresh=function() DrawBags(); DrawForm() end
-	function page:Refresh()
-		if selected and not Bag() then selected=nil end
-		if not selected and ns.Inventory.items[1] then
-			local bag=ns.Inventory.items[1]; selected=bag.key; perAuction=bag.slots[1].count; auctions=math.max(1,math.floor(bag.count/perAuction)); customUnit=nil; customBid=nil
-		end
-		Refresh()
-	end
-	function page:Posted(post) if post.key==selected then auctions=math.max(1,auctions-1) end end
-	page.bagButtons=bagButtons; return page
+-- Sell tab: your bags on the left, a price already filled in from a rule in
+-- the middle, and the competition on the right with your auctions slotted in.
+-- The layout and behavior follow the lab's concept (lab/src/ui/concept/sell.ts).
+--
+-- An item can sit in several bag slots (three stacks of leather). Picking any
+-- of them picks the item, and the form works from the total across all of them.
+local _, ns = ...
+local L = ns.L
+local Kit = ns.Kit
+local Theme = ns.Theme
+local C = Theme.color
+
+local LADDER_ROWS = 9
+local BAG_COLUMNS = 4
+local LABEL_WIDTH = 86 -- the name column of the form's control rows
+local DEFAULT_STACK = 20 -- auctions start at this many units each
+
+local state = {
+	key = nil, -- the chosen bag item
+	saleType = "buyout",
+	ruleId = ns.DefaultPriceRule,
+	customUnit = nil, -- set when the player types a price
+	customBid = nil, -- set when the player types a starting bid
+	perAuction = 1,
+	auctions = 1,
+	duration = ns.DefaultDuration,
+}
+
+local bags, form, ladder, bagHint, formHint
+local bagTiles, parts, ladderRows = {}, {}, {}
+local stack
+local Refresh, PaintForm, PaintLadder, PaintSummary
+
+-- ========= What is being sold ===============================================
+local function Owned()
+	return state.key and ns.Bags:Find(state.key)
 end
+
+-- The market's view of the chosen item, or nil when nobody is selling it.
+local function Listed()
+	local market = ns.Window:Market()
+	return market and state.key and market.byKey[state.key]
+end
+
+local function SaleType()
+	for _, type in ipairs(ns.SaleTypes) do
+		if type.id == state.saleType then
+			return type
+		end
+	end
+	return ns.SaleTypes[1]
+end
+
+local function IsCommodity()
+	local listed, owned = Listed(), Owned()
+	return (listed or owned) ~= nil and ns.Orders.IsCommodity(listed or owned)
+end
+
+local function UnitPrice()
+	if state.customUnit then
+		return state.customUnit
+	end
+	local listed = Listed()
+	if not listed then
+		return nil
+	end
+	for _, rule in ipairs(ns.PriceRules) do
+		if rule.id == state.ruleId then
+			return rule.price(listed, ns.History:Usual(listed))
+		end
+	end
+end
+
+local function StartingBid()
+	if state.customBid then
+		return state.customBid
+	end
+	local unit = UnitPrice()
+	return unit and math.max(1, math.floor(unit * ns.StartingBidShare))
+end
+
+local function Choose(key)
+	state.key = key
+	state.customUnit, state.customBid = nil, nil
+	local owned = Owned()
+	local total = owned and owned.total or 1
+	if IsCommodity() then
+		-- A commodity is one listing of a quantity.
+		state.perAuction, state.auctions = total, 1
+	else
+		state.perAuction = math.max(1, math.min(total, DEFAULT_STACK))
+		state.auctions = math.max(1, math.floor(total / state.perAuction))
+	end
+	Refresh()
+end
+
+-- ========= Bags =============================================================
+local function BagTile(index)
+	local tile = bagTiles[index]
+	if not tile then
+		tile = CreateFrame("Button", nil, bags)
+		tile:SetSize(Theme.bagSlot, Theme.bagSlot)
+		Kit.Fill(tile, C.input)
+		tile.art = tile:CreateTexture(nil, "ARTWORK")
+		tile.art:SetPoint("TOPLEFT", 2, -2)
+		tile.art:SetPoint("BOTTOMRIGHT", -2, 2)
+		tile.art:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+		tile.border = Kit.Border(tile, C.inputBorder, "OVERLAY")
+		tile.count = Kit.Text(tile, "small", C.white, "RIGHT")
+		tile.count:SetPoint("BOTTOMRIGHT", -3, 2)
+		tile:SetScript("OnClick", function(self)
+			Choose(self.slot.item.key)
+		end)
+		tile:SetScript("OnEnter", function(self)
+			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+			if not pcall(GameTooltip.SetHyperlink, GameTooltip, self.slot.item.link) then
+				GameTooltip:SetText(self.slot.item.name)
+			end
+			GameTooltip:Show()
+		end)
+		tile:SetScript("OnLeave", function()
+			GameTooltip:Hide()
+		end)
+		bagTiles[index] = tile
+	end
+	return tile
+end
+
+local function PaintBags()
+	for _, tile in ipairs(bagTiles) do
+		tile:Hide()
+	end
+	local slots = ns.Bags:Slots()
+	bagHint:SetShown(#slots == 0)
+	local step = Theme.bagSlot + 4
+	for index, slot in ipairs(slots) do
+		local tile = BagTile(index)
+		local column, row = (index - 1) % BAG_COLUMNS, math.floor((index - 1) / BAG_COLUMNS)
+		tile:ClearAllPoints()
+		tile:SetPoint("TOPLEFT", bags, "TOPLEFT", 8 + column * step, -(30 + row * step))
+		tile.slot = slot
+		tile.art:SetTexture(slot.icon)
+		tile.count:SetText(slot.count > 1 and slot.count or "")
+		local chosen = slot.item.key == state.key
+		tile.border:SetColor(chosen and C.accent or C.inputBorder)
+		tile:Show()
+	end
+end
+
+-- ========= The form =========================================================
+-- A row with its name on the left: used for Sale, the sliders and Duration.
+local function NamedRow(parent, name, height)
+	local row = CreateFrame("Frame", nil, parent)
+	row:SetHeight(height or 24)
+	row.name = Kit.Text(row, "normal", C.accent)
+	row.name:SetPoint("LEFT")
+	row.name:SetText(name)
+	return row
+end
+
+local function SliderRow(parent, name, onChange)
+	local row = NamedRow(parent, name, 22)
+	row.value = Kit.Text(row, "normal", C.muted, "RIGHT")
+	row.value:SetPoint("RIGHT")
+	row.value:SetWidth(76)
+	row.slider = Kit.Slider(row, { onChange = onChange })
+	row.slider:SetPoint("LEFT", LABEL_WIDTH, 0)
+	row.slider:SetPoint("RIGHT", row.value, "LEFT", -8, 0)
+	return row
+end
+
+local function BuildForm(parent)
+	stack = Kit.Stack(parent, 8)
+
+	formHint = Kit.Note(parent, "normal", C.muted, "CENTER")
+	formHint:SetPoint("TOPLEFT", 16, -30)
+	formHint:SetPoint("TOPRIGHT", -16, -30)
+	formHint:SetWidth(380)
+	formHint:SetBody(L.SELL_PICK)
+
+	parts.head = CreateFrame("Frame", nil, parent)
+	parts.head:SetHeight(42)
+	parts.icon = Kit.Icon(parts.head, 40)
+	parts.icon:SetPoint("LEFT")
+	parts.name = Kit.Text(parts.head, "large")
+	parts.name:SetPoint("TOPLEFT", 48, -4)
+	parts.name:SetPoint("RIGHT")
+	parts.have = Kit.Text(parts.head, "small", C.muted)
+	parts.have:SetPoint("BOTTOMLEFT", 48, 5)
+
+	parts.saleRow = NamedRow(parent, L.SELL_SALE)
+	parts.sale = Kit.Choices(parts.saleRow, {
+		items = ns.SaleTypes,
+		padding = 14,
+		isActive = function(type)
+			return type.id == state.saleType
+		end,
+		onPick = function(type)
+			state.saleType = type.id
+			Refresh()
+		end,
+	})
+	parts.sale:SetPoint("LEFT", LABEL_WIDTH, 0)
+
+	parts.priceLabel = CreateFrame("Frame", nil, parent)
+	parts.priceLabel:SetHeight(14)
+	parts.priceLabel.text = Kit.Text(parts.priceLabel, "normal", C.accent)
+	parts.priceLabel.text:SetPoint("LEFT")
+
+	-- Three boxes, like the game: gold, silver, copper. They start on the
+	-- rule's price, and typing in any of them makes the price your own.
+	parts.priceRow = CreateFrame("Frame", nil, parent)
+	parts.priceRow:SetHeight(28)
+	parts.price = Kit.MoneyInput(parts.priceRow, {
+		onChange = function(copper)
+			state.customUnit = math.max(1, copper)
+			parts.rules:Refresh()
+			PaintSummary()
+			PaintLadder()
+		end,
+	})
+	parts.price:SetPoint("LEFT")
+
+	parts.rulesRow = CreateFrame("Frame", nil, parent)
+	parts.rulesRow:SetHeight(24)
+	parts.rules = Kit.Choices(parts.rulesRow, {
+		items = ns.PriceRules,
+		padding = 12,
+		isActive = function(rule)
+			return state.customUnit == nil and rule.id == state.ruleId
+		end,
+		onPick = function(rule)
+			state.ruleId = rule.id
+			state.customUnit = nil
+			Refresh()
+		end,
+	})
+	parts.rules:SetPoint("LEFT")
+
+	-- With both a buy now price and bids, the starting bid gets its own entry.
+	parts.bidRow = NamedRow(parent, L.SELL_STARTING_BID)
+	parts.bid = Kit.MoneyInput(parts.bidRow, {
+		compact = true,
+		onChange = function(copper)
+			state.customBid = math.max(1, copper)
+			PaintSummary()
+		end,
+	})
+	parts.bid:SetPoint("LEFT", LABEL_WIDTH, 0)
+	local each = Kit.Text(parts.bidRow, "small", C.muted)
+	each:SetPoint("LEFT", parts.bid, "RIGHT", 6, 0)
+	each:SetText(L.SELL_EACH)
+
+	-- Price confidence: one line and the facts under it. The reasons are in
+	-- the tooltip.
+	parts.confidence = CreateFrame("Frame", nil, parent)
+	parts.confidence:SetHeight(38)
+	Kit.Fill(parts.confidence, C.block)
+	Kit.Border(parts.confidence, C.line)
+	local confidenceName = Kit.Text(parts.confidence, "normal", C.text)
+	confidenceName:SetPoint("TOPLEFT", 8, -6)
+	confidenceName:SetText(L.CONFIDENCE)
+	parts.confidenceLevel = Kit.Text(parts.confidence, "normal", C.text, "RIGHT")
+	parts.confidenceLevel:SetPoint("TOPRIGHT", -8, -6)
+	parts.confidenceMeter = Kit.Meter(parts.confidence, ns.ConfidencePips)
+	parts.confidenceMeter:SetPoint("RIGHT", parts.confidenceLevel, "LEFT", -6, 0)
+	parts.confidenceFacts = Kit.Text(parts.confidence, "small", C.muted)
+	parts.confidenceFacts:SetPoint("BOTTOMLEFT", 8, 6)
+	parts.confidenceFacts:SetPoint("RIGHT", -8, 0)
+	parts.confidence:EnableMouse(true)
+	Kit.Tip(parts.confidence, function()
+		local reading = ns.Signals:Confidence(Listed())
+		return { L.CONFIDENCE, unpack(reading.reasons) }
+	end)
+
+	parts.quantityRow = SliderRow(parent, L.SELL_QUANTITY, function(value)
+		state.perAuction = value
+		PaintSummary()
+		PaintLadder()
+	end)
+	parts.eachRow = SliderRow(parent, L.SELL_EACH_AUCTION, function(value)
+		local owned = Owned()
+		state.perAuction = value
+		state.auctions = math.min(state.auctions, math.max(1, math.floor((owned and owned.total or 1) / value)))
+		PaintForm()
+		PaintLadder()
+	end)
+	parts.auctionsRow = SliderRow(parent, L.SELL_AUCTIONS, function(value)
+		state.auctions = value
+		PaintSummary()
+		PaintLadder()
+	end)
+
+	parts.durationRow = NamedRow(parent, L.SELL_DURATION)
+	parts.duration = Kit.Choices(parts.durationRow, {
+		items = ns.Durations,
+		padding = 14,
+		isActive = function(option)
+			return option.index == state.duration
+		end,
+		onPick = function(option)
+			state.duration = option.index
+			parts.duration:Refresh()
+		end,
+	})
+	parts.duration:SetPoint("LEFT", LABEL_WIDTH, 0)
+
+	parts.posting = Kit.Pair(parent)
+	parts.rule = CreateFrame("Frame", nil, parent)
+	parts.rule:SetHeight(1)
+	Kit.Fill(parts.rule, C.line)
+	parts.total = Kit.Pair(parent, "total", C.text)
+	parts.total:SetHeight(22)
+	parts.warning = Kit.Note(parent, "small", C.bad)
+	parts.warning:SetWidth(400)
+	parts.receive = Kit.Pair(parent)
+	parts.receive:EnableMouse(true)
+	Kit.Tip(parts.receive, { L.SELL_BUYOUT, L.SELL_RECEIVE_TIP })
+
+	parts.post = Kit.Button(parent, { text = L.SELL_POST, look = "action", height = 32, width = 300, tip = { L.TAB_SELL, L.SELL_POST_TIP } })
+end
+
+-- The numbers under the form. Redrawn alone while a slider moves.
+PaintSummary = function()
+	local owned = Owned()
+	if not owned then
+		return
+	end
+	local type = SaleType()
+	local commodity = IsCommodity()
+	local total = owned.total
+	local posting = state.perAuction * state.auctions
+	local unit = UnitPrice()
+
+	parts.quantityRow.value:SetText(ns.Comma(state.perAuction) .. " " .. L.SELL_OF:format(ns.Comma(total)))
+	parts.eachRow.value:SetText(L.BUY_LINE_UNITS:format(ns.Comma(state.perAuction)))
+	parts.auctionsRow.value:SetText(ns.Comma(state.auctions) .. " " .. L.SELL_OF:format(ns.Comma(math.max(1, math.floor(total / state.perAuction)))))
+	parts.post:SetLabel(state.auctions > 1 and L.SELL_POST_MANY:format(ns.Comma(state.auctions)) or L.SELL_POST)
+	parts.post:SetDisabled(unit == nil)
+
+	local left = L.SELL_POSTING:format(ns.Comma(posting), ns.Comma(total))
+	if posting < total then
+		left = left .. L.SELL_KEEPING:format(ns.Comma(total - posting))
+	end
+	if not unit then
+		parts.posting:Set(left, "")
+		parts.total:Set(L.SELL_BUYOUT, "")
+		parts.receive:Set("", "")
+		parts.warning:SetBody(L.SELL_NO_PRICE, C.muted)
+		parts.warning:Show()
+		return
+	end
+
+	local each = unit * state.perAuction
+	local all = each * state.auctions
+	local many = state.auctions > 1
+	parts.posting:Set(left, many and L.SELL_EACH_AUCTION_PRICE:format(ns.Money(each)) or "")
+	local totalLabel
+	if type.buyout or commodity then
+		totalLabel = many and L.SELL_ALL_BUYOUTS or L.SELL_BUYOUT
+	else
+		totalLabel = many and L.SELL_ALL_BIDS or L.SELL_BID
+	end
+	parts.total:Set(totalLabel, ns.Money(all))
+	local cut = math.floor(ns.Assumptions.auctionCut * 100 + 0.5)
+	local receiveLabel = (type.buyout or commodity) and L.SELL_RECEIVE or L.SELL_RECEIVE_BIDS
+	parts.receive:Set(receiveLabel:format(cut), ns.Money(math.floor(all * (1 - ns.Assumptions.auctionCut))))
+
+	local bid = StartingBid()
+	local bidTooHigh = not commodity and type.buyout and type.bids and bid ~= nil and bid >= unit
+	parts.warning:SetShown(bidTooHigh)
+	if bidTooHigh then
+		parts.warning:SetBody(L.SELL_BID_TOO_HIGH, C.bad)
+	end
+end
+
+PaintForm = function()
+	stack:Reset()
+	local owned = Owned()
+	formHint:SetShown(owned == nil)
+	if not owned then
+		return
+	end
+	local listed = Listed()
+	local type = SaleType()
+	local commodity = IsCommodity()
+	local total = owned.total
+
+	parts.icon:SetIcon(owned.icon)
+	parts.name:SetText(owned.name)
+	parts.name:SetTextColor(unpack(Kit.QualityColor(owned.quality)))
+	parts.have:SetText(#owned.slots > 1 and L.SELL_HAVE_STACKS:format(ns.Comma(total), #owned.slots) or L.SELL_HAVE:format(ns.Comma(total)))
+	stack:Add(parts.head)
+
+	-- Commodities are unit-price listings: no bids, and no splitting into auctions.
+	if not commodity then
+		parts.sale:Refresh()
+		stack:Add(parts.saleRow, 8)
+	end
+
+	parts.priceLabel.text:SetText((type.buyout or commodity) and L.SELL_PRICE_EACH or L.SELL_BID_EACH)
+	stack:Add(parts.priceLabel, 8)
+	parts.price:SetAmount(UnitPrice() or 0)
+	stack:Add(parts.priceRow, 4)
+	parts.rules:Refresh()
+	stack:Add(parts.rulesRow, 6)
+
+	if not commodity and type.buyout and type.bids then
+		parts.bid:SetAmount(StartingBid() or 0)
+		stack:Add(parts.bidRow, 6)
+	end
+
+	local reading = ns.Signals:Confidence(listed)
+	parts.confidenceMeter:SetReading(reading)
+	parts.confidenceLevel:SetText(reading.level.label)
+	parts.confidenceFacts:SetText(ns.Signals:ConfidenceLine(reading))
+	stack:Add(parts.confidence, 8)
+
+	if commodity then
+		parts.quantityRow.slider:SetRange(total)
+		parts.quantityRow.slider:SetShownValue(state.perAuction)
+		stack:Add(parts.quantityRow, 8)
+	elseif total > 1 then
+		parts.eachRow.slider:SetRange(total)
+		parts.eachRow.slider:SetShownValue(state.perAuction)
+		stack:Add(parts.eachRow, 8)
+		parts.auctionsRow.slider:SetRange(math.floor(total / state.perAuction))
+		parts.auctionsRow.slider:SetShownValue(state.auctions)
+		stack:Add(parts.auctionsRow, 4)
+	end
+
+	parts.duration:Refresh()
+	stack:Add(parts.durationRow, 8)
+	stack:Add(parts.posting, 8)
+	stack:Add(parts.rule, 4)
+	stack:Add(parts.total, 4)
+	PaintSummary()
+	if parts.warning:IsShown() then
+		stack:Add(parts.warning, 2)
+	end
+	stack:Add(parts.receive, 2)
+	stack:Add(parts.post, 10)
+end
+
+-- ========= The competition ==================================================
+local function LadderRow(index)
+	local row = ladderRows[index]
+	if not row then
+		row = Kit.Pair(ladder, "normal", C.text)
+		row:SetHeight(20)
+		row.fill = Kit.Fill(row, C.you)
+		ladderRows[index] = row
+	end
+	return row
+end
+
+PaintLadder = function()
+	for _, row in ipairs(ladderRows) do
+		row:Hide()
+	end
+	local owned, listed = Owned(), Listed()
+	parts.ladderKey:SetShown(owned ~= nil)
+	parts.ladderNote:Hide()
+	parts.ladderMarket:Hide()
+	if not owned then
+		return
+	end
+	local commodity = IsCommodity()
+	local unit = UnitPrice()
+	local y, used = 46, 0
+	local function Add(left, right, you)
+		used = used + 1
+		local row = LadderRow(used)
+		row:ClearAllPoints()
+		row:SetPoint("TOPLEFT", ladder, "TOPLEFT", 8, -y)
+		row:SetPoint("TOPRIGHT", ladder, "TOPRIGHT", -8, -y)
+		row:Set(left, right)
+		row.fill:SetShown(you == true)
+		row:Show()
+		y = y + 21
+	end
+	local function You()
+		local what = commodity and L.SELL_YOU_UNITS:format(ns.Comma(state.perAuction))
+			or L.SELL_YOU:format(ns.Comma(state.auctions), ns.Comma(state.perAuction))
+		Add(what, ns.Money(unit), true)
+	end
+
+	local placed, shown, unitsAhead = unit == nil, 0, 0
+	for _, tier in ipairs(listed and listed.tiers or {}) do
+		if not placed and tier.unit >= unit then
+			You()
+			placed = true
+		end
+		if not placed then
+			unitsAhead = unitsAhead + tier.units
+		end
+		if shown < LADDER_ROWS then
+			Add(L.SELL_LADDER_ROW:format(ns.Comma(tier.copies), ns.Comma(tier.stack)), ns.Money(tier.unit))
+			shown = shown + 1
+		end
+	end
+	if not placed then
+		You()
+	end
+
+	local note = L.SELL_NOT_LISTED
+	if listed then
+		note = unitsAhead == 0 and L.SELL_CHEAPEST or L.SELL_AHEAD:format(ns.Comma(unitsAhead))
+	end
+	parts.ladderNote:ClearAllPoints()
+	parts.ladderNote:SetPoint("TOPLEFT", ladder, "TOPLEFT", 8, -(y + 6))
+	parts.ladderNote:SetPoint("TOPRIGHT", ladder, "TOPRIGHT", -8, -(y + 6))
+	parts.ladderNote:SetBody(note)
+	parts.ladderNote:Show()
+	if listed then
+		parts.ladderMarket:ClearAllPoints()
+		parts.ladderMarket:SetPoint("TOPLEFT", parts.ladderNote, "BOTTOMLEFT", 0, -4)
+		parts.ladderMarket:SetPoint("TOPRIGHT", parts.ladderNote, "BOTTOMRIGHT", 0, -4)
+		parts.ladderMarket:SetBody(L.SELL_MARKET:format(ns.Comma(listed.listings), ns.Money(ns.History:Usual(listed))))
+		parts.ladderMarket:Show()
+	end
+end
+
+-- ========= The tab ==========================================================
+Refresh = function()
+	-- What was chosen may have been sold or moved since.
+	if state.key and not ns.Bags:Find(state.key) then
+		state.key = nil
+	end
+	if not state.key then
+		local first = ns.Bags:Slots()[1]
+		if first then
+			return Choose(first.item.key)
+		end
+	end
+	PaintBags()
+	PaintForm()
+	PaintLadder()
+end
+
+local function Create(parent)
+	local pad = Theme.pad
+	bags = Kit.Panel(parent)
+	bags:SetPoint("TOPLEFT")
+	bags:SetPoint("BOTTOMLEFT")
+	bags:SetWidth(Theme.sell.bags)
+	local bagsLabel = Kit.Text(bags, "normal", C.accent)
+	bagsLabel:SetPoint("TOPLEFT", 8, -9)
+	bagsLabel:SetText(L.SELL_BAGS)
+	bagHint = Kit.Note(bags, "small", C.muted)
+	bagHint:SetPoint("TOPLEFT", 8, -32)
+	bagHint:SetPoint("TOPRIGHT", -8, -32)
+	bagHint:SetWidth(Theme.sell.bags - 16)
+	bagHint:SetBody(L.SELL_BAGS_EMPTY)
+
+	ladder = Kit.Panel(parent)
+	ladder:SetPoint("TOPRIGHT")
+	ladder:SetPoint("BOTTOMRIGHT")
+	ladder:SetWidth(Theme.sell.competition)
+	local ladderLabel = Kit.Text(ladder, "normal", C.accent)
+	ladderLabel:SetPoint("TOPLEFT", 8, -9)
+	ladderLabel:SetText(L.SELL_COMPETITION)
+	parts.ladderKey = Kit.Text(ladder, "small", C.muted)
+	parts.ladderKey:SetPoint("TOPLEFT", 8, -27)
+	parts.ladderKey:SetText(L.SELL_COMPETITION_KEY)
+	parts.ladderNote = Kit.Note(ladder, "small", C.muted)
+	parts.ladderNote:SetWidth(Theme.sell.competition - 16)
+	parts.ladderMarket = Kit.Note(ladder, "small", C.muted)
+	parts.ladderMarket:SetWidth(Theme.sell.competition - 16)
+
+	form = Kit.Panel(parent)
+	form:SetPoint("TOPLEFT", bags, "TOPRIGHT", pad, 0)
+	form:SetPoint("BOTTOMRIGHT", ladder, "BOTTOMLEFT", -pad, 0)
+	BuildForm(form)
+
+	return { Refresh = Refresh }
+end
+
+ns.Window:RegisterTab({ id = "sell", label = L.TAB_SELL, order = 2, Create = Create })

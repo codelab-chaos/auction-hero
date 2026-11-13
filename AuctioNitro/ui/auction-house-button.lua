@@ -1,5 +1,7 @@
--- A button on Blizzard's auction house window that opens the AuctioNitro panel.
--- The auction house UI loads on demand, so the button is made the first time it opens.
+-- A button on Blizzard's auction house window that opens the AuctioNitro
+-- window. It sits on the game's own frame, so it uses the game's own button.
+-- The auction house UI loads on demand, so the button is made the first time
+-- it opens.
 local _, ns = ...
 local Bus = ns.Bus
 

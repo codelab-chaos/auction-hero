@@ -147,3 +147,46 @@ ns.HistoryRule = {
 	-- item. Before that, it is the current scan's median.
 	trustAfterScans = 2,
 }
+
+-- ========= Buying ===========================================================
+-- Commodities are bought by the unit: ask for 40 and you get exactly 40, from
+-- the cheapest sellers up, in one purchase. Everything else is bought one
+-- whole auction at a time. The scan says which an item is when the game had
+-- the answer ready. For the rest we go by item class.
+ns.CommodityClassIDs = { [0] = true, [5] = true, [6] = true, [7] = true, [12] = true, [15] = true }
+
+-- An item is flagged as a deal in lists when its lowest price sits this far
+-- under its usual price and it has at least this many auctions.
+ns.DealBadgeRule = { percent = 30, minListings = 3 }
+
+-- ========= The deal meter ===================================================
+-- How good a buy is: how far the price you would pay sits under the item's
+-- usual price. It is judged on the whole order, so buying deeper into the
+-- ladder makes the deal worse. Five steps, one pip each.
+ns.DealLevels = {
+	over = { id = "over", label = L.DEAL_OVER, pips = 1, tone = "bad" },
+	fair = { id = "fair", label = L.DEAL_FAIR, pips = 2, tone = "warn" },
+	great = { id = "great", label = L.DEAL_GREAT, pips = 3, tone = "good" },
+	confident = { id = "confident", label = L.DEAL_CONFIDENT, pips = 4, tone = "good" },
+	resell = { id = "resell", label = L.DEAL_RESELL, pips = 5, tone = "good" },
+}
+ns.DealPips = 5
+
+ns.DealRule = {
+	fairBand = 10, -- percent over the usual price that still counts as fair
+	greatFrom = 15, -- percent under the usual price that makes it great to buy
+	confidentNeeds = "good", -- an id from ns.ConfidenceLevels
+	resellFrom = 30, -- percent under that leaves room to resell
+	resellNeeds = "high",
+	-- Below this price confidence there is no deal reading at all.
+	needsConfidence = "fair",
+}
+
+-- ========= Reselling ========================================================
+-- How far under the usual price an auction must be to be worth buying to sell
+-- again. The middle one is the starting choice.
+ns.ResellMargins = { 15, 30, 50 }
+ns.ResellDefaultMargin = 30
+ns.ResellMinListings = 5 -- ignore thin markets
+ns.ResellMinPips = 4 -- a lead needs at least this deal reading to be listed
+ns.ResellDefaultMinProfit = 5000 -- copper
