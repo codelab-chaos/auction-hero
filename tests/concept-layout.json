@@ -1,0 +1,21 @@
+{
+  "source": "Rendered lab/src/ui/screens/concept.ts and final styles.css",
+  "measured": "2026-11-12, Chrome 1200x950, 900x600 concept window",
+  "metrics": {
+    "titleHeight": 33.1875,
+    "tabsHeight": 38.1875,
+    "bodyTop": 81.375,
+    "bodyHeight": 508.625,
+    "listRow": 25.1875,
+    "listHeader": 23.296875,
+    "listGutter": 17,
+    "buyToolbar": 26,
+    "toolbarGap": 6,
+    "resellToolbar": 36.796875,
+    "sidebarHeader": 28.1875,
+    "sidebarWidth": 158,
+    "searchWidth": 185.734375,
+    "buyToggleWidths": [66.375, 80.09375, 48.796875],
+    "tabWidths": [75.109375, 74.015625, 86.8125]
+  }
+}

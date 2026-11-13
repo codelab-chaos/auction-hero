@@ -4,11 +4,11 @@
 
 Reproduce the existing **Concept** window in Nitro Lab as closely as WoW's UI renderer permits, with working auction-house functionality. The lab is the specification for the arrangement of controls, selection behavior, filtering, colors, spacing, and information shown to the player.
 
-This document is the implementation plan. Writing it does not change the lab, the addon, or the deployed game files. The checkpoint before this plan is `f65e573`.
+This plan was committed as `c307d0b`, following checkpoint `f65e573`. The owner then authorized implementation on `feat/faithful-concept-ui`, in the existing project folder. The implementation record below distinguishes local checks from client verification.
 
-The current native UI is a functional first pass with substantial visual and behavioral differences. In particular, its stock red buttons, single-selection categories, missing filter rail, different column widths, and relocated controls do not reproduce the concept. Those choices will be corrected using the existing prototype code.
+The checkpoint's native UI was a functional first pass with substantial visual and behavioral differences. Its stock red buttons, single-selection categories, missing filter rail, different column widths, and relocated controls did not reproduce the concept. The corrective port follows the existing prototype code.
 
-The visual reference is [ui-good.png](docs/img-barn/ui-good.png). [ui-bad.png](docs/img-barn/ui-bad.png) records the native implementation that needs correction.
+The visual reference is [ui-good.png](img-barn/ui-good.png). [ui-bad.png](img-barn/ui-bad.png) records the native implementation that needs correction.
 
 ## 1. Use the lab code as the specification
 
@@ -193,7 +193,7 @@ Closing the auction house, changing the selected item or quantity, quote expiry,
 
 ## 7. Implementation order and proposed file boundaries
 
-Keep the project in its current folder and branch. The lab remains the reference throughout.
+Keep the project in its current folder, using the owner's authorized `feat/faithful-concept-ui` branch. The lab remains the reference throughout.
 
 1. Establish the source mapping, rendered measurements and repeatable comparison data.
 2. Replace native widget styling with the concept theme; verify the window shell and tab states.
@@ -246,4 +246,29 @@ In the actual Forever client, verify scan loading, filters, selection, tooltips,
 
 Mock tests can establish logic and construction behavior. They cannot establish in-game visual fidelity or prove that a protected trading action works in the client. Those results will be reported separately. If actual client screenshots or trading verification are unavailable, the affected parts remain explicitly unverified rather than being described as finished.
 
-Implementation, validation and deployment will be reported as distinct states. This planning task ends with this document; it does not start the corrective port or deploy any changes.
+Implementation, validation and deployment are reported as distinct states.
+
+## Implementation record — November 12, 2026
+
+The corrective native implementation is on `feat/faithful-concept-ui`. The lab source is unchanged.
+
+- `scripts/export-concept.mjs` reads the real TypeScript configuration and final CSS declarations into `AuctioNitro/data/concept.lua`. The addon has no Node or browser dependency.
+- `AuctioNitro/ui/widgets.lua` contains the shared theme and retained native controls. The three components are now `ui/tabs/buy.lua`, `sell.lua`, and `resell.lua`; `ui/trading-window.lua` owns the shell and live-action adapter.
+- `AuctioNitro/market/concept.lua` translates the lab's facets, order filling, pricing rules, confidence, deal and resell calculations. Native field names and actual commodity classifications are accepted at the adapter boundary.
+- Buy has the four reference columns, separate category checkboxes and expanders, quality/equipment rail, single search row, sortable table and right-hand order controls. Sell has real bag slots, the prototype's form controls and competition ladder. Resell has the discount/profit toolbar and numbered plan.
+- Trading retains live search, variant/price validation, quote and post confirmations. The initial trading action explicitly checks current prices; subsequent presses show the live quantity and cost. Commodity posting combines quantities and permits buyout only. Item posting submits one auction per press.
+- Analysis exposes loading/error states and preserves the previous market while preparing a replacement. Old summary-only snapshots do not cause a missing-rows exception.
+
+### Measurements and data diagnosis
+
+Measurements came from the rendered prototype in Chrome, with a 900 × 600 concept window. `tests/concept-layout.json` records the values used by the native port: title 33.1875, tabs 38.1875, body panels 508.625, table header 23.296875 and table rows 25.1875 logical units. Buy columns measure 34 / 176 / 396 / 250, with 8-unit gaps. The status message uses the otherwise empty end of the tab strip only for progress or errors, leaving the full body height available.
+
+The configured Forever account's saved-variable file and backup were inspected read-only. Both contained empty `snapshots` tables. There was no full saved scan there to restore or display; the lab's previously imported scans are separate files. No saved variables were cleared or rewritten, and no lab fixture was injected into the game.
+
+### Checks and remaining client verification
+
+`python3 tests/run-addon.py` passes Lua syntax checks, native frame construction and interaction checks, retained-frame checks, analysis state/race checks, and existing live-action invariant tests. `scripts/export-concept-fixtures.mjs` generates expected results by executing the actual lab modules; 5,726 comparisons pass across 19 items, 8 facet combinations and 4 filters. The lab's 29 existing tests also pass.
+
+Regenerate configuration with `node scripts/export-concept.mjs`. Regenerate parity fixtures with `node scripts/export-concept-fixtures.mjs`. Both use the lab's installed Vite dependency and leave its source files untouched.
+
+Actual Forever screenshots, texture/font appearance, scrolling and protected purchase/post execution remain unverified. Native panels use thin rectangular borders; browser corner radii, shadows and exact font rasterization are not yet reproduced. Review the real client after deployment and `/reload`; compare the states listed above before declaring visual completion.

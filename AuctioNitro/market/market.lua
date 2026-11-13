@@ -45,7 +45,7 @@ end
 -- has no individual auctions to build ladders from.
 function Market:Build(snapshot)
 	local source = ns.SourceById[snapshot.meta.source]
-	if not source or source.aggregated then
+	if not source or source.aggregated or not snapshot.rows then
 		return nil
 	end
 	local index = ns.Schemas[snapshot.meta.schema].index

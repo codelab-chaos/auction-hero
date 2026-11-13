@@ -10,14 +10,26 @@ local function Object(name)
 	if name then _G[name]=o end
 	return o
 end
-function CreateFrame(_,name) local f=Object(name); frames[#frames+1]=f; return f end
+function CreateFrame(kind,name,parent,template) local f=Object(name); f.kind,f.parent,f.template=kind,parent,template; frames[#frames+1]=f; return f end
 function Methods:SetScript(key,fn) self.scripts[key]=fn end
+function Methods:SetFontString(label) self.fontString=label end
+function Methods:SetSize(width,height) self.width,self.height=width,height end
+function Methods:SetWidth(width) self.width=width end
+function Methods:SetHeight(height) self.height=height end
+function Methods:GetWidth() return self.width or 100 end
+function Methods:GetHeight() return self.height or 24 end
+function Methods:GetValue() return self.value end
+function Methods:GetStringHeight() return math.max(14,math.ceil(#self.text*6/(self.width or 200))*14) end
+function Methods:GetStringWidth() return #self.text*6 end
+function Methods:IsEnabled() return self.enabled~=false end
+function Methods:HasFocus() return false end
+function CreateColor(...) return {...} end
 function Methods:RegisterEvent(event) self.events[event]=true end
 function Methods:Show() if not self.shown then self.shown=true; if self.scripts.OnShow then self.scripts.OnShow(self) end end end
 function Methods:Hide() if self.shown then self.shown=false; if self.scripts.OnHide then self.scripts.OnHide(self) end end end
 function Methods:SetShown(value) if value then self:Show() else self:Hide() end end
 function Methods:IsShown() return self.shown end
-function Methods:SetText(text) self.text=tostring(text or "") end
+function Methods:SetText(text) self.text=tostring(text or ""); if self.fontString then self.fontString:SetText(text) end end
 function Methods:GetText() return self.text end
 function Methods:GetNumber() return tonumber(self.text) or 0 end
 function Methods:SetChecked(value) self.checked=value end
@@ -96,8 +108,9 @@ local function Event(event,...)
 end
 local function Count(name) local n=0; for _,c in ipairs(calls) do if c[1]==name then n=n+1 end end; return n end
 local function Eq(actual,expected) assert(actual==expected,tostring(actual).." ~= "..tostring(expected)) end
-Load("locales/en-us.lua"); Load("data/trading.lua"); Load("data/catalog.lua")
+Load("locales/en-us.lua"); Load("data/trading.lua"); Load("data/catalog.lua"); Load("data/concept.lua")
 Load("market/history.lua"); Load("market/signals.lua"); Load("market/trading.lua"); Load("inventory.lua"); Load("trade.lua")
+Load("market/concept.lua")
 ns.Bus:Fire("INIT")
 ns.Inventory:Refresh()
 local item={key="100:Ore",itemID=100,name="Ore",link=link,quality=1,units=20,listings=2,bidOnly=0,min=50,median=100,
@@ -150,7 +163,7 @@ local built=ns.Market:Build({meta={source="replicate",schema="replicate",time=20
 Eq(#built.items,1); Eq(built.items[1].tiers[1].copies,2); Eq(built.items[1].units,20)
 Eq(built.items[1].min,50); Eq(built.items[1].usable,true); Eq(built.items[1].subType,"Metal")
 ns.Analysis={market={items={item},byKey={[item.key]=item},time=GetServerTime(),listings=2}}
-Load("ui/widgets.lua"); Load("ui/trading-window.lua")
+Load("ui/widgets.lua"); Load("ui/tabs/buy.lua"); Load("ui/tabs/sell.lua"); Load("ui/tabs/resell.lua"); Load("ui/trading-window.lua")
 ns.Bus:Fire("READY"); ns.Window:Show()
 assert(AuctioNitroWindow:IsShown())
 for _,tab in ipairs({"Sell","Resell","Buy"}) do
@@ -168,3 +181,5 @@ end
 assert(picked,"bag item selection was not constructed")
 ns.Bus:Fire("AH_CLOSED"); Eq(ns.Trade.state.phase,"idle")
 print("Addon checks passed: live searches, variant/price guards, commodity quotes, post confirmations, validation, order math, and native window/tabs.")
+assert(loadfile('tests/concept.lua'))(ns)
+assert(loadfile('tests/native-ui.lua'))(ns,frames,Event,Eq)

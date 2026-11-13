@@ -22,6 +22,7 @@ data\summary.lua
 data\views.lua
 data\trading.lua
 data\catalog.lua
+data\concept.lua
 feed\links.lua
 feed\replicate.lua
 feed\browse.lua
@@ -32,6 +33,7 @@ market\market.lua
 market\history.lua
 market\signals.lua
 market\trading.lua
+market\concept.lua
 inventory.lua
 trade.lua
 analyze\profile.lua
@@ -40,6 +42,9 @@ analyze\analyzer.lua
 ui\view-model.lua
 ui\panel.lua
 ui\widgets.lua
+ui\tabs\buy.lua
+ui\tabs\sell.lua
+ui\tabs\resell.lua
 ui\trading-window.lua
 ui\auction-house-button.lua
 commands.lua
