@@ -2,6 +2,7 @@
 // tabs running on the scan. Nothing here uses data the addon could not get in game.
 import { CONCEPT_TABS, WINDOW } from "../../config/concept";
 import { createBuyTab } from "../concept/buy";
+import { createHistoryTab } from "../concept/history";
 import { createResellTab } from "../concept/resell";
 import { createSellTab } from "../concept/sell";
 import { remember, store, type LabContext, type Screen } from "../context";
@@ -13,6 +14,7 @@ const TAB_BUILDERS: Record<string, (ctx: LabContext) => Tab> = {
   buy: createBuyTab,
   sell: createSellTab,
   resell: createResellTab,
+  history: createHistoryTab,
 };
 
 export function createConceptScreen(ctx: LabContext): Screen {

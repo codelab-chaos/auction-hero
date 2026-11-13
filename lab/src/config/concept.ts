@@ -12,6 +12,7 @@ export const CONCEPT_TABS: ConceptTab[] = [
   { id: "buy", label: "Buy" },
   { id: "sell", label: "Sell" },
   { id: "resell", label: "Resell" },
+  { id: "history", label: "History" },
 ];
 
 // Quick toggles above the Buy list.
@@ -79,3 +80,7 @@ export type SaleTypeId = (typeof SALE_TYPES)[number]["id"];
 
 // When bids are on, the starting bid begins at this share of the price.
 export const STARTING_BID_SHARE = 0.8;
+
+// The most units of an item that may be for sale, in all, for it to be shown
+// as a resell lead. Reselling means buying the market out and relisting it.
+export const RESELL_MAX_ITEMS = 10;

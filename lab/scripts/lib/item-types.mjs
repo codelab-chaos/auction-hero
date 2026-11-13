@@ -104,3 +104,21 @@ export async function loadItemTypes() {
     };
   };
 }
+
+// Returns a function: item id -> how many fit in one bag slot (1 for anything
+// that does not stack), or null for an item the tables do not know.
+// The addon gets the same number in game from C_Item.GetItemMaxStackSizeByID.
+export async function loadStackSizes() {
+  const lines = readFileSync(await tableFile("ItemSparse"), "utf8").split(/\r?\n/);
+  const header = splitLine(lines[0]);
+  const idAt = header.indexOf("ID");
+  const stackAt = header.indexOf("Stackable");
+  if (idAt < 0 || stackAt < 0) throw new Error("the ItemSparse table has no ID or Stackable column");
+  const sizes = new Map();
+  for (let index = 1; index < lines.length; index++) {
+    if (!lines[index]) continue;
+    const cells = splitLine(lines[index]);
+    sizes.set(Number(cells[idAt]), Math.max(1, Number(cells[stackAt]) || 1));
+  }
+  return (itemId) => sizes.get(itemId) ?? null;
+}

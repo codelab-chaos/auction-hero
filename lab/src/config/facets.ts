@@ -273,7 +273,7 @@ export const BUY_FACETS: Facet[] = [
     placement: "rail",
     tileShape: "swatch",
     read: (item) => (item.quality === null ? null : String(item.quality)),
-    options: QUALITIES.filter((quality) => quality.id <= 4).map((quality) => ({
+    options: QUALITIES.map((quality) => ({
       value: String(quality.id),
       label: quality.label,
       color: quality.color,

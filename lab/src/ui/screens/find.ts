@@ -117,7 +117,7 @@ export function createFindScreen(ctx: LabContext): Screen {
   function buildControls(): void {
     clear(controls);
     const qualityChecks = h("div", { class: "chips" });
-    for (const quality of QUALITIES.filter((candidate) => candidate.id <= 4)) {
+    for (const quality of QUALITIES) {
       qualityChecks.append(
         h(
           "label",

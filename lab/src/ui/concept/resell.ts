@@ -2,7 +2,7 @@
 // for the one you pick, the whole plan: what to buy, what to relist it at, and
 // what is left after the auction house's cut.
 import { ASSUMPTIONS } from "../../config/catalog";
-import { RESELL_LIST_LIMIT, RESELL_MARGINS, RESELL_MIN_PIPS } from "../../config/concept";
+import { RESELL_LIST_LIMIT, RESELL_MARGINS, RESELL_MAX_ITEMS, RESELL_MIN_PIPS } from "../../config/concept";
 import type { MarketItem } from "../../model/market";
 import { findResellLeads, planResell, type ResellLead, type ResellParams } from "../../model/resell";
 import { confidenceLine, deal, priceConfidence, type Deal } from "../../model/signals";
@@ -25,6 +25,7 @@ const COLUMNS: Column<Row>[] = [
     render: (row) => h("span", { class: "item-cell" }, icon(row.lead.item.icon, 18), itemName(row.lead.item.name, row.lead.item.quality, "")),
   },
   { id: "deal", label: "Deal", width: "66px", sort: (row) => row.deal.level.pips, render: (row) => meter(row.deal, { compact: true }) },
+  { id: "forSale", label: "For sale", align: "right", width: "58px", sort: (row) => row.lead.item.units, render: (row) => h("span", { class: "muted" }, number(row.lead.item.units)) },
   { id: "units", label: "Buy", align: "right", width: "52px", sort: (row) => row.lead.buyUnits, render: (row) => number(row.lead.buyUnits) },
   { id: "cost", label: "Cost", align: "right", width: "96px", sort: (row) => row.lead.cost, render: (row) => money(row.lead.cost) },
   { id: "profit", label: "Profit", align: "right", width: "96px", sort: (row) => row.lead.profit, render: (row) => money(row.lead.profit) },
@@ -37,6 +38,7 @@ function confidenceRow(item: MarketItem): HTMLElement {
 
 export function createResellTab(ctx: LabContext): { element: HTMLElement; update: () => void } {
   let margin = RESELL_MARGINS[1] ?? 30;
+  let maxItems = RESELL_MAX_ITEMS;
   let minProfit = 5000; // copper
   let withinGold = false;
   let solidOnly = false;
@@ -55,6 +57,7 @@ export function createResellTab(ctx: LabContext): { element: HTMLElement; update
       budget: withinGold ? ctx.budget() : 0,
       minProfit,
       minListings: 5,
+      maxItems,
     };
   }
 
@@ -91,6 +94,18 @@ export function createResellTab(ctx: LabContext): { element: HTMLElement; update
       );
     }
 
+    const maxBuy = h("input", {
+      type: "number",
+      min: "1",
+      class: "input cw-quantity-input",
+      value: String(maxItems),
+      title: "Only show items with this many or fewer for sale in all. Stackable items count by the stack: 100 that stack to 20 count as 5. Reselling means buying them all, then relisting.",
+      onchange: (event: Event) => {
+        maxItems = Math.max(1, Number((event.target as HTMLInputElement).value) || RESELL_MAX_ITEMS);
+        render();
+      },
+    });
+
     const profit = moneyInput(
       minProfit,
       (copper) => {
@@ -103,11 +118,13 @@ export function createResellTab(ctx: LabContext): { element: HTMLElement; update
 
     toolbar.append(
       h("label", { class: "cw-group" }, h("span", { class: "cw-group-label" }, "Discount"), discount),
+      h("label", { class: "cw-group" }, h("span", { class: "cw-group-label" }, "Max items"), maxBuy),
+      h("div", { class: "cw-break" }),
       h("label", { class: "cw-group" }, h("span", { class: "cw-group-label" }, "Min profit"), profit),
       h(
         "div",
         { class: "cw-group cw-group-end" },
-        toggle("I can afford", withinGold, "Only what your gold covers. Set your gold in the lab's header.", () => {
+        toggle("I can afford", withinGold, "Only loads your gold can buy out in full. Set your gold in the lab's header.", () => {
           withinGold = !withinGold;
           render();
         }),

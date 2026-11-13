@@ -30,6 +30,7 @@ export interface ItemRecord {
   classId: number | null;
   subClassId: number | null;
   commodity: boolean | null; // bought by the unit rather than by the auction. null when unknown
+  maxStack?: number | null; // how many fit in one bag slot. Missing or null when unknown
 }
 
 // [itemIndex, count, buyout, minBid, bid, timeLeft, copies]

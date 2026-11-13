@@ -12,9 +12,13 @@ import type { MarketItem, Tier } from "./market";
 
 export interface ResellParams {
   marginPercent: number; // buy auctions at least this far under the usual price
-  budget: number; // copper to spend per item, 0 for no limit
+  budget: number; // copper you have, 0 for no limit. Hides loads you cannot buy out in full
   minProfit: number; // copper
   minListings: number; // ignore thin markets
+  // The most units of an item that may be for sale, in all, for it to be a
+  // lead. Reselling means buying the market out and relisting it, so only
+  // small markets are worth showing. This never trims a plan.
+  maxItems: number;
 }
 
 export const DEFAULT_RESELL_PARAMS: ResellParams = {
@@ -22,6 +26,7 @@ export const DEFAULT_RESELL_PARAMS: ResellParams = {
   budget: 0,
   minProfit: 5000,
   minListings: 5,
+  maxItems: 10,
 };
 
 // Auctions to buy at one price point.
@@ -45,6 +50,20 @@ export interface ResellLead {
   competition: number; // units still listed at or under the target after buying
 }
 
+// How many of an item fit in one bag slot. The import records it from the
+// game's item tables. For an item those do not know, the biggest stack anyone
+// has listed stands in for it.
+function maxStack(item: MarketItem): number {
+  return item.maxStack ?? item.tiers.reduce((biggest, tier) => Math.max(biggest, tier.stack), 1);
+}
+
+// How much of an item is for sale, counted the way it fills bags: a stackable
+// item counts by full stacks (100 that stack to 20 is 5), anything else by
+// the piece.
+export function marketSize(item: MarketItem): number {
+  return Math.ceil(item.units / maxStack(item));
+}
+
 // Plans a purchase of up to auctionLimit auctions, cheapest first. Returns
 // null when the item has no usual price to resell at, or nothing cheap enough.
 export function planResell(item: MarketItem, params: ResellParams, auctionLimit = Infinity): ResellLead | null {
@@ -63,7 +82,6 @@ export function planResell(item: MarketItem, params: ResellParams, auctionLimit 
     const worthBuying = tier.unit <= ceiling ? tier.copies : 0;
     available += worthBuying;
     let take = Math.min(worthBuying, auctionLimit - buyAuctions);
-    if (params.budget > 0) take = Math.min(take, Math.floor((params.budget - cost) / tier.buyout));
     take = Math.max(0, take);
     if (take > 0) lines.push({ tier, auctions: take });
     buyAuctions += take;
@@ -97,7 +115,10 @@ export function findResellLeads(items: MarketItem[], params: ResellParams): Rese
   for (const item of items) {
     if (item.name === null) continue;
     const lead = planResell(item, params);
-    if (lead && lead.profit >= params.minProfit) leads.push(lead);
+    if (!lead || marketSize(item) > params.maxItems) continue;
+    // A load you cannot buy out in full is not a lead.
+    if (params.budget > 0 && lead.cost > params.budget) continue;
+    if (lead.profit >= params.minProfit) leads.push(lead);
   }
   return leads;
 }
