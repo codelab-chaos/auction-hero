@@ -1,0 +1,35 @@
+## Interface: 16001
+## Title: AuctioNitro
+## Notes: Download the auction house feed and review its data model and what can be derived from it.
+## Author: Wizwonk
+## Version: 0.1.0
+## AllowLoadGameType: forever
+## ExcludeLoadGameType: standard, classic
+## Category: Auction House
+## IconTexture: Interface\Icons\INV_Misc_Coin_02
+## SavedVariables: AuctioNitroDB
+## SavedVariablesPerCharacter: AuctioNitroCharDB
+## AddonCompartmentFunc: AuctioNitro_OnAddonCompartmentClick
+
+core.lua
+jobs.lua
+locales\en-us.lua
+data\settings.lua
+data\schemas.lua
+data\sources.lua
+data\events.lua
+data\summary.lua
+data\views.lua
+feed\links.lua
+feed\replicate.lua
+feed\browse.lua
+feed\downloader.lua
+feed\event-log.lua
+store.lua
+analyze\profile.lua
+analyze\derive.lua
+analyze\analyzer.lua
+ui\view-model.lua
+ui\panel.lua
+ui\auction-house-button.lua
+commands.lua
