@@ -7,7 +7,7 @@ Status: draft for review. Nothing here is settled until the open questions at th
 ## How we work on evaluations
 
 1. An evaluation is written down here first: the question it answers, the data it uses, and what would prove it wrong.
-2. It is built and tried in Nitro Lab against real scans.
+2. It is built and tried in Nitro Lab (its own repository, `../nitro-lab`) against real scans.
 3. Only when it reads right there is it ported to the addon.
 
 The addon and the lab must then use the same rule. The deal rule of 13 November 2026 was built in both at once, before this process existed, and is the one exception.
@@ -161,7 +161,7 @@ First results for market type, from the seven scans of 12 and 13 November 2026: 
 
    The badge would then need both a discount and a confidence over a set threshold, with a stricter threshold for the Resell tab. Check: random-suffix green gear, which fills the deals list today at 85% to 92% under, should mostly drop out.
 
-   **First pass, built in the lab's Find tab on 13 November 2026** (`lab/src/model/deal-confidence.ts`, rules in `lab/src/config/signals.ts`). Scored 0 to 100: days seen up to 35, units seen selling up to 40, different prices up to 25, capped at 25 when the vendor check trips. A deal is shown from 40 to buy for yourself and from 65 to buy for resale. On eight scans over two days:
+   **First pass, built in the lab's Find tab on 13 November 2026** (`src/model/deal-confidence.ts`, rules in `src/config/signals.ts`, in `../nitro-lab`). Scored 0 to 100: days seen up to 35, units seen selling up to 40, different prices up to 25, capped at 25 when the vendor check trips. A deal is shown from 40 to buy for yourself and from 65 to buy for resale. On eight scans over two days:
 
    | | Deals |
    |---|---|

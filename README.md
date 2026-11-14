@@ -51,7 +51,6 @@ Copy the `AuctioNitro` folder into
 | --- | --- |
 | `AuctioNitro/` | The addon |
 | `tests/` | The addon's tests, run against a mocked game client |
-| `lab/` | Nitro Lab, a local web workbench used to study scans and design the window before it is built in game. The addon does not depend on it |
 | `docs/` | Research notes and how the window is put together |
 | `scripts/deploy.sh` | Copies the addon into a local game install |
 
@@ -60,9 +59,6 @@ Copy the `AuctioNitro` folder into
 ```sh
 # Addon tests
 cd tests && npm install && npm test
-
-# Nitro Lab
-cd lab && npm install && npm run dev
 
 # Copy the addon into your game (set WOW_ADDONS_DIR, or put the AddOns path
 # on the first line of a .deploy-target file in the repository root)
@@ -73,6 +69,13 @@ The tests load the addon's real files into a Lua interpreter with a fake game
 client and drive it the way a player would. They catch broken behavior and Lua
 errors. They cannot show how the window looks or prove what the real server
 does, so anything that talks to the server is also checked in game.
+
+## Nitro Lab
+
+Nitro Lab is a local web workbench used to study scans, design the window, and
+try out price evaluations before they are built in game. It has its own
+repository, kept beside this one in `../nitro-lab`. The addon does not depend
+on it.
 
 ## License
 

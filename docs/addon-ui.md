@@ -1,6 +1,6 @@
 # The in-game window
 
-The addon's window is the Nitro Lab concept (`lab/src/ui/concept`) rebuilt for the game: same 900 by 600 size, same tabs, same layout, colors and wording. Open it with `/an`, the AuctioNitro button on the auction house, or the minimap addon menu. It also opens with the auction house.
+The addon's window is the Nitro Lab concept (`src/ui/concept` in the lab's own repository, `../nitro-lab`) rebuilt for the game: same 900 by 600 size, same tabs, same layout, colors and wording. Open it with `/an`, the AuctioNitro button on the auction house, or the minimap addon menu. It also opens with the auction house.
 
 It is drawn from plain textures and text, not the game's stock button art, so it takes its whole look from one theme table.
 
@@ -73,7 +73,7 @@ A deal is a price under what you would otherwise pay for the item, the baseline.
 - **Badge:** a list row is flagged when its cheapest price is 30% or more under the baseline, and the baseline has something behind it: past scans, or at least three different prices today.
 - **Deal meter:** reads the whole order against the same baseline, so buying deeper into the ladder weakens the reading. Its tooltip says what it was measured against.
 
-Nothing here knows what actually sold: these are asking prices, and the meter says so. Rules: `ns.BaselineRule`, `ns.DealBadgeRule` and `ns.DealRule` in `data/trading.lua`. The lab uses the same rules (`lab/src/config/catalog.ts`).
+Nothing here knows what actually sold: these are asking prices, and the meter says so. Rules: `ns.BaselineRule`, `ns.DealBadgeRule` and `ns.DealRule` in `data/trading.lua`. The lab uses the same rules (`src/config/catalog.ts` in `../nitro-lab`).
 
 ## Item tooltips
 
