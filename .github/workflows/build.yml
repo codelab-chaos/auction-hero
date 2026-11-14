@@ -1,0 +1,53 @@
+name: Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  addon:
+    name: Addon syntax and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Lua 5.1
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y lua5.1
+      # The game runs Lua 5.1. The tests run on a newer Lua, so this is what
+      # catches syntax the game would refuse.
+      - name: Check Lua syntax
+        run: find AuctioNitro tests -name '*.lua' -print0 | xargs -0 -n1 luac5.1 -p
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Run addon tests
+        working-directory: tests
+        run: |
+          npm ci
+          npm test
+
+  lab:
+    name: Nitro Lab typecheck and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - working-directory: lab
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
