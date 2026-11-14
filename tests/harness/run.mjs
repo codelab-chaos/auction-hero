@@ -13,7 +13,7 @@ const require = createRequire(import.meta.url);
 const { lua, lauxlib, lualib, to_luastring, to_jsstring } = require("fengari");
 
 const here = dirname(fileURLToPath(import.meta.url));
-export const ADDON_DIR = join(here, "../../AuctioNitro");
+export const ADDON_DIR = join(here, "../../AuctionHero");
 
 // Throws with the Lua error (and its traceback) when the scenario fails.
 export function runScenario(scenarioFile, addonDir = ADDON_DIR) {
@@ -26,7 +26,7 @@ export function runScenario(scenarioFile, addonDir = ADDON_DIR) {
     }
     if (addonArgs) {
       // Every addon file is called with the addon's name and its shared table.
-      lua.lua_pushstring(L, to_luastring("AuctioNitro"));
+      lua.lua_pushstring(L, to_luastring("AuctionHero"));
       lua.lua_getglobal(L, to_luastring("NS"));
     }
     if (lua.lua_pcall(L, addonArgs ? 2 : 0, 0, 0) !== 0) {
@@ -39,7 +39,7 @@ export function runScenario(scenarioFile, addonDir = ADDON_DIR) {
   run("NS = {}", "namespace");
 
   // Load the addon's files in the order its TOC lists them, as the game does.
-  const toc = readFileSync(join(addonDir, "AuctioNitro.toc"), "utf8").split(/\r?\n/);
+  const toc = readFileSync(join(addonDir, "AuctionHero.toc"), "utf8").split(/\r?\n/);
   for (const line of toc) {
     const file = line.trim().replace(/\\/g, "/");
     if (file && !file.startsWith("#")) run(readFileSync(join(addonDir, file), "utf8"), file, true);

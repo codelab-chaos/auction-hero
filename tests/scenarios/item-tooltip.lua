@@ -38,7 +38,7 @@ local record = ns.History:Get(key)
 
 local tip = tooltip(name, link)
 ns.ItemTooltip.OnItem(tip)
-check("the block is headed with the addon's name", tip.lines[2], "AuctioNitro")
+check("the block is headed with the addon's name", tip.lines[2], "Auction Hero")
 check("no blended price is quoted", line(tip, "Going rate"), nil)
 local live = ns.Analysis.market.byKey[key]
 local atLowest, nextUp, atNext = 0, nil, 0

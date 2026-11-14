@@ -75,7 +75,7 @@ tips.scripts.OnClick(tips)
 check("and back", ns.IsEnabled("itemTooltips"), true)
 
 -- Turning debug on brings the Debug section in, under its own heading.
-SlashCmdList.AUCTIONITRO("debug")
+SlashCmdList.AUCTIONHERO("debug")
 Tick(2)
 check("debug on lists the debug switches too", ids(), "debug,itemTooltips,logEvents,openWithAuctionHouse,railLarge")
 check("under a Debug heading", debugHeading(), 1)
@@ -91,11 +91,11 @@ check("puts the section away again", debugHeading(), 0)
 check("with its switches", ids(), "itemTooltips,openWithAuctionHouse,railLarge")
 
 -- A developer's account keeps the section, whether the Debug tab is on or off.
-SlashCmdList.AUCTIONITRO("dev")
+SlashCmdList.AUCTIONHERO("dev")
 Tick(2)
 check("dev lists the Debug section with the tab off", debugHeading(), 1)
-check("and remembers it in the saved variables", AuctioNitroDB.dev, true)
-SlashCmdList.AUCTIONITRO("dev")
+check("and remembers it in the saved variables", AuctionHeroDB.dev, true)
+SlashCmdList.AUCTIONHERO("dev")
 Tick(2)
 check("dev off puts it away", debugHeading(), 0)
 options.scripts.OnClick(options)

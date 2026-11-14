@@ -20,7 +20,7 @@ local fonts = {}
 function Kit.Font(size)
 	local font = fonts[size]
 	if not font then
-		font = CreateFont("AuctioNitroFont" .. size)
+		font = CreateFont("AuctionHeroFont" .. size)
 		local ok = pcall(font.SetFont, font, Theme.font, size, "")
 		if not ok or not font:GetFont() then
 			font:SetFont(STANDARD_TEXT_FONT, size, "")

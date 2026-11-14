@@ -1,6 +1,6 @@
 -- Debug tab: the raw scan views (summary, row model, items, rows) and the
 -- event log, for looking at what the game actually sent. It only shows while
--- the debug switch is on: /an debug.
+-- the debug switch is on: /ah debug.
 --
 -- What each view contains is decided by ui\view-model.lua and data\views.lua.
 -- This file only draws the table it is handed.

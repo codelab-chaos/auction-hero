@@ -1,4 +1,4 @@
--- Feature switches, as data. Flipped with /an set or in the game's options,
+-- Feature switches, as data. Flipped with /ah set or in the game's options,
 -- where every switch here shows up by itself.
 local _, ns = ...
 local L = ns.L
@@ -11,8 +11,8 @@ ns.SettingSections = {
 	{
 		id = "debug",
 		label = L.OPTIONS_DEBUG,
-		-- For working on the addon. Listed on a developer's account (/an dev,
-		-- remembered on that machine) or while the Debug tab is on (/an debug).
+		-- For working on the addon. Listed on a developer's account (/ah dev,
+		-- remembered on that machine) or while the Debug tab is on (/ah debug).
 		shown = function()
 			return ns.db.dev == true or ns.IsEnabled("debug")
 		end,

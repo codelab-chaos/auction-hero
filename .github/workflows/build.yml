@@ -25,7 +25,7 @@ jobs:
       # The game runs Lua 5.1. The tests run on a newer Lua, so this is what
       # catches syntax the game would refuse.
       - name: Check Lua syntax
-        run: find AuctioNitro tests -name '*.lua' -print0 | xargs -0 -n1 luac5.1 -p
+        run: find AuctionHero tests -name '*.lua' -print0 | xargs -0 -n1 luac5.1 -p
       - uses: actions/setup-node@v6
         with:
           node-version: 24

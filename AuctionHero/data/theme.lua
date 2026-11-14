@@ -1,5 +1,5 @@
 -- Theme: the window's sizes, colors and fonts, as data. These are the values
--- of the Nitro Lab concept (lab/src/styles.css), so the in-game window matches
+-- of the ahero-lab concept (lab/src/styles.css), so the in-game window matches
 -- the design it was worked out in.
 local _, ns = ...
 

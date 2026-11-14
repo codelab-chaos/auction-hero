@@ -2,7 +2,7 @@
 
 ## Objective and current status
 
-Reproduce the existing **Concept** window in Nitro Lab as closely as WoW's UI renderer permits, with working auction-house functionality. The lab is the specification for the arrangement of controls, selection behavior, filtering, colors, spacing, and information shown to the player.
+Reproduce the existing **Concept** window in ahero-lab as closely as WoW's UI renderer permits, with working auction-house functionality. The lab is the specification for the arrangement of controls, selection behavior, filtering, colors, spacing, and information shown to the player.
 
 This plan was committed as `c307d0b`, following checkpoint `f65e573`. The owner then authorized implementation on `feat/faithful-concept-ui`, in the existing project folder. The implementation record below distinguishes local checks from client verification.
 
@@ -30,13 +30,13 @@ The port will follow these files directly:
 
 CSS must be read in cascade order. Later declarations change earlier layouts: the final Buy layout has **four columns**, and the final concept palette is brown and gold. Copying an earlier three-column rule would reproduce the same mistake.
 
-The outer Nitro Lab shell is separate from the Concept window. The SPA's scan-date selector, simulated dates, historical analysis screens and header configuration are not additional rows to insert into the in-game window.
+The outer ahero-lab shell is separate from the Concept window. The SPA's scan-date selector, simulated dates, historical analysis screens and header configuration are not additional rows to insert into the in-game window.
 
 ### How the source becomes Lua
 
 WoW runs Lua and native UI objects; it does not execute the lab's TypeScript and CSS. I will translate the existing component tree and model functions into those native objects while retaining their structure and behavior.
 
-Plain configuration will be carried over systematically. A build-time export can read the lab's existing TypeScript configuration and produce checked-in Lua tables for labels, categories, class IDs, box definitions, defaults and thresholds. Function-based rules will be translated explicitly and checked against the TypeScript implementation using shared fixtures. The addon will run independently of Node and Nitro Lab.
+Plain configuration will be carried over systematically. A build-time export can read the lab's existing TypeScript configuration and produce checked-in Lua tables for labels, categories, class IDs, box definitions, defaults and thresholds. Function-based rules will be translated explicitly and checked against the TypeScript implementation using shared fixtures. The addon will run independently of Node and ahero-lab.
 
 The lab files will remain unchanged during this port. Native API differences will be handled in the addon adapters rather than by changing the prototype to match the current addon.
 
@@ -216,7 +216,7 @@ Proposed native responsibilities:
 | `market/` and a facet model | Pure data calculations and the translated facet selection logic |
 | `inventory.lua`, `trade.lua` | Game inventory and asynchronous trading adapters |
 
-The scan inspector stays available behind Data or `/an data`. Its controls do not dictate the appearance of the trading window.
+The scan inspector stays available behind Data or `/ah data`. Its controls do not dictate the appearance of the trading window.
 
 ## 8. Verification and completion criteria
 
@@ -252,9 +252,9 @@ Implementation, validation and deployment are reported as distinct states.
 
 The corrective native implementation is on `feat/faithful-concept-ui`. The lab source is unchanged.
 
-- `scripts/export-concept.mjs` reads the real TypeScript configuration and final CSS declarations into `AuctioNitro/data/concept.lua`. The addon has no Node or browser dependency.
-- `AuctioNitro/ui/widgets.lua` contains the shared theme and retained native controls. The three components are now `ui/tabs/buy.lua`, `sell.lua`, and `resell.lua`; `ui/trading-window.lua` owns the shell and live-action adapter.
-- `AuctioNitro/market/concept.lua` translates the lab's facets, order filling, pricing rules, confidence, deal and resell calculations. Native field names and actual commodity classifications are accepted at the adapter boundary.
+- `scripts/export-concept.mjs` reads the real TypeScript configuration and final CSS declarations into `AuctionHero/data/concept.lua`. The addon has no Node or browser dependency.
+- `AuctionHero/ui/widgets.lua` contains the shared theme and retained native controls. The three components are now `ui/tabs/buy.lua`, `sell.lua`, and `resell.lua`; `ui/trading-window.lua` owns the shell and live-action adapter.
+- `AuctionHero/market/concept.lua` translates the lab's facets, order filling, pricing rules, confidence, deal and resell calculations. Native field names and actual commodity classifications are accepted at the adapter boundary.
 - Buy has the four reference columns, separate category checkboxes and expanders, quality/equipment rail, single search row, sortable table and right-hand order controls. Sell has real bag slots, the prototype's form controls and competition ladder. Resell has the discount/profit toolbar and numbered plan.
 - Trading retains live search, variant/price validation, quote and post confirmations. The initial trading action explicitly checks current prices; subsequent presses show the live quantity and cost. Commodity posting combines quantities and permits buyout only. Item posting submits one auction per press.
 - Analysis exposes loading/error states and preserves the previous market while preparing a replacement. Old summary-only snapshots do not cause a missing-rows exception.

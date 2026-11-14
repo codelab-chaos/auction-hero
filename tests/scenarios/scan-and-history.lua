@@ -6,7 +6,7 @@ local key = "2001:Copper Ore"
 local first = ns.Store:GetSourceSnapshot("replicate").meta.time
 check("scans remembered after one", ns.History:ScanCount(), 1)
 check("the item was seen once", ns.History:Get(key).n, 1)
-checkTrue("the scan is saved whole, so the tabs have listings after a login", #AuctioNitroDB.snapshots.replicate.rows > 0)
+checkTrue("the scan is saved whole, so the tabs have listings after a login", #AuctionHeroDB.snapshots.replicate.rows > 0)
 
 Tick(400)
 Scan()
@@ -19,8 +19,8 @@ check("a third scan soon after updates the newest point", #ns.History:Points(key
 check("and is still counted as a scan", ns.History:ScanCount(), 3)
 
 -- Nothing clears a scan or the history.
-SlashCmdList.AUCTIONITRO("clear scan")
-SlashCmdList.AUCTIONITRO("clear")
+SlashCmdList.AUCTIONHERO("clear scan")
+SlashCmdList.AUCTIONHERO("clear")
 checkTrue("the scan survives a clear command", ns.Store:GetSnapshot() ~= nil)
 check("there is no way to clear the store", ns.Store.Clear, nil)
 check("the history survives too", ns.History:ScanCount(), 3)

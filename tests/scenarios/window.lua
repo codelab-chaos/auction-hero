@@ -1,6 +1,6 @@
 -- Every tab builds, and nothing a player can click or hover raises an error.
 local ns = Boot()
-SlashCmdList.AUCTIONITRO("")
+SlashCmdList.AUCTIONHERO("")
 OpenAuctionHouse()
 Scan()
 checkTrue("the scan became a market", ns.Analysis and ns.Analysis.market)
@@ -15,7 +15,7 @@ local function tabs()
 	return table.concat(ids, ",")
 end
 check("tabs without debug", tabs(), "buy,sell,resell,auctions,ledger,history")
-SlashCmdList.AUCTIONITRO("debug on")
+SlashCmdList.AUCTIONHERO("debug on")
 check("tabs with debug", tabs(), "buy,sell,resell,auctions,ledger,history,debug")
 
 local all = { "buy", "sell", "auctions", "resell", "history", "debug" }

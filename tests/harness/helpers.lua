@@ -26,7 +26,7 @@ end
 
 -- Logs in. Returns the addon's shared table.
 function Boot()
-	FireEvent("ADDON_LOADED", "AuctioNitro")
+	FireEvent("ADDON_LOADED", "AuctionHero")
 	FireEvent("PLAYER_LOGIN")
 	Tick(5)
 	return NS
@@ -40,7 +40,7 @@ end
 -- Runs a full scan to the end: the download, then the work that follows it.
 -- It stops stepping as soon as that is done, and gives up after 500 steps.
 function Scan()
-	SlashCmdList.AUCTIONITRO("scan")
+	SlashCmdList.AUCTIONHERO("scan")
 	Tick(5)
 	for _ = 1, 100 do
 		if not NS.Downloader:IsRunning() and NS.Jobs:IsIdle() then
@@ -54,9 +54,9 @@ end
 -- Shows the window on a tab.
 function ShowTab(id)
 	NS.charDb.tab = id
-	SlashCmdList.AUCTIONITRO("")
-	if not AuctioNitroCharDB.windowShown then
-		SlashCmdList.AUCTIONITRO("")
+	SlashCmdList.AUCTIONHERO("")
+	if not AuctionHeroCharDB.windowShown then
+		SlashCmdList.AUCTIONHERO("")
 	end
 	Tick(5)
 end

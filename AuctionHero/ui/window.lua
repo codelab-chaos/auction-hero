@@ -1,4 +1,4 @@
--- Window: the AuctioNitro window. A title bar, a row of tabs, and the body of
+-- Window: the Auction Hero window. A title bar, a row of tabs, and the body of
 -- whichever tab is chosen. Tabs register themselves (see ui\tabs), so this
 -- file knows nothing about what any of them shows.
 --
@@ -198,7 +198,7 @@ local function SavePosition()
 end
 
 local function Build()
-	frame = CreateFrame("Frame", "AuctioNitroWindow", UIParent)
+	frame = CreateFrame("Frame", "AuctionHeroWindow", UIParent)
 	local minWidth, minHeight = Theme.window.width, Theme.window.height + Theme.footerHeight
 	local maxWidth, maxHeight = Theme.windowMax.width, Theme.windowMax.height
 	local size = ns.charDb.windowSize
@@ -355,7 +355,7 @@ local function Build()
 	ns.Bus:On("ACTIVITY_ADDED", PaintFooter)
 	PaintFooter()
 
-	tinsert(UISpecialFrames, "AuctioNitroWindow") -- Escape closes it
+	tinsert(UISpecialFrames, "AuctionHeroWindow") -- Escape closes it
 
 	frame:SetScript("OnShow", function()
 		ns.charDb.windowShown = true

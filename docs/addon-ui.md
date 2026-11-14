@@ -1,12 +1,12 @@
 # The in-game window
 
-The addon's window is the Nitro Lab concept (`src/ui/concept` in the lab's own repository, `../nitro-lab`) rebuilt for the game: same 900 by 600 size, same tabs, same layout, colors and wording. Open it with `/an`, the AuctioNitro button on the auction house, or the minimap addon menu. It also opens with the auction house.
+The addon's window is the ahero-lab concept (`src/ui/concept` in the lab's own repository, `../ahero-lab`) rebuilt for the game: same 900 by 600 size, same tabs, same layout, colors and wording. Open it with `/ah`, the AuctionHero button on the auction house, or the minimap addon menu. It also opens with the auction house.
 
 It is drawn from plain textures and text, not the game's stock button art, so it takes its whole look from one theme table.
 
 ## The scan is the core
 
-Everything AuctioNitro does runs off scan data. A scan is what the Buy, Sell and Resell tabs list, what the going rates, deals, price history and item tooltips are worked out from, and so what makes the auction house easier to use and easier to profit from. Keeping and loading that data is fundamental operation, never an optional extra: a scan is saved whole, and there is no switch to turn that off.
+Everything Auction Hero does runs off scan data. A scan is what the Buy, Sell and Resell tabs list, what the going rates, deals, price history and item tooltips are worked out from, and so what makes the auction house easier to use and easier to profit from. Keeping and loading that data is fundamental operation, never an optional extra: a scan is saved whole, and there is no switch to turn that off.
 
 ## What is there
 
@@ -16,7 +16,7 @@ Everything AuctioNitro does runs off scan data. A scan is what the Buy, Sell and
 - **Sell:** your real bags as a grid (an item spread over several stacks is one choice), sale type, price in gold, silver and copper, the five price rules, price confidence with its facts line, how many to post, duration, and the competition ladder with your auctions slotted in.
 - **Resell:** discount and minimum profit settings, "I can afford" and "Top deals", the list of leads, and the Buy, Relist, Keep plan.
 - **Graphs:** pick an item and see its usual and lowest price as lines and the units for sale as bars, over 3, 7, 14 or 30 days, with a hover readout. It draws from the first scan, and a note says it is early until two days are in.
-- **Debug:** the raw scan views and the event log. Hidden unless the debug switch is on: `/an debug`.
+- **Debug:** the raw scan views and the event log. Hidden unless the debug switch is on: `/ah debug`.
 
 ## Posting
 
@@ -56,7 +56,7 @@ The panel under the Buy button says how fresh its prices are: from the scan, bei
 
 ## Ledger
 
-The Ledger tab keeps every auction house trade the character makes, for good, in the character's saved variables (`AuctioNitroCharDB.ledger`). It shows the trades added up by item, or one line per trade.
+The Ledger tab keeps every auction house trade the character makes, for good, in the character's saved variables (`AuctionHeroCharDB.ledger`). It shows the trades added up by item, or one line per trade.
 
 - **Buys and deposits** are written down when the game confirms them. The addon watches the game's own buy and post calls, so a trade made in the game's window is recorded too.
 - **Sales** are read from auction house mail, the only place that states the price, the auction house's cut and the deposit handed back. Open the mailbox to bring them in. Nothing in the mailbox is touched. A mail read twice is entered once.
@@ -73,11 +73,11 @@ A deal is a price under what you would otherwise pay for the item, the baseline.
 - **Badge:** a list row is flagged when its cheapest price is 30% or more under the baseline, and the baseline has something behind it: past scans, or at least three different prices today.
 - **Deal meter:** reads the whole order against the same baseline, so buying deeper into the ladder weakens the reading. Its tooltip says what it was measured against.
 
-Nothing here knows what actually sold: these are asking prices, and the meter says so. Rules: `ns.BaselineRule`, `ns.DealBadgeRule` and `ns.DealRule` in `data/trading.lua`. The lab uses the same rules (`src/config/catalog.ts` in `../nitro-lab`).
+Nothing here knows what actually sold: these are asking prices, and the meter says so. Rules: `ns.BaselineRule`, `ns.DealBadgeRule` and `ns.DealRule` in `data/trading.lua`. The lab uses the same rules (`src/config/catalog.ts` in `../ahero-lab`).
 
 ## Item tooltips
 
-Hovering an item anywhere in the game (bags, chat links, the auction house) adds a short AuctioNitro block to its tooltip.
+Hovering an item anywhere in the game (bags, chat links, the auction house) adds a short Auction Hero block to its tooltip.
 
 - **Lowest:** the cheapest price it is listed at, and how many of everything for sale are at that price.
 - **Next price up:** what you pay if the cheapest is gone, with its count.

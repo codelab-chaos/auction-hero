@@ -1,5 +1,5 @@
 ## Interface: 16001
-## Title: AuctioNitro
+## Title: Auction Hero
 ## Notes: Browse, price and trade auctions with scan history and a compact Buy, Sell and Resell interface.
 ## Author: Wizwonk
 ## Version: 0.1.0
@@ -7,9 +7,9 @@
 ## ExcludeLoadGameType: standard, classic
 ## Category: Auction House
 ## IconTexture: Interface\Icons\INV_Misc_Coin_02
-## SavedVariables: AuctioNitroDB
-## SavedVariablesPerCharacter: AuctioNitroCharDB
-## AddonCompartmentFunc: AuctioNitro_OnAddonCompartmentClick
+## SavedVariables: AuctionHeroDB
+## SavedVariablesPerCharacter: AuctionHeroCharDB
+## AddonCompartmentFunc: AuctionHero_OnAddonCompartmentClick
 
 core.lua
 jobs.lua

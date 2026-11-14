@@ -1,4 +1,4 @@
--- A button on Blizzard's auction house window that opens the AuctioNitro
+-- A button on Blizzard's auction house window that opens the Auction Hero
 -- window. It sits on the game's own frame, so it uses the game's own button.
 -- The auction house UI loads on demand, so the button is made the first time
 -- it opens.

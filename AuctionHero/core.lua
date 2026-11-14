@@ -166,15 +166,15 @@ frame:SetScript("OnEvent", function(_, event, arg1)
 		if arg1 ~= addonName then
 			return
 		end
-		AuctioNitroDB = AuctioNitroDB or {}
-		AuctioNitroCharDB = AuctioNitroCharDB or {}
+		AuctionHeroDB = AuctionHeroDB or {}
+		AuctionHeroCharDB = AuctionHeroCharDB or {}
 		for _, setting in ipairs(ns.Settings) do
 			ACCOUNT_DEFAULTS.switches[setting.id] = setting.default
 		end
-		ApplyDefaults(AuctioNitroDB, ACCOUNT_DEFAULTS)
-		ApplyDefaults(AuctioNitroCharDB, CHARACTER_DEFAULTS)
-		ns.db = AuctioNitroDB
-		ns.charDb = AuctioNitroCharDB
+		ApplyDefaults(AuctionHeroDB, ACCOUNT_DEFAULTS)
+		ApplyDefaults(AuctionHeroCharDB, CHARACTER_DEFAULTS)
+		ns.db = AuctionHeroDB
+		ns.charDb = AuctionHeroCharDB
 		Bus:Fire("INIT")
 	elseif event == "PLAYER_LOGIN" then
 		Bus:Fire("READY")

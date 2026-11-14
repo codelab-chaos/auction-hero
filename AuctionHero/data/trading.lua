@@ -155,7 +155,7 @@ ns.HistoryRule = {
 	-- for 30% and everything before it for 70%.
 	smoothing = 0.3,
 	-- How many days back each item's graph points reach. Older ones fall off.
-	-- This is the starting value: the player can change it with /an history,
+	-- This is the starting value: the player can change it with /ah history,
 	-- within the limits below. A point is about 25 bytes.
 	graphPoints = 30,
 	graphPointsMin = 7,

@@ -1,5 +1,5 @@
 -- Options: the addon's own settings panel, opened from the Options button in
--- the title bar or /an options. It covers the tab that is showing and is put
+-- the title bar or /ah options. It covers the tab that is showing and is put
 -- away with Close, Escape's close of the window, or the button again.
 --
 -- It is built from ns.Settings and ns.SettingSections, so a new switch or

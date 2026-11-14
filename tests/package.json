@@ -1,5 +1,5 @@
 {
-  "name": "auctionitro-tests",
+  "name": "auction-hero-tests",
   "private": true,
   "description": "Runs the addon against a mocked game client",
   "type": "module",

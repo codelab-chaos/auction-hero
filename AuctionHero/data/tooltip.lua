@@ -1,4 +1,4 @@
--- What AuctioNitro adds to an item's tooltip, as data: one rule per line, in
+-- What Auction Hero adds to an item's tooltip, as data: one rule per line, in
 -- order. A rule returns the text for the right-hand side, or nothing to leave
 -- its line out. An item nothing is known about gets no lines at all.
 --

@@ -1,4 +1,4 @@
--- Item tooltips: adds what AuctioNitro knows about an item to its tooltip,
+-- Item tooltips: adds what Auction Hero knows about an item to its tooltip,
 -- anywhere in the game. Which lines, and in what order, is ns.TooltipLines in
 -- data\tooltip.lua. This file only finds the item and writes the lines.
 local _, ns = ...
@@ -76,7 +76,7 @@ function ItemTooltip.OnItem(tooltip, data)
 		return
 	end
 	-- A recipe's tooltip is filled twice. One block is enough.
-	if tooltip.auctioNitroAdded then
+	if tooltip.auctionHeroAdded then
 		return
 	end
 	local itemID, name = Shown(tooltip, data)
@@ -87,7 +87,7 @@ function ItemTooltip.OnItem(tooltip, data)
 	if #lines == 0 then
 		return
 	end
-	tooltip.auctioNitroAdded = true
+	tooltip.auctionHeroAdded = true
 	local label, value = C.muted, C.text
 	tooltip:AddLine(" ")
 	tooltip:AddLine(L.TITLE, C.accent[1], C.accent[2], C.accent[3])
@@ -119,7 +119,7 @@ end
 for _, tooltip in ipairs({ GameTooltip, ItemRefTooltip }) do
 	if tooltip and tooltip.HookScript then
 		pcall(tooltip.HookScript, tooltip, "OnTooltipCleared", function(self)
-			self.auctioNitroAdded = nil
+			self.auctionHeroAdded = nil
 		end)
 	end
 end

@@ -12,8 +12,8 @@ local function footerStatus()
 	return found[1] and strip(found[1].text)
 end
 local function redraw()
-	SlashCmdList.AUCTIONITRO("")
-	SlashCmdList.AUCTIONITRO("")
+	SlashCmdList.AUCTIONHERO("")
+	SlashCmdList.AUCTIONHERO("")
 	Tick(2)
 end
 

@@ -18,7 +18,7 @@ local function Memory()
 	if update then
 		pcall(update)
 	end
-	local ok, kilobytes = pcall(usage, "AuctioNitro")
+	local ok, kilobytes = pcall(usage, "AuctionHero")
 	return ok and kilobytes and kilobytes * 1024 or nil
 end
 

@@ -1,13 +1,13 @@
 # The auction house as a player economy
 
-A working paper for AuctioNitro. It sets down how the auction house behaves as a market, what a player trading on it is really asking, and which of those questions our data can answer. It is the reference for every evaluation the addon or the lab makes: a deal, a going rate, scarcity, a lead worth flipping.
+A working paper for AuctionHero. It sets down how the auction house behaves as a market, what a player trading on it is really asking, and which of those questions our data can answer. It is the reference for every evaluation the addon or the lab makes: a deal, a going rate, scarcity, a lead worth flipping.
 
 Status: draft for review. Nothing here is settled until the open questions at the end are answered.
 
 ## How we work on evaluations
 
 1. An evaluation is written down here first: the question it answers, the data it uses, and what would prove it wrong.
-2. It is built and tried in Nitro Lab (its own repository, `../nitro-lab`) against real scans.
+2. It is built and tried in ahero-lab (its own repository, `../ahero-lab`) against real scans.
 3. Only when it reads right there is it ported to the addon.
 
 The addon and the lab must then use the same rule. The deal rule of 13 November 2026 was built in both at once, before this process existed, and is the one exception.
@@ -161,7 +161,7 @@ First results for market type, from the seven scans of 12 and 13 November 2026: 
 
    The badge would then need both a discount and a confidence over a set threshold, with a stricter threshold for the Resell tab. Check: random-suffix green gear, which fills the deals list today at 85% to 92% under, should mostly drop out.
 
-   **First pass, built in the lab's Find tab on 13 November 2026** (`src/model/deal-confidence.ts`, rules in `src/config/signals.ts`, in `../nitro-lab`). Scored 0 to 100: days seen up to 35, units seen selling up to 40, different prices up to 25, capped at 25 when the vendor check trips. A deal is shown from 40 to buy for yourself and from 65 to buy for resale. On eight scans over two days:
+   **First pass, built in the lab's Find tab on 13 November 2026** (`src/model/deal-confidence.ts`, rules in `src/config/signals.ts`, in `../ahero-lab`). Scored 0 to 100: days seen up to 35, units seen selling up to 40, different prices up to 25, capped at 25 when the vendor check trips. A deal is shown from 40 to buy for yourself and from 65 to buy for resale. On eight scans over two days:
 
    | | Deals |
    |---|---|

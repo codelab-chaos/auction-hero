@@ -166,7 +166,7 @@ Things to know:
 
 **There is no price history API.** The client only knows what is listed right now. Every auction addon builds history itself by recording what it sees into SavedVariables.
 
-This is the core design decision for AuctioNitro:
+This is the core design decision for Auction Hero:
 
 - What we snapshot (browse min prices, full search results, or full scans).
 - How often, given the search limit and the scan cooldown.
@@ -275,7 +275,7 @@ Suggested next step: a tiny probe addon that answers these and dumps one scan to
 
 ## The addon and deployment
 
-The addon lives in `AuctioNitro/` and deploys the same way `../quest-party` does:
+The addon lives in `AuctionHero/` and deploys the same way `../quest-party` does:
 
 ```sh
 scripts/deploy.sh            # copy the addon into the game
@@ -288,14 +288,14 @@ scripts/deploy.sh --dry-run  # show what would change, copy nothing
 
 What the first version does (a probe, not yet a trading tool):
 
-- **Download:** "Full scan" (`ReplicateItems`, one row per auction) or "Browse sweep" (paged empty browse, one row per item). Buttons are in the window, which opens with the auction house. `/an` toggles it.
+- **Download:** "Full scan" (`ReplicateItems`, one row per auction) or "Browse sweep" (paged empty browse, one row per item). Buttons are in the window, which opens with the auction house. `/ah` toggles it.
 - **Summary:** snapshot facts and market totals, with breakdowns by quality, time left, stack size and seller.
 - **Model:** every field of the raw rows with the Lua types seen, how often it is filled, and its values or range.
 - **Items:** per-item listings, units, sellers, lowest, median and highest unit price, and how far the lowest sits under the median. Click a row to see its raw rows.
 - **Rows:** the raw rows. The tooltip lists every field as it arrived.
 - **Log:** the auction house events the client fired, with their payloads.
 
-The snapshot is saved in `AuctioNitroDB` (`WTF/Account/<account>/SavedVariables/AuctioNitro.lua`), so it can also be read from outside the game after a `/reload` or logout.
+The snapshot is saved in `AuctionHeroDB` (`WTF/Account/<account>/SavedVariables/AuctionHero.lua`), so it can also be read from outside the game after a `/reload` or logout.
 
 Where things are, one responsibility per file:
 

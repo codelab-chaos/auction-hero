@@ -10,7 +10,7 @@
 #   scripts/deploy.sh --dry-run  show what would change, copy nothing
 set -euo pipefail
 
-ADDON_NAME="AuctioNitro"
+ADDON_NAME="AuctionHero"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SOURCE_DIR="$REPO_ROOT/$ADDON_NAME"
 TARGET_FILE="$REPO_ROOT/.deploy-target"

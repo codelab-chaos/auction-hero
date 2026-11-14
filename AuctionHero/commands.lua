@@ -1,4 +1,4 @@
--- Slash commands: /an and /auctionitro. Commands are a data table of handlers.
+-- Slash commands: /ah and /auctionhero. Commands are a data table of handlers.
 local _, ns = ...
 local L = ns.L
 
@@ -41,7 +41,7 @@ local commands = {
 	cancel = function()
 		ns.Downloader:Cancel()
 	end,
-	-- Shows or hides the Debug tab: /an debug, or /an debug on|off.
+	-- Shows or hides the Debug tab: /ah debug, or /ah debug on|off.
 	-- Marks this account as a developer's: the options panel then always lists
 	-- the Debug section, so the Debug tab can be switched on and off from there.
 	-- Kept in the saved variables, so it stays set on this machine only.
@@ -73,7 +73,7 @@ local commands = {
 			ns.Print(L.CMD_POST_NOTHING)
 		end
 	end,
-	-- How many days of prices each item keeps for its graph: /an history 60.
+	-- How many days of prices each item keeps for its graph: /ah history 60.
 	-- With no number it says what the setting is.
 	history = function(days)
 		local number = tonumber(days)
@@ -117,9 +117,9 @@ local commands = {
 	help = PrintHelp,
 }
 
-SLASH_AUCTIONITRO1 = "/an"
-SLASH_AUCTIONITRO2 = "/auctionitro"
-SlashCmdList["AUCTIONITRO"] = function(text)
+SLASH_AUCTIONHERO1 = "/ah"
+SLASH_AUCTIONHERO2 = "/auctionhero"
+SlashCmdList["AUCTIONHERO"] = function(text)
 	local words = {}
 	for word in (text or ""):lower():gmatch("%S+") do
 		words[#words + 1] = word
@@ -133,6 +133,6 @@ SlashCmdList["AUCTIONITRO"] = function(text)
 end
 
 -- Click target for the minimap addon menu (see AddonCompartmentFunc in the TOC).
-function AuctioNitro_OnAddonCompartmentClick()
+function AuctionHero_OnAddonCompartmentClick()
 	ns.Window:Toggle()
 end

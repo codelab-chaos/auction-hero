@@ -2,7 +2,7 @@
 local _, ns = ...
 
 ns.L = {
-	TITLE = "AuctioNitro",
+	TITLE = "Auction Hero",
 
 	-- Views (tabs)
 	VIEW_SUMMARY = "Summary",
@@ -150,10 +150,10 @@ ns.L = {
 
 	-- Commands
 	CMD_HELP = "Commands:",
-	CMD_HELP_TOGGLE = "/an  show or hide the window",
-	CMD_HELP_SCAN = "/an scan | browse | cancel  start or stop a download; /an data  open the scan inspector",
-	CMD_HELP_CLEAR = "/an clear log  empty the event log",
-	CMD_HELP_SET = "/an set [name] [on|off]  list or flip a switch",
+	CMD_HELP_TOGGLE = "/ah  show or hide the window",
+	CMD_HELP_SCAN = "/ah scan | browse | cancel  start or stop a download; /ah data  open the scan inspector",
+	CMD_HELP_CLEAR = "/ah clear log  empty the event log",
+	CMD_HELP_SET = "/ah set [name] [on|off]  list or flip a switch",
 	CMD_CLEARED = "Snapshot and log cleared.",
 	CMD_SET_LINE = "%s: %s  (%s)",
 	CMD_SET_UNKNOWN = "No switch called %s.",
@@ -271,7 +271,7 @@ L.WIN_ANALYZING = "Reading the scan..."
 L.WIN_NO_MARKET = "This needs a full scan. Open the auction house and press Scan."
 L.SETTING_DEBUG = "Show the Debug tab"
 L.SETTING_DEBUG_TIP = "Adds a tab with the raw scan views and the event log."
-L.CMD_HELP_DEBUG = "/an debug  show or hide the Debug tab"
+L.CMD_HELP_DEBUG = "/ah debug  show or hide the Debug tab"
 L.CMD_DEBUG_ON = "Debug tab on."
 L.CMD_DEBUG_OFF = "Debug tab off."
 L.CMD_DEV_ON = "Developer options on. Options now lists the Debug section."
@@ -405,12 +405,12 @@ L.DEBUG_BROWSE = "Browse sweep"
 L.DEBUG_CLEAR_LOG = "Clear log"
 L.DEBUG_CONFIRM = "Press again"
 L.CMD_CLEARED_LOG = "The event log was cleared."
-L.CMD_CLEAR_HOW = "/an clear log  empties the event log. Scans and the price history are never cleared."
+L.CMD_CLEAR_HOW = "/ah clear log  empties the event log. Scans and the price history are never cleared."
 L.DEBUG_FILTER = "Filter"
 
 -- Price history length
-L.CMD_HISTORY = "Each item keeps %d days of prices for its graph. /an history <days> changes it (%d to %d)."
-L.CMD_HELP_HISTORY = "/an history [days]  how many days of prices each item keeps"
+L.CMD_HISTORY = "Each item keeps %d days of prices for its graph. /ah history <days> changes it (%d to %d)."
+L.CMD_HELP_HISTORY = "/ah history [days]  how many days of prices each item keeps"
 
 -- Posting
 L.SELL_DEPOSIT = "Deposit"
@@ -513,12 +513,12 @@ L.SETTING_RAIL_LARGE_TIP = "Makes the quick filter icons down the left of the Bu
 L.BUY_RAIL_BIGGER = "Bigger filter icons"
 L.BUY_RAIL_SMALLER = "Smaller filter icons"
 L.OPTIONS = "Options"
-L.OPTIONS_TIP = "AuctioNitro's settings."
+L.OPTIONS_TIP = "Auction Hero's settings."
 L.OPTIONS_DEBUG = "Debug"
 L.OPTIONS_DATA = "Data kept: %s. The last scan (%s auctions) and price history for %s items (%s graph points, up to %d days back)."
 L.OPTIONS_DATA_MB = "about %.0f MB in memory"
 L.OPTIONS_DATA_UNKNOWN = "size not reported by the game"
-L.CMD_HELP_OPTIONS = "/an options  open the options"
+L.CMD_HELP_OPTIONS = "/ah options  open the options"
 
 -- Buying
 L.BUY_QUOTING = "Asking the auction house for the price..."

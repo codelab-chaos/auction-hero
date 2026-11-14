@@ -386,7 +386,7 @@ local function BuildRequest()
 		buyout = commodity or type.buyout,
 	}
 end
-ns.SellRequest = BuildRequest -- for the /an post command
+ns.SellRequest = BuildRequest -- for the /ah post command
 
 -- One press, one action: start the post, or confirm the one waiting.
 PressPost = function()

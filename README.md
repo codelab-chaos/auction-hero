@@ -1,4 +1,4 @@
-# AuctioNitro
+# Auction Hero
 
 An auction house addon for World of Warcraft: Forever. It replaces the stock
 window with one built for buying, selling and reselling: better filters, going
@@ -26,7 +26,7 @@ It works from what it sees in game. There is no outside price feed.
 - **Item tooltips:** hover an item anywhere in the game for its going rate,
   lowest price, quantity for sale and when it was last seen.
 
-Open it with `/an`, or it opens with the auction house. `/an help` lists the
+Open it with `/ah`, or it opens with the auction house. `/ah help` lists the
 commands.
 
 ## Status
@@ -42,14 +42,14 @@ More detail is in [docs/addon-ui.md](docs/addon-ui.md).
 
 ## Install
 
-Copy the `AuctioNitro` folder into
+Copy the `AuctionHero` folder into
 `World of Warcraft/_forever_/Interface/AddOns`, then start the game.
 
 ## What is in this repository
 
 | Folder | What it is |
 | --- | --- |
-| `AuctioNitro/` | The addon |
+| `AuctionHero/` | The addon |
 | `tests/` | The addon's tests, run against a mocked game client |
 | `docs/` | Research notes and how the window is put together |
 | `scripts/deploy.sh` | Copies the addon into a local game install |
@@ -70,11 +70,11 @@ client and drive it the way a player would. They catch broken behavior and Lua
 errors. They cannot show how the window looks or prove what the real server
 does, so anything that talks to the server is also checked in game.
 
-## Nitro Lab
+## ahero-lab
 
-Nitro Lab is a local web workbench used to study scans, design the window, and
+ahero-lab is a local web workbench used to study scans, design the window, and
 try out price evaluations before they are built in game. It has its own
-repository, kept beside this one in `../nitro-lab`. The addon does not depend
+repository, kept beside this one in `../ahero-lab`. The addon does not depend
 on it.
 
 ## License

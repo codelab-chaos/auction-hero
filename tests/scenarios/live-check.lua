@@ -45,7 +45,7 @@ check("and their units", units, 13)
 check("other items are untouched", snapshot.rows[2][at.itemID] ~= nil, true)
 check("the scan notes the patch", snapshot.meta.patched[1].id, 2001)
 checkTrue("and when", snapshot.meta.patched[1].time ~= nil)
-check("the same table is what is saved", AuctioNitroDB.snapshots.replicate, snapshot)
+check("the same table is what is saved", AuctionHeroDB.snapshots.replicate, snapshot)
 
 -- History is not given a scan it did not have, but a new low is a new low.
 local record = ns.History:Get("2001:Copper Ore")
