@@ -22,6 +22,9 @@ data\summary.lua
 data\views.lua
 data\theme.lua
 data\trading.lua
+data\activity.lua
+data\ledger.lua
+data\tooltip.lua
 data\facets.lua
 feed\links.lua
 feed\replicate.lua
@@ -29,8 +32,10 @@ feed\browse.lua
 feed\downloader.lua
 feed\event-log.lua
 store.lua
+activity.lua
 market\market.lua
 market\history.lua
+market\footprint.lua
 market\signals.lua
 market\orders.lua
 market\facets.lua
@@ -39,6 +44,12 @@ inventory\bags.lua
 trade\posting.lua
 trade\sell-search.lua
 trade\owned.lua
+trade\item-key.lua
+trade\buying.lua
+trade\live-check.lua
+ledger\ledger.lua
+ledger\trades.lua
+ledger\mail.lua
 analyze\profile.lua
 analyze\derive.lua
 analyze\analyzer.lua
@@ -50,7 +61,10 @@ ui\tabs\buy.lua
 ui\tabs\sell.lua
 ui\tabs\auctions.lua
 ui\tabs\resell.lua
+ui\tabs\ledger.lua
 ui\tabs\history.lua
 ui\tabs\debug.lua
+ui\options.lua
+ui\item-tooltip.lua
 ui\auction-house-button.lua
 commands.lua

@@ -38,17 +38,12 @@ function Store:GetCachedSources()
 end
 
 -- "disk" when the active snapshot is in the saved variables file,
--- "memory" when it will be written on the next reload or logout,
--- "never" when the rows are not being saved at all.
+-- "memory" when it will be written on the next reload or logout.
 function Store:GetSaveState()
 	if not snapshots[activeId] then
 		return nil
-	elseif not inMemoryOnly[activeId] then
-		return "disk"
-	elseif ns.IsEnabled("persistRows") then
-		return "memory"
 	end
-	return "never"
+	return inMemoryOnly[activeId] and "memory" or "disk"
 end
 
 -- Saved snapshots this build could not load (an unknown source or schema).
@@ -61,13 +56,10 @@ local function Persist()
 	for id, snapshot in pairs(unreadable) do
 		saved[id] = snapshot
 	end
+	-- Snapshots are saved whole. The Buy, Sell and Resell tabs are built from
+	-- the rows, so without them a login would start with nothing to show.
 	for id, snapshot in pairs(snapshots) do
-		-- A snapshot already on disk stays whole even if the switch was turned off since.
-		if ns.IsEnabled("persistRows") or not inMemoryOnly[id] then
-			saved[id] = snapshot
-		else
-			saved[id] = { meta = snapshot.meta }
-		end
+		saved[id] = snapshot
 	end
 	ns.db.snapshots = saved
 	ns.db.active = activeId
@@ -89,6 +81,45 @@ function Store:SetActive(sourceId)
 		Persist()
 		Bus:Fire("SNAPSHOT_CHANGED")
 	end
+end
+
+-- Replaces a snapshot's rows for one item id with fresher ones, from a live
+-- check of that item. The snapshot is then no longer one moment in time, so
+-- it says which items were patched and when: meta.patched is a list of
+-- { id, time }, one entry per item, for whoever reads the scan afterwards.
+function Store:PatchItem(sourceId, itemID, rows, time, name)
+	local snapshot = snapshots[sourceId]
+	local schema = snapshot and ns.Schemas[snapshot.meta.schema]
+	if not schema or not schema.index.itemID then
+		return false
+	end
+	-- With a name, only that variant of the item is replaced.
+	local at, nameAt = schema.index.itemID, schema.index.name
+	local kept = {}
+	for _, row in ipairs(snapshot.rows) do
+		if row[at] ~= itemID or (name and row[nameAt] ~= name) then
+			kept[#kept + 1] = row
+		end
+	end
+	for _, row in ipairs(rows) do
+		kept[#kept + 1] = row
+	end
+	snapshot.rows = kept
+	local patched = snapshot.meta.patched or {}
+	local entry
+	for _, known in ipairs(patched) do
+		if known.id == itemID then
+			entry = known
+		end
+	end
+	if entry then
+		entry.time = time
+	else
+		patched[#patched + 1] = { id = itemID, time = time }
+	end
+	snapshot.meta.patched = patched
+	Persist()
+	return true
 end
 
 -- There is deliberately no way to clear a snapshot. A new scan replaces the
@@ -133,11 +164,4 @@ Bus:On("DOWNLOAD_FINISHED", function(meta, rows, items)
 	ns.db.lastFetch[meta.source] = meta.time
 	Persist()
 	Bus:Fire("SNAPSHOT_CHANGED")
-end)
-
-Bus:On("SETTING_CHANGED", function(id)
-	if id == "persistRows" then
-		Persist()
-		Bus:Fire("SAVE_STATE_CHANGED")
-	end
 end)

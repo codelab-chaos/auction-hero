@@ -124,7 +124,7 @@ ns.BuyRail = {
 
 -- The quick toggles beside the search box.
 ns.BuyToggles = {
-	{ id = "usableOnly", label = L.BUY_CAN_USE },
-	{ id = "affordableOnly", label = L.BUY_CAN_AFFORD },
-	{ id = "dealsOnly", label = L.BUY_DEALS },
+	{ id = "usableOnly", label = L.BUY_CAN_USE, tip = L.BUY_CAN_USE_TIP },
+	{ id = "affordableOnly", label = L.BUY_CAN_AFFORD, tip = L.BUY_CAN_AFFORD_TIP },
+	{ id = "dealsOnly", label = L.BUY_DEALS, tip = L.BUY_DEALS_TIP },
 }

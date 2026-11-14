@@ -145,36 +145,36 @@ local function BuildPlan(parent)
 	local function Count(planned)
 		return planned.byUnit and planned.buyUnits or planned.buyAuctions
 	end
-	local minus = Kit.Button(parts.limitRow, { text = "-", width = 26, height = 26, onClick = function()
+	parts.limitMinus = Kit.Button(parts.limitRow, { text = "-", width = 26, height = 26, onClick = function()
 		local lead, planned = Current()
 		if lead then
 			SetLimit(Count(planned) - 1, lead.available)
 		end
 	end })
-	minus:SetPoint("LEFT", 60, 0)
+	parts.limitMinus:SetPoint("LEFT", 60, 0)
 	parts.limit = Kit.Input(parts.limitRow, { width = 60, height = 26, numeric = true, justify = "RIGHT", maxLetters = 6, onChange = function(text)
 		local lead = Current()
 		if lead then
 			SetLimit(tonumber(text) or 1, lead.available)
 		end
 	end })
-	parts.limit:SetPoint("LEFT", minus, "RIGHT", 4, 0)
-	local plus = Kit.Button(parts.limitRow, { text = "+", width = 26, height = 26, onClick = function()
+	parts.limit:SetPoint("LEFT", parts.limitMinus, "RIGHT", 4, 0)
+	parts.limitPlus = Kit.Button(parts.limitRow, { text = "+", width = 26, height = 26, onClick = function()
 		local lead, planned = Current()
 		if lead then
 			SetLimit(Count(planned) + 1, lead.available)
 		end
 	end })
-	plus:SetPoint("LEFT", parts.limit, "RIGHT", 4, 0)
-	local all = Kit.Button(parts.limitRow, { text = L.SELL_ALL, height = 26, onClick = function()
+	parts.limitPlus:SetPoint("LEFT", parts.limit, "RIGHT", 4, 0)
+	parts.limitAll = Kit.Button(parts.limitRow, { text = L.SELL_ALL, height = 26, onClick = function()
 		local lead = Current()
 		if lead then
 			SetLimit(lead.available, lead.available)
 		end
 	end })
-	all:SetPoint("LEFT", plus, "RIGHT", 4, 0)
+	parts.limitAll:SetPoint("LEFT", parts.limitPlus, "RIGHT", 4, 0)
 	parts.limitOf = Kit.Text(parts.limitRow, "small", C.muted)
-	parts.limitOf:SetPoint("LEFT", all, "RIGHT", 6, 0)
+	parts.limitOf:SetPoint("LEFT", parts.limitAll, "RIGHT", 6, 0)
 
 	-- The game sells one auction per press, so the button buys the next one
 	-- on the list and says exactly what that is.
@@ -251,6 +251,11 @@ PaintPlan = function()
 	parts.limitLabel:SetText(lead.byUnit and L.RESELL_UNITS or L.RESELL_AUCTIONS)
 	parts.limit:SetValue(tostring(count))
 	parts.limitOf:SetText(L.SELL_OF:format(ns.Comma(full.available)))
+	-- A button that cannot change the number says so by going dim: with one
+	-- auction worth buying there is nothing to add and nothing to take away.
+	parts.limitMinus:SetDisabled(count <= 1)
+	parts.limitPlus:SetDisabled(count >= full.available)
+	parts.limitAll:SetDisabled(count >= full.available)
 	stack:Add(parts.limitRow, 4)
 
 	local next = lead.lines[1]
@@ -328,6 +333,9 @@ local function Create(parent)
 	plan:SetPoint("TOPRIGHT")
 	plan:SetPoint("BOTTOMRIGHT")
 	plan:SetWidth(Theme.resell.plan)
+	Kit.Split(plan, { id = "resell.plan", edge = "LEFT", min = Theme.resell.plan, max = Theme.resell.plan + Theme.panelGrow, onChange = function()
+		ns.Window:RefreshActive()
+	end })
 	BuildPlan(plan)
 
 	-- The settings bar: two labelled controls on the left (how big a discount,
@@ -395,6 +403,7 @@ local function Create(parent)
 	affordButton:SetPoint("RIGHT", topButton, "LEFT", -5, 0)
 
 	list = Kit.List(parent, {
+		id = "resell",
 		columns = {
 			{
 				id = "name",

@@ -12,15 +12,16 @@ ns.name = addonName
 --   DOWNLOAD_STATE(state)      a download started, progressed, finished or failed
 --   DOWNLOAD_FINISHED(meta, rows, items)  a download produced a snapshot
 --   SNAPSHOT_CHANGED           the snapshot being viewed changed, or there is none
---   SAVE_STATE_CHANGED         whether the snapshot will reach the disk changed
 --   ANALYSIS_STATE(running)    the analyzer started or stopped
 --   ANALYSIS_READY             profile, derived data and the market are ready to show
 --   HISTORY_CHANGED            a scan was folded into the price history
 --   BAGS_CHANGED               what the player carries changed
 --   OWNED_CHANGED              the list of the player's own auctions was refreshed
 --   POSTING_CHANGED(state)     a post started, needs confirming, finished or failed
+--   BUYING_CHANGED(state)      a purchase was quoted, confirmed, finished or failed
 --   LOG_ADDED                  the event log got a new line
 --   SETTING_CHANGED(id, value) a feature switch was flipped
+--   ACTIVITY_ADDED             the footer's list of recent actions got a line
 local Bus = { handlers = {} }
 ns.Bus = Bus
 
@@ -95,6 +96,20 @@ function ns.Duration(seconds)
 		return ("%dm %02ds"):format(math.floor(seconds / 60), seconds % 60)
 	end
 	return ("%dh %02dm"):format(math.floor(seconds / 3600), math.floor(seconds / 60) % 60)
+end
+
+-- Seconds -> how long ago, in the units a person would say: "just now",
+-- "12m", "2h 10m", "3d 4h".
+function ns.Ago(seconds)
+	local minutes = math.floor(seconds / 60)
+	if minutes < 1 then
+		return ns.L.AGO_NOW
+	elseif minutes < 60 then
+		return ns.L.AGO_MINUTES:format(minutes)
+	elseif minutes < 1440 then
+		return ns.L.AGO_HOURS:format(math.floor(minutes / 60), minutes % 60)
+	end
+	return ns.L.AGO_DAYS:format(math.floor(minutes / 1440), math.floor(minutes / 60) % 24)
 end
 
 function ns.Print(text)

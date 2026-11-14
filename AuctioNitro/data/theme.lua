@@ -18,6 +18,17 @@ ns.Theme = {
 
 	-- The size of the game's own auction house window.
 	window = { width = 900, height = 600 },
+	-- The window can be dragged bigger from its corner, never smaller than the
+	-- size above: the tabs are laid out for that.
+	windowMax = { width = 1500, height = 1000 },
+	-- Sizers: the draggable separators between list columns and between panels.
+	sizerWidth = 8, -- the drag area
+	sizerIdleAlpha = 0.15, -- how visible its line is at rest, and under the mouse
+	sizerHoverAlpha = 0.8,
+	columnMin = 28, -- how narrow and how wide a list column can be dragged
+	columnMax = 420,
+	panelGrow = 260, -- how much wider than designed a side panel can be dragged
+	footerHeight = 22, -- the status bar under the tabs' body, added to the height
 	titleHeight = 30,
 	tabHeight = 27,
 	tabWidth = 84,
@@ -33,6 +44,7 @@ ns.Theme = {
 	headerHeight = 22, -- list headers
 	controlHeight = 24, -- buttons and inputs
 	tile = 26, -- rail tiles
+	tileLargeScale = 1.25, -- how much bigger they get when the rail is widened
 	swatch = 12, -- rail quality swatches (their height)
 	bagSlot = 40,
 

@@ -17,7 +17,7 @@ local C = Theme.color
 local Window = { tabs = {} }
 ns.Window = Window
 
-local frame, body, goldText, statusText, scanButton
+local frame, body, goldText, statusText, footerStatus, scanButton
 local tabButtons, built = {}, {}
 
 function Window:RegisterTab(tab)
@@ -135,17 +135,36 @@ local StatusText = {
 	end,
 }
 
-local function IdleStatus()
+-- Seconds since the last full scan, or nil when there has not been one.
+local function ScanAge()
 	local snapshot = ns.Store:GetSourceSnapshot("replicate")
+	return snapshot and math.max(0, GetServerTime() - (snapshot.meta.time or 0)), snapshot
+end
+
+-- Seconds until the server will take another full scan, or 0 when it will.
+local function ScanWait()
+	local age = ScanAge()
+	local cooldown = ns.SourceById.replicate.cooldownSeconds or 0
+	return age and math.max(0, cooldown - age) or 0
+end
+
+local function IdleStatus()
+	local age, snapshot = ScanAge()
 	if not snapshot then
 		return L.WIN_NEEDS_SCAN
 	end
-	local age = math.max(0, GetServerTime() - (snapshot.meta.time or 0))
 	local scans = ns.History:ScanCount()
+	local text
 	if scans == 1 then
-		return L.WIN_SCAN_AGE_ONE:format(ns.Duration(age), ns.Comma(snapshot.meta.count or 0))
+		text = L.WIN_SCAN_AGE_ONE:format(ns.Ago(age), ns.Comma(snapshot.meta.count or 0))
+	else
+		text = L.WIN_SCAN_AGE:format(ns.Ago(age), ns.Comma(snapshot.meta.count or 0), ns.Comma(scans))
 	end
-	return L.WIN_SCAN_AGE:format(ns.Duration(age), ns.Comma(snapshot.meta.count or 0), ns.Comma(scans))
+	local wait = ScanWait()
+	if wait > 0 then
+		text = text .. L.WIN_SCAN_WAIT:format(math.ceil(wait / 60))
+	end
+	return text
 end
 
 local function UpdateScanBar(state)
@@ -154,13 +173,21 @@ local function UpdateScanBar(state)
 	end
 	local running = ns.Downloader:IsRunning()
 	scanButton:SetLabel(running and L.CANCEL or L.WIN_SCAN)
-	scanButton:SetDisabled(not running and not ns.auctionHouseOpen)
+	-- A scan can always be cancelled. Starting one needs the auction house
+	-- open and the server's wait between full scans to be over.
+	scanButton:SetDisabled(not running and (not ns.auctionHouseOpen or ScanWait() > 0))
 	if state and StatusText[state.phase] then
 		statusText:SetText(StatusText[state.phase](state))
 		statusText:SetTextColor(unpack(state.phase == "failed" and C.bad or C.muted))
 	elseif not running then
-		statusText:SetText(IdleStatus())
+		-- Beside the button: only when the last scan was. The rest of what is
+		-- known about it sits at the right of the footer.
+		local age = ScanAge()
+		statusText:SetText(age and ns.Ago(age) or "")
 		statusText:SetTextColor(unpack(C.muted))
+	end
+	if footerStatus then
+		footerStatus:SetText(IdleStatus())
 	end
 end
 
@@ -172,7 +199,17 @@ end
 
 local function Build()
 	frame = CreateFrame("Frame", "AuctioNitroWindow", UIParent)
-	frame:SetSize(Theme.window.width, Theme.window.height)
+	local minWidth, minHeight = Theme.window.width, Theme.window.height + Theme.footerHeight
+	local maxWidth, maxHeight = Theme.windowMax.width, Theme.windowMax.height
+	local size = ns.charDb.windowSize
+	frame:SetSize(
+		math.max(minWidth, math.min(maxWidth, size and size.width or minWidth)),
+		math.max(minHeight, math.min(maxHeight, size and size.height or minHeight))
+	)
+	frame:SetResizable(true)
+	if frame.SetResizeBounds then
+		frame:SetResizeBounds(minWidth, minHeight, maxWidth, maxHeight)
+	end
 	frame:SetFrameStrata("HIGH")
 	frame:SetToplevel(true)
 	frame:SetMovable(true)
@@ -211,18 +248,26 @@ local function Build()
 	name:SetPoint("LEFT", 12, 0)
 	name:SetText(L.TITLE)
 
-	local close = Kit.Button(title, {
-		text = "x",
-		width = 22,
+	-- The game's own red close button, so closing looks like every other window.
+	local close = CreateFrame("Button", nil, title, "UIPanelCloseButtonNoScripts")
+	close:SetSize(24, 24)
+	close:SetScript("OnClick", function()
+		frame:Hide()
+	end)
+	close:SetPoint("RIGHT", -3, 0)
+
+	local optionsButton = Kit.Button(title, {
+		text = L.OPTIONS,
 		height = 20,
+		tip = { L.OPTIONS, L.OPTIONS_TIP },
 		onClick = function()
-			frame:Hide()
+			ns.Options:Open()
 		end,
 	})
-	close:SetPoint("RIGHT", -5, 0)
+	optionsButton:SetPoint("RIGHT", close, "LEFT", -6, 0)
 
 	goldText = Kit.Text(title, "normal", C.muted, "RIGHT")
-	goldText:SetPoint("RIGHT", close, "LEFT", -10, 0)
+	goldText:SetPoint("RIGHT", optionsButton, "LEFT", -10, 0)
 
 	scanButton = Kit.Button(title, {
 		text = L.WIN_SCAN,
@@ -250,7 +295,65 @@ local function Build()
 
 	body = CreateFrame("Frame", nil, frame)
 	body:SetPoint("TOPLEFT", Theme.pad, -(bodyTop + Theme.pad))
-	body:SetPoint("BOTTOMRIGHT", -Theme.pad, Theme.pad)
+	body:SetPoint("BOTTOMRIGHT", -Theme.pad, Theme.pad + Theme.footerHeight)
+
+	-- The footer: the last thing the addon did. Hovering lists the recent ones.
+	local footer = CreateFrame("Frame", nil, frame)
+	footer:SetPoint("BOTTOMLEFT", 1, 1)
+	footer:SetPoint("BOTTOMRIGHT", -1, 1)
+	footer:SetHeight(Theme.footerHeight)
+	footer:EnableMouse(true)
+	Kit.Fill(footer, C.panel)
+	local footerLine = Kit.Rule(footer, C.line)
+	footerLine:SetPoint("TOPLEFT")
+	footerLine:SetPoint("TOPRIGHT")
+	-- The corner grip that resizes the window, the same one chat windows use.
+	local grip = CreateFrame("Button", nil, footer)
+	grip:SetSize(16, 16)
+	grip:SetPoint("BOTTOMRIGHT", -1, 1)
+	grip:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+	grip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
+	grip:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
+	grip:SetScript("OnMouseDown", function()
+		frame:StartSizing("BOTTOMRIGHT")
+	end)
+	grip:SetScript("OnMouseUp", function()
+		frame:StopMovingOrSizing()
+		ns.charDb.windowSize = { width = frame:GetWidth(), height = frame:GetHeight() }
+		SavePosition()
+		Window:RefreshActive()
+	end)
+
+	footerStatus = Kit.Text(footer, "small", C.muted, "RIGHT")
+	footerStatus:SetPoint("RIGHT", -22, 0)
+	local footerText = Kit.Text(footer, "small", C.muted)
+	footerText:SetPoint("LEFT", 10, 0)
+	footerText:SetPoint("RIGHT", footerStatus, "LEFT", -16, 0)
+	footerText:SetWordWrap(false)
+	local tones = { good = C.good, bad = C.bad }
+	local function PaintFooter()
+		local latest = ns.Activity:Latest()
+		footerText:SetText(latest and (latest.clock .. "  " .. latest.text) or L.ACT_NONE)
+		footerText:SetTextColor(unpack(latest and tones[latest.tone] or C.muted))
+	end
+	footer:SetScript("OnEnter", function(self)
+		local entries = ns.Activity.entries
+		if #entries == 0 then
+			return
+		end
+		GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT", 0, 2)
+		GameTooltip:SetText(L.ACT_TITLE, 1, 0.82, 0)
+		for _, entry in ipairs(entries) do
+			local color = tones[entry.tone] or C.text
+			GameTooltip:AddLine(entry.clock .. "  " .. entry.text, color[1], color[2], color[3])
+		end
+		GameTooltip:Show()
+	end)
+	footer:SetScript("OnLeave", function()
+		GameTooltip:Hide()
+	end)
+	ns.Bus:On("ACTIVITY_ADDED", PaintFooter)
+	PaintFooter()
 
 	tinsert(UISpecialFrames, "AuctioNitroWindow") -- Escape closes it
 
@@ -262,6 +365,12 @@ local function Build()
 	frame:SetScript("OnHide", function()
 		ns.charDb.windowShown = false
 	end)
+	-- The scan's age and the wait for the next one move with the clock.
+	C_Timer.NewTicker(20, function()
+		if frame:IsShown() and not ns.Downloader:IsRunning() then
+			UpdateScanBar()
+		end
+	end)
 	frame:RegisterEvent("PLAYER_MONEY")
 	frame:SetScript("OnEvent", function()
 		Window:RefreshActive()
@@ -271,6 +380,11 @@ local function Build()
 	if ns.charDb.windowShown then
 		frame:Show()
 	end
+end
+
+-- The area under the tabs, for things that cover the whole tab.
+function Window:Body()
+	return body
 end
 
 function Window:Toggle()

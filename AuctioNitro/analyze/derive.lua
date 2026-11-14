@@ -152,7 +152,14 @@ local function FinishItem(item)
 		item.minUnit = math.floor(prices[order[1]])
 		item.maxUnit = math.floor(prices[order[count]])
 		item.medianUnit = math.floor(WeightedMedian(prices, item.weights, order))
-		if count >= ns.DealBadgeRule.minListings and item.medianUnit > 0 then
+		-- Different prices, not auctions: identical auctions are one seller.
+		local different = 0
+		for position = 1, count do
+			if position == 1 or prices[order[position]] ~= prices[order[position - 1]] then
+				different = different + 1
+			end
+		end
+		if different >= ns.DealBadgeRule.minPrices and item.medianUnit > 0 then
 			item.deal = math.floor((item.medianUnit - item.minUnit) / item.medianUnit * 100)
 		end
 	end

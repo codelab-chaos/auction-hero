@@ -96,12 +96,15 @@ local function Tile(parent, label)
 	return tile
 end
 
+-- What the line under the charts says while no point is hovered.
+local resting = L.HISTORY_HOVER
+
 local function SetReadout(point)
 	if not point then
-		parts.readout:SetText(L.HISTORY_HOVER)
+		parts.readout:SetText(resting)
 		return
 	end
-	parts.readout:SetText(L.HISTORY_READOUT:format(ns.Chart.DayLabel(point.day), ns.Money(point.median), ns.Money(point.low), ns.Comma(point.units)))
+	parts.readout:SetText(L.HISTORY_READOUT:format(ns.Chart.TimeLabel(point.time, true), ns.Money(point.median), ns.Money(point.low), ns.Comma(point.units)))
 end
 
 local function BuildDetail(parent)
@@ -229,9 +232,8 @@ local function PaintDetail(rows)
 
 	local points = ns.History:InRange(ns.History:Points(item.key), state.range)
 	local summary = ns.History:Summarize(points)
-	if not summary or #points < 2 then
-		-- One day is a dot, not a graph. Say when it will become one.
-		prompt:SetBody(L.HISTORY_ONE_DAY)
+	if not summary then
+		prompt:SetBody(L.HISTORY_NONE)
 		prompt:ClearAllPoints()
 		prompt:SetPoint("TOPLEFT", 16, -80)
 		prompt:SetPoint("TOPRIGHT", -16, -80)
@@ -254,6 +256,8 @@ local function PaintDetail(rows)
 	stack:Add(parts.unitsHead, 4)
 	stack:Add(parts.units, 2)
 	parts.unitsChart:Draw(points, { bars = ns.HistoryUnits })
+	-- A scan or two is a start, not a trend. Say so until two days are in.
+	resting = summary.days < 2 and L.HISTORY_PRIMING:format(summary.scans) or L.HISTORY_HOVER
 	SetReadout(nil)
 	stack:Add(parts.readoutRow, 2)
 end
@@ -285,6 +289,9 @@ local function Create(parent)
 	side:SetPoint("TOPLEFT")
 	side:SetPoint("BOTTOMLEFT")
 	side:SetWidth(Theme.history.list)
+	Kit.Split(side, { id = "history.list", edge = "RIGHT", min = Theme.history.list, max = Theme.history.list + Theme.panelGrow, onChange = function()
+		ns.Window:RefreshActive()
+	end })
 
 	local search = Kit.Input(side, { height = 26, placeholder = L.BUY_SEARCH, onChange = function(text)
 		state.search = text
@@ -294,6 +301,7 @@ local function Create(parent)
 	search:SetPoint("TOPRIGHT", -8, -8)
 
 	list = Kit.List(side, {
+		id = "history",
 		columns = {
 			{
 				id = "name",
@@ -359,4 +367,4 @@ local function Create(parent)
 	return { Refresh = Refresh }
 end
 
-ns.Window:RegisterTab({ id = "history", label = L.TAB_HISTORY, order = 4, Create = Create })
+ns.Window:RegisterTab({ id = "history", label = L.TAB_HISTORY, order = 6, Create = Create })

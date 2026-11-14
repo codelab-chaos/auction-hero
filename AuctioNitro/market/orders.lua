@@ -55,6 +55,25 @@ function Orders.Fill(item, wanted)
 	}
 end
 
+-- One auction at a chosen unit price, in the same shape Fill returns: the
+-- player picked that price in the list and wants that one, not the cheapest.
+-- Returns nil when nothing is listed at that price.
+function Orders.FillAt(item, unit)
+	for _, tier in ipairs(item.tiers) do
+		if tier.unit == unit then
+			return {
+				byUnit = false,
+				lines = { { tier = tier, units = tier.stack, auctions = 1 } },
+				units = tier.stack,
+				cost = tier.buyout,
+				purchases = 1,
+				averageUnit = tier.unit,
+				short = 0,
+			}
+		end
+	end
+end
+
 -- The price of the cheapest single auction, for "can I afford one".
 function Orders.CheapestAuction(item)
 	local cheapest

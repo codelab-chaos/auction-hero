@@ -28,6 +28,13 @@ Bus:On("SNAPSHOT_CHANGED", function()
 		local market = full and ns.Market:Build(full)
 		if mine ~= generation then return end
 		local folded = ns.History:Fold(market)
+		-- With this scan in the history, say how each item's price compares.
+		for count, item in ipairs(market and market.items or {}) do
+			ns.Signals:Rate(item)
+			if count % 200 == 0 then
+				ns.Breathe()
+			end
+		end
 		return ns.Profile:Run(snapshot), ns.Derive:Run(snapshot), market, folded
 	end, function(profile, derived, market, folded)
 		if folded then

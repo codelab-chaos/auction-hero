@@ -102,7 +102,9 @@ local function ReadCommodity()
 end
 
 local frame = CreateFrame("Frame")
-for _, event in ipairs({ "ITEM_SEARCH_RESULTS_UPDATED", "COMMODITY_SEARCH_RESULTS_UPDATED", "AUCTION_HOUSE_THROTTLED_SYSTEM_READY" }) do
+-- Forever answers an item search with AUCTION_HOUSE_NEW_RESULTS_RECEIVED,
+-- where other clients send ITEM_SEARCH_RESULTS_UPDATED. Both are taken.
+for _, event in ipairs({ "AUCTION_HOUSE_NEW_RESULTS_RECEIVED", "ITEM_SEARCH_RESULTS_UPDATED", "COMMODITY_SEARCH_RESULTS_UPDATED", "AUCTION_HOUSE_THROTTLED_SYSTEM_READY" }) do
 	pcall(frame.RegisterEvent, frame, event)
 end
 frame:SetScript("OnEvent", function(_, event)

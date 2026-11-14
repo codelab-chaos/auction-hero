@@ -10,6 +10,7 @@ local function PrintHelp()
 	ns.Print(L.CMD_HELP_SET)
 	ns.Print(L.CMD_HELP_DEBUG)
 	ns.Print(L.CMD_HELP_HISTORY)
+	ns.Print(L.CMD_HELP_OPTIONS)
 end
 
 local function PrintSwitch(setting)
@@ -41,6 +42,18 @@ local commands = {
 		ns.Downloader:Cancel()
 	end,
 	-- Shows or hides the Debug tab: /an debug, or /an debug on|off.
+	-- Marks this account as a developer's: the options panel then always lists
+	-- the Debug section, so the Debug tab can be switched on and off from there.
+	-- Kept in the saved variables, so it stays set on this machine only.
+	dev = function(value)
+		local on = not ns.db.dev
+		if value == "on" or value == "off" then
+			on = value == "on"
+		end
+		ns.db.dev = on or nil
+		ns.Print(on and L.CMD_DEV_ON or L.CMD_DEV_OFF)
+		ns.Bus:Fire("SETTING_CHANGED", "dev")
+	end,
 	debug = function(value)
 		local on = not ns.IsEnabled("debug")
 		if value == "on" or value == "off" then
@@ -97,6 +110,9 @@ local commands = {
 			ns.SetEnabled(setting.id, not ns.IsEnabled(setting.id))
 		end
 		PrintSwitch(setting)
+	end,
+	options = function()
+		ns.Options:Open()
 	end,
 	help = PrintHelp,
 }

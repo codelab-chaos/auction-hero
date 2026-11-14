@@ -532,6 +532,110 @@ function Kit.Scroll(parent)
 	return scroll
 end
 
+-- ========= Sizer ===========================================================
+-- A vertical separator that can be dragged left and right. Written once and
+-- used wherever two things share a row: list columns, and the panels of a tab.
+--
+-- options:
+--   get()       the current size of whatever this resizes
+--   set(size)   called with each new size while dragging
+--   direction   1 when dragging right makes it bigger, -1 for the opposite
+--   min, max    how small and how big it may go
+--   onDone()    called once when the drag ends
+-- Returns the frame. The caller places it and gives it a height.
+function Kit.Sizer(parent, options)
+	local sizer = CreateFrame("Frame", nil, parent)
+	sizer:SetWidth(Theme.sizerWidth)
+	sizer:SetFrameLevel(parent:GetFrameLevel() + 5)
+	sizer:EnableMouse(true)
+	local mark = sizer:CreateTexture(nil, "OVERLAY")
+	mark:SetColorTexture(unpack(C.accent))
+	mark:SetWidth(1)
+	mark:SetPoint("TOP", 0, -3)
+	mark:SetPoint("BOTTOM", 0, 3)
+	mark:SetAlpha(Theme.sizerIdleAlpha)
+
+	local startX, startSize
+	local function Stop()
+		if not startX then
+			return
+		end
+		startX = nil
+		sizer:SetScript("OnUpdate", nil)
+		mark:SetAlpha(sizer:IsMouseOver() and Theme.sizerHoverAlpha or Theme.sizerIdleAlpha)
+		if options.onDone then
+			options.onDone()
+		end
+	end
+	sizer:SetScript("OnEnter", function()
+		mark:SetAlpha(Theme.sizerHoverAlpha)
+	end)
+	sizer:SetScript("OnLeave", function()
+		if not startX then
+			mark:SetAlpha(Theme.sizerIdleAlpha)
+		end
+	end)
+	sizer:SetScript("OnMouseDown", function(self)
+		startX = GetCursorPosition() / self:GetEffectiveScale()
+		startSize = options.get()
+		local last = startSize
+		self:SetScript("OnUpdate", function()
+			if not IsMouseButtonDown("LeftButton") then
+				return Stop()
+			end
+			local moved = GetCursorPosition() / self:GetEffectiveScale() - startX
+			local wanted = math.floor(startSize + moved * (options.direction or 1) + 0.5)
+			wanted = math.max(options.min, math.min(options.max, wanted))
+			if wanted ~= last then
+				last = wanted
+				options.set(wanted)
+			end
+		end)
+	end)
+	sizer:SetScript("OnMouseUp", Stop)
+	return sizer
+end
+
+-- Puts a sizer in the gap beside a panel, so the panel's width can be dragged.
+-- The width is kept for the character under options.id.
+--
+-- options:
+--   id        the name the width is saved under
+--   edge      "RIGHT" or "LEFT": the side of the panel the sizer sits on
+--   min, max  how narrow and how wide the panel may go
+--   onChange  called when a drag ends, to redraw what depends on the width
+function Kit.Split(panel, options)
+	local saved = ns.charDb.panelWidths or {}
+	ns.charDb.panelWidths = saved
+	if saved[options.id] then
+		panel:SetWidth(math.max(options.min, math.min(options.max, saved[options.id])))
+	end
+	local right = options.edge == "RIGHT"
+	local sizer = Kit.Sizer(panel:GetParent(), {
+		direction = right and 1 or -1,
+		min = options.min,
+		max = options.max,
+		get = function()
+			return panel:GetWidth()
+		end,
+		set = function(size)
+			panel:SetWidth(size)
+			saved[options.id] = size
+		end,
+		onDone = options.onChange,
+	})
+	local gap = Theme.pad
+	sizer:SetWidth(gap)
+	if right then
+		sizer:SetPoint("TOPLEFT", panel, "TOPRIGHT")
+		sizer:SetPoint("BOTTOMLEFT", panel, "BOTTOMRIGHT")
+	else
+		sizer:SetPoint("TOPRIGHT", panel, "TOPLEFT")
+		sizer:SetPoint("BOTTOMRIGHT", panel, "BOTTOMLEFT")
+	end
+	return sizer
+end
+
 -- ========= Copy box ========================================================
 -- Addons cannot write to the clipboard, so this is the usual way round it: a
 -- box of selectable text, opened with everything already selected, so Ctrl+C
@@ -613,6 +717,8 @@ end
 --
 -- options:
 --   columns     { id, label, width | flex, align, sortable,
+--                 fixed = true,                   the width cannot be dragged
+--                 labelColor,                     the header's color
 --                 text(row) -> string,            what the cell says
 --                 color(row) -> color | nil,      its text color
 --                 icon(row) -> fileID | nil,      an icon before the text
@@ -646,25 +752,107 @@ function Kit.List(parent, options)
 	empty:SetPoint("TOP", scrollBox, "TOP", 0, -30)
 	empty:SetText(options.empty or "")
 
+	-- Widths the player dragged, by column id. A list with an id keeps them
+	-- for the character; one without keeps them until the next reload.
+	local dragged = {}
+	if options.id and ns.charDb then
+		ns.charDb.columnWidths = ns.charDb.columnWidths or {}
+		ns.charDb.columnWidths[options.id] = ns.charDb.columnWidths[options.id] or {}
+		dragged = ns.charDb.columnWidths[options.id]
+	end
+	-- A fixed column keeps the width it was given: it cannot be dragged, and a
+	-- width dragged before it became fixed is ignored.
+	local function WidthOf(column)
+		return (not column.fixed and dragged[column.id]) or column.width or 0
+	end
+
 	-- Where each column sits, worked out from the list's width.
 	local left, width = {}, {}
 	local function Layout()
 		local available = (scrollBox:GetWidth() or 0)
 		local fixed, padding = 0, 8
 		for _, column in ipairs(columns) do
-			fixed = fixed + (column.width or 0)
+			if not column.flex then
+				fixed = fixed + WidthOf(column)
+			end
 		end
 		local flex = math.max(60, available - fixed - padding * (#columns + 1))
 		local x = padding
 		for index, column in ipairs(columns) do
 			left[index] = x
-			width[index] = column.flex and flex or column.width
+			width[index] = column.flex and flex or WidthOf(column)
 			x = x + width[index] + padding
 		end
 	end
 
-	local headers = {}
-	local function PaintHeaders()
+	local headers, grips = {}, {}
+	local PaintHeaders, Repaint
+
+	-- A grip sits on the line between two columns, and the line follows the
+	-- mouse. Which widths change to make that happen depends on where the
+	-- stretchy column is:
+	--   stretchy column to the right of the line: the column on the left of
+	--     the line grows, and the stretchy one gives up the room.
+	--   stretchy column on the left of the line, or is the left one: the column
+	--     on the right shrinks, and what it gives up goes to the column on the
+	--     left (by itself when that one is the stretchy column).
+	local flexIndex
+	for index, column in ipairs(columns) do
+		if column.flex then
+			flexIndex = index
+		end
+	end
+
+	local function BuildGrip(index)
+		local before, after = columns[index], columns[index + 1]
+		local options = { min = Theme.columnMin, max = Theme.columnMax }
+		-- No grip on a line whose drag would have to resize a fixed column.
+		local resized = (not flexIndex or flexIndex > index) and before or after
+		if resized.fixed or (resized == after and not before.flex and before.fixed) then
+			return nil
+		end
+		if not flexIndex or flexIndex > index then
+			options.direction = 1
+			options.get = function()
+				return WidthOf(before)
+			end
+			options.set = function(size)
+				dragged[before.id] = size
+				Repaint()
+			end
+		else
+			options.direction = -1
+			options.get = function()
+				return WidthOf(after)
+			end
+			options.set = function(size)
+				local given = WidthOf(after) - size
+				if not before.flex then
+					-- Hand the room to the left column, as far as it can take it.
+					local grown = math.max(Theme.columnMin, math.min(Theme.columnMax, WidthOf(before) + given))
+					given = grown - WidthOf(before)
+					dragged[before.id] = grown
+				end
+				dragged[after.id] = WidthOf(after) - given
+				Repaint()
+			end
+		end
+		local grip = Kit.Sizer(header, options)
+		grip:SetHeight(Theme.headerHeight)
+		return grip
+	end
+
+	function PaintHeaders()
+		for index = 1, #columns - 1 do
+			if grips[index] == nil then
+				grips[index] = BuildGrip(index) or false
+			end
+			local grip = grips[index]
+			if grip then
+				grip:ClearAllPoints()
+				grip:SetPoint("LEFT", left[index] + width[index] + 4 - Theme.sizerWidth / 2, 0)
+			end
+		end
 		for index, column in ipairs(columns) do
 			local cell = headers[index]
 			if not cell then
@@ -686,6 +874,7 @@ function Kit.List(parent, options)
 			if sort.id == column.id then
 				arrow = sort.descending and "  v" or "  ^"
 			end
+			cell.label:SetTextColor(unpack(column.labelColor or C.accent))
 			cell.label:SetText((column.label or "") .. arrow)
 		end
 	end
@@ -761,7 +950,10 @@ function Kit.List(parent, options)
 			if cell.icon then
 				cell.icon:ClearAllPoints()
 				cell.icon:SetPoint("LEFT", x, 0)
-				cell.icon:SetIcon(column.icon(data))
+				-- No icon, no box: an empty square looks like something to click.
+				local art = column.icon(data)
+				cell.icon:SetIcon(art)
+				cell.icon:SetShown(art ~= nil)
 				x = x + rowHeight - 1
 				w = w - (rowHeight - 1)
 			end
@@ -787,6 +979,26 @@ function Kit.List(parent, options)
 			end
 		end
 	end
+
+	-- Lays the columns out again and redraws what is on screen.
+	function Repaint()
+		Layout()
+		PaintHeaders()
+		pcall(scrollBox.ForEachFrame, scrollBox, function(row)
+			if row.data then
+				PaintRow(row, row.data)
+			end
+		end)
+	end
+
+	-- The window can be resized, and the stretchy column follows.
+	local lastWidth
+	list:SetScript("OnSizeChanged", function(_, newWidth)
+		if left[1] and newWidth ~= lastWidth then
+			lastWidth = newWidth
+			Repaint()
+		end
+	end)
 
 	local view = CreateScrollBoxListLinearView()
 	view:SetElementExtent(rowHeight)

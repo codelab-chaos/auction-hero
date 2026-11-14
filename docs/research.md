@@ -6,7 +6,7 @@ Researched 2026-11-12. Covers the in-game auction object model and API, what is 
 
 | Source | What it is | Trust |
 | --- | --- | --- |
-| `/home/chadneff/git/hub/wow-ui-source`, branch `origin/forever` | Blizzard's own UI code and generated API docs, client 1.60.1 build 70888 | Primary. Everything in "Object model" and "API" below comes from here |
+| A local clone of [Gethe/wow-ui-source](https://github.com/Gethe/wow-ui-source), branch `origin/forever` | Blizzard's own UI code and generated API docs, client 1.60.1 build 70888 | Primary. Everything in "Object model" and "API" below comes from here |
 | `../quest-party/QuestParty/QuestParty.toc` | Our own working Forever addon | Primary for TOC settings |
 | Community repos, guides, CurseForge pages | Other addon authors' notes | Self-reported. None had an in-game test behind the claims we care about |
 | Blizzard forum post on the web API | One developer probing endpoints | Unofficial, "nothing is official and documented yet" |
@@ -14,7 +14,7 @@ Researched 2026-11-12. Covers the in-game auction object model and API, what is 
 Note: the local `wow-ui-source` checkout sits on `live` (retail 12.1.5). Read the Forever files without switching branches:
 
 ```sh
-cd /home/chadneff/git/hub/wow-ui-source
+cd path/to/wow-ui-source
 git show origin/forever:Interface/AddOns/Blizzard_APIDocumentationGenerated/AuctionHouseDocumentation.lua
 git ls-tree -r --name-only origin/forever Interface/AddOns/Blizzard_AuctionHouseUI
 ```

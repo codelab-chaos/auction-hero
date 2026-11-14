@@ -49,7 +49,9 @@ function Signals:Confidence(item)
 		}
 	end
 
-	local depth = StepFor(rule.depth, "auctions", auctions)
+	-- Judged by how many different prices there are, not how many auctions.
+	local prices = item.priceCount or 0
+	local depth = StepFor(rule.depth, "prices", prices)
 	local low, high = usual * (1 - rule.agreementBand), usual * (1 + rule.agreementBand)
 	local agreeing = 0
 	for _, tier in ipairs(item.tiers) do
@@ -65,7 +67,7 @@ function Signals:Confidence(item)
 
 	local share = math.floor(agreement * 100 + 0.5)
 	local reasons = {
-		auctions == 1 and L.REASON_ONE_AUCTION or L.REASON_AUCTIONS:format(ns.Comma(auctions)),
+		auctions == 1 and L.REASON_ONE_AUCTION or (prices == 1 and L.REASON_ONE_PRICE or L.REASON_AUCTIONS):format(ns.Comma(auctions), ns.Comma(prices)),
 		(agreement < rule.agreementWarning and L.REASON_SCATTERED or L.REASON_NEAR_USUAL):format(share),
 		scans <= 1 and L.REASON_ONE_SCAN or L.REASON_SCANS:format(ns.Comma(scans), ns.Comma(days)),
 		L.REASON_NO_SALES,
@@ -91,51 +93,93 @@ function Signals:ConfidenceLine(confidence)
 	)
 end
 
+-- The price a buyer would otherwise pay for an item, which a deal is measured
+-- against: today's floor, held down to the item's usual lowest price once
+-- past scans can say what that is. Returns nil when there is neither, else
+--   { price, floor, typicalLow, backed }   backed: past scans had a say
+-- Worked out once per item per scan and kept on the item.
+function Signals:Baseline(item)
+	if item.baseline == nil then
+		local typicalLow = ns.History:TypicalLow(item.key)
+		local price = item.floor
+		if typicalLow and (not price or typicalLow < price) then
+			price = typicalLow
+		end
+		item.baseline = price and { price = price, floor = item.floor, typicalLow = typicalLow, backed = typicalLow ~= nil } or false
+	end
+	return item.baseline or nil
+end
+
+-- Sets what a list shows for an item: item.deal, how far its cheapest price
+-- sits under the baseline in percent (nil when there is no baseline or it is
+-- not under), and item.dealUnits, how many units are at that price.
+function Signals:Rate(item)
+	item.deal, item.dealUnits = nil, nil
+	local baseline = self:Baseline(item)
+	if not baseline or not item.min or item.min >= baseline.price then
+		return
+	end
+	-- A row is only flagged when there is something behind the baseline: past
+	-- scans, or several different prices today. Two listings far apart say
+	-- nothing about which of them is the odd one.
+	if not baseline.backed and (item.priceCount or 0) < ns.DealBadgeRule.minPrices then
+		return
+	end
+	item.deal = math.floor((baseline.price - item.min) / baseline.price * 100)
+	item.dealUnits = 0
+	for _, tier in ipairs(item.tiers) do
+		if tier.unit == item.min then
+			item.dealUnits = item.dealUnits + tier.units
+		end
+	end
+end
+
 -- How good it is to buy an order of this item. units and cost describe the
 -- whole order. Returns a reading like Confidence, plus:
---   known    false when there is too little to judge by. No meter is shown then
---   saving   what the order saves against the usual price (negative when over)
+--   known    false when there is nothing to measure against. No meter is shown then
+--   saving   what the order saves against the baseline (negative when over)
 function Signals:Deal(item, units, cost)
 	local rule = ns.DealRule
-	local function ConfidenceAt(id)
-		for _, level in ipairs(ns.ConfidenceLevels) do
-			if level.id == id then
-				return level.min
-			end
-		end
-		return 0
-	end
-	local confidence = self:Confidence(item)
-	local usual = ns.History:Usual(item)
-	if units <= 0 or not usual or confidence.score < ConfidenceAt(rule.needsConfidence) then
+	local baseline = self:Baseline(item)
+	if units <= 0 or not baseline then
 		return { known = false, pips = ns.DealPips, level = { pips = 0, tone = "warn", label = "" }, reasons = { L.DEAL_UNKNOWN } }
 	end
 
 	local unitPrice = cost / units
-	local under = (usual - unitPrice) / usual * 100
+	local under = (baseline.price - unitPrice) / baseline.price * 100
 	local level = ns.DealLevels.fair
 	if under < -rule.fairBand then
 		level = ns.DealLevels.over
-	elseif under >= rule.resellFrom and confidence.score >= ConfidenceAt(rule.resellNeeds) then
-		level = ns.DealLevels.resell
 	elseif under >= rule.greatFrom then
-		level = confidence.score >= ConfidenceAt(rule.confidentNeeds) and ns.DealLevels.confident or ns.DealLevels.great
+		local needs = 0
+		for _, entry in ipairs(ns.ConfidenceLevels) do
+			if entry.id == rule.confidentNeeds then
+				needs = entry.min
+			end
+		end
+		local sure = baseline.backed or self:Confidence(item).score >= needs
+		if not sure then
+			level = ns.DealLevels.great
+		elseif under >= rule.resellFrom then
+			level = ns.DealLevels.resell
+		else
+			level = ns.DealLevels.confident
+		end
 	end
 
 	local percent = math.floor(math.abs(under) + 0.5)
 	local reasons = {}
 	if percent == 0 then
-		reasons[1] = L.DEAL_AT_USUAL:format(ns.PlainMoney(usual))
+		reasons[1] = L.DEAL_AT_USUAL:format(ns.PlainMoney(baseline.price))
 	else
-		reasons[1] = (under > 0 and L.DEAL_UNDER or L.DEAL_ABOVE):format(percent, ns.PlainMoney(usual))
+		reasons[1] = (under > 0 and L.DEAL_UNDER or L.DEAL_ABOVE):format(percent, ns.PlainMoney(baseline.price))
 	end
-	if level == ns.DealLevels.great then
-		reasons[2] = L.DEAL_CHECK
-	end
+	reasons[2] = baseline.backed and L.DEAL_BASIS_HISTORY or L.DEAL_BASIS_TODAY
+	reasons[3] = L.DEAL_ASKING
 
 	return {
 		known = true,
-		saving = math.floor(usual * units - cost + 0.5),
+		saving = math.floor(baseline.price * units - cost + 0.5),
 		level = level,
 		pips = ns.DealPips,
 		reasons = reasons,

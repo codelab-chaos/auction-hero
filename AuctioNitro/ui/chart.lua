@@ -31,8 +31,9 @@ local function AxisMoney(copper)
 end
 Chart.AxisMoney = AxisMoney
 
-function Chart.DayLabel(day)
-	return date("%b %d", day * SECONDS_PER_DAY + SECONDS_PER_DAY / 2)
+-- A point's time as text: the date, with the time of day when asked for.
+function Chart.TimeLabel(time, clock)
+	return date(clock and "%b %d %H:%M" or "%b %d", time)
 end
 
 -- A round number at or above a value, so the top grid line is a tidy figure.
@@ -63,7 +64,7 @@ function Chart.New(parent, options)
 	local plotHeight = options.height - TOP - bottom
 	local pools = { line = {}, box = {}, label = {} }
 	local used = { line = 0, box = 0, label = 0 }
-	local drawn -- { points, x = function(day) } for the hover
+	local drawn -- { points, X = function(time) } for the hover
 
 	local function Reset()
 		for kind, pool in pairs(pools) do
@@ -138,10 +139,16 @@ function Chart.New(parent, options)
 			end
 		end
 		local top = NiceCeiling(marks.lines and highest * 1.05 or highest)
-		local firstDay, lastDay = points[1].day, points[#points].day
-		local span = math.max(1, lastDay - firstDay)
-		local function X(day)
-			return LEFT + (day - firstDay) / span * plotWidth
+		-- The plot spans the time the points cover, so two scans an hour apart
+		-- fill it as two weeks of scans do. A single point sits in the middle.
+		local first, last = points[1].time, points[#points].time
+		local span = last - first
+		local clock = span < 2 * SECONDS_PER_DAY -- a short span needs the time of day
+		local function X(time)
+			if span <= 0 then
+				return LEFT + plotWidth / 2
+			end
+			return LEFT + (time - first) / span * plotWidth
 		end
 		local function Y(value)
 			return bottom + value / top * plotHeight
@@ -157,10 +164,14 @@ function Chart.New(parent, options)
 			Label(options.format(value), "RIGHT", "RIGHT", LEFT - 6, y)
 		end
 		if options.dates then
-			Label(Chart.DayLabel(firstDay), "LEFT", "BOTTOMLEFT", LEFT, 0)
-			Label(Chart.DayLabel(lastDay), "RIGHT", "BOTTOMRIGHT", LEFT + plotWidth, 0)
-			if #points > 2 then
-				Label(Chart.DayLabel(math.floor((firstDay + lastDay) / 2 + 0.5)), "CENTER", "BOTTOM", LEFT + plotWidth / 2, 0)
+			if span <= 0 then
+				Label(Chart.TimeLabel(first, true), "CENTER", "BOTTOM", LEFT + plotWidth / 2, 0)
+			else
+				Label(Chart.TimeLabel(first, clock), "LEFT", "BOTTOMLEFT", LEFT, 0)
+				Label(Chart.TimeLabel(last, clock), "RIGHT", "BOTTOMRIGHT", LEFT + plotWidth, 0)
+				if #points > 2 then
+					Label(Chart.TimeLabel(math.floor((first + last) / 2), clock), "CENTER", "BOTTOM", LEFT + plotWidth / 2, 0)
+				end
 			end
 		end
 
@@ -169,22 +180,22 @@ function Chart.New(parent, options)
 			for _, entry in ipairs(marks.lines) do
 				for index = 2, #points do
 					local from, to = points[index - 1], points[index]
-					Line(entry.color, 2, X(from.day), Y(entry.value(from)), X(to.day), Y(entry.value(to)))
+					Line(entry.color, 2, X(from.time), Y(entry.value(from)), X(to.time), Y(entry.value(to)))
 				end
 				for _, point in ipairs(points) do
-					Box(entry.color, X(point.day) - 2, Y(entry.value(point)) - 2, 4, 4, "OVERLAY")
+					Box(entry.color, X(point.time) - 2, Y(entry.value(point)) - 2, 4, 4, "OVERLAY")
 				end
 			end
 		else
-			local width = math.max(2, math.min(14, plotWidth / (span + 1) - 2))
+			local width = math.max(2, math.min(14, plotWidth / #points - 2))
 			for _, point in ipairs(points) do
-				Box(marks.bars.color, X(point.day) - width / 2, bottom, width, Y(marks.bars.value(point)) - bottom)
+				Box(marks.bars.color, X(point.time) - width / 2, bottom, width, Y(marks.bars.value(point)) - bottom)
 			end
 		end
 		drawn = { points = points, X = X }
 	end
 
-	-- Hovering reads the nearest day. Checked each frame while the mouse is over.
+	-- Hovering reads the nearest point. Checked each frame while the mouse is over.
 	local shown
 	chart:SetScript("OnUpdate", function(self)
 		if not drawn then
@@ -194,7 +205,7 @@ function Chart.New(parent, options)
 		if self:IsMouseOver() then
 			local cursorX = GetCursorPosition() / self:GetEffectiveScale() - (self:GetLeft() or 0)
 			for _, point in ipairs(drawn.points) do
-				if not nearest or math.abs(drawn.X(point.day) - cursorX) < math.abs(drawn.X(nearest.day) - cursorX) then
+				if not nearest or math.abs(drawn.X(point.time) - cursorX) < math.abs(drawn.X(nearest.time) - cursorX) then
 					nearest = point
 				end
 			end
@@ -204,7 +215,7 @@ function Chart.New(parent, options)
 			guide:SetShown(nearest ~= nil)
 			if nearest then
 				guide:ClearAllPoints()
-				guide:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", math.floor(drawn.X(nearest.day) + 0.5), bottom)
+				guide:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", math.floor(drawn.X(nearest.time) + 0.5), bottom)
 			end
 			if options.onHover then
 				options.onHover(nearest)

@@ -9,6 +9,12 @@ local C = Theme.color
 local Facets = ns.Facets
 
 local ORDER_LINES = 8 -- price points listed in the order panel
+local PRICE_ROWS = 15 -- prices listed under an opened item, at most
+local STAT_LINES = 10 -- lines of scan facts under the Buy button, at most
+local LADDER_ROWS = 10 -- prices listed under "For sale now", at most
+local LADDER_ROW_HEIGHT = 16
+local LADDER_BAR_AT = 110 -- where the bars start, from the left of a row
+local LADDER_BAR = 110 -- the longest a bar gets
 local HEADER_HEIGHT, OPTION_HEIGHT = 26, 21
 
 -- What the player has chosen. Kept for the session.
@@ -26,12 +32,16 @@ local market, facets, listable, makeFilter -- rebuilt when the market changes
 local rail, sidebar, toolbar, list, order, prompt, searchBox
 local railTiles, sideRows, toggleButtons = {}, {}, {}
 local Refresh
+local lastOrder -- item key -> where it stood in the list as last sorted
 
 -- ========= Filtering ========================================================
 local function Prepare()
 	local current = ns.Window:Market()
 	if facets and current == market then
 		return
+	end
+	if current ~= market then
+		lastOrder = nil -- a new scan: nothing to hold the old order for
 	end
 	market = current
 	listable = {}
@@ -96,11 +106,18 @@ local function Dim(color)
 	return { color[1] * 0.28 + base[1] * 0.72, color[2] * 0.28 + base[2] * 0.72, color[3] * 0.28 + base[3] * 0.72, 1 }
 end
 
+-- The rail has two sizes, switched by the strip beside it. Swatches keep
+-- their share of the tile size.
+local function TileSize()
+	return ns.IsEnabled("railLarge") and math.floor(Theme.tile * Theme.tileLargeScale + 0.5) or Theme.tile
+end
+
 local function PaintTile(tile, spec, y)
-	local height = spec.swatch and Theme.swatch or Theme.tile
+	local size = TileSize()
+	local height = spec.swatch and math.floor(size * Theme.swatch / Theme.tile + 0.5) or size
 	tile:ClearAllPoints()
 	tile:SetPoint("TOP", rail, "TOP", 0, -y)
-	tile:SetSize(Theme.tile, height)
+	tile:SetSize(size, height)
 	tile.tip = spec.tip
 	tile.onClick = spec.onClick
 	if spec.swatch then
@@ -110,17 +127,17 @@ local function PaintTile(tile, spec, y)
 		tile.mark:SetVertexColor(0, 0, 0)
 		tile.mark:ClearAllPoints()
 		tile.mark:SetPoint("CENTER")
-		tile.mark:SetSize(16, 16)
+		tile.mark:SetSize(height + 4, height + 4)
 	else
 		tile.fill:SetColorTexture(unpack(C.input))
 		tile.art:SetTexture(spec.icon)
 		tile.art:SetShown(spec.icon ~= nil)
-		tile.art:SetAlpha(spec.on and 1 or 0.7)
+		tile.art:SetAlpha(1) -- full brightness either way: the check and the border say on
 		tile.border:SetColor(spec.on and C.accent or C.inputBorder)
 		tile.mark:SetVertexColor(1, 1, 1)
 		tile.mark:ClearAllPoints()
 		tile.mark:SetPoint("CENTER")
-		tile.mark:SetSize(26, 26)
+		tile.mark:SetSize(size, size)
 	end
 	tile.mark:SetShown(spec.on)
 	tile:Show()
@@ -188,6 +205,7 @@ end
 
 local railRules = {}
 local function PaintRail()
+	rail:SetWidth(TileSize() + Theme.buy.rail - Theme.tile)
 	for _, tile in ipairs(railTiles) do
 		tile:Hide()
 	end
@@ -421,26 +439,99 @@ local SORT_VALUES = {
 	end,
 }
 
+-- How far a unit price sits under what the item would otherwise cost, in
+-- percent, or nil when it does not.
+local function DealAt(item, unit)
+	local baseline = ns.Signals:Baseline(item)
+	if baseline and unit < baseline.price then
+		return math.floor((baseline.price - unit) / baseline.price * 100)
+	end
+end
+
+-- The rows under an opened item: one for each price it is listed at, with how
+-- many are at that price. A price row is { item, point = { unit, units } }.
+-- Nothing about what is for sale is left for the player to guess.
+local function PriceRows(item)
+	local rows = {}
+	local points = ns.Market.PricePoints(item)
+	for index = 1, math.min(#points, PRICE_ROWS) do
+		rows[#rows + 1] = { item = item, point = points[index] }
+	end
+	if #points > PRICE_ROWS then
+		rows[#rows + 1] = { item = item, more = #points - PRICE_ROWS, upTo = points[#points].unit }
+	end
+	return rows
+end
+
+-- The list is sorted when the player sorts or filters it. A change that
+-- comes from elsewhere (a live check, a purchase) keeps every item where it
+-- stood, so what the player is looking at does not jump away: an item whose
+-- bargain has just sold stays put, with its new numbers, until the next sort.
 local function PaintList(keepScroll)
-	local rows = FilteredItems()
-	Kit.SortRows(rows, SORT_VALUES[state.sort.id], state.sort.descending)
+	local items = FilteredItems()
+	if keepScroll and lastOrder then
+		-- The chosen item stays even when it no longer passes the filters.
+		local chosen = market and state.selectedKey and market.byKey[state.selectedKey]
+		if chosen and lastOrder[chosen.key] then
+			local listed = false
+			for _, item in ipairs(items) do
+				listed = listed or item == chosen
+			end
+			if not listed then
+				items[#items + 1] = chosen
+			end
+		end
+		Kit.SortRows(items, function(item)
+			return lastOrder[item.key] or math.huge
+		end, false)
+	else
+		Kit.SortRows(items, SORT_VALUES[state.sort.id], state.sort.descending)
+	end
+	lastOrder = {}
+	for index, item in ipairs(items) do
+		lastOrder[item.key] = index
+	end
+	local rows = {}
+	for _, item in ipairs(items) do
+		rows[#rows + 1] = item
+		if item.key == state.openKey then
+			for _, row in ipairs(PriceRows(item)) do
+				rows[#rows + 1] = row
+			end
+		end
+	end
 	list:SetSort(state.sort.id, state.sort.descending)
 	list:SetRows(rows, keepScroll)
 end
 
 -- ========= The order panel ==================================================
 local parts = {}
+local PaintStats -- defined below PaintOrder, which calls it
 local stack
+
+-- The order as it stands: for a single item, the auction at the price picked
+-- in the list when one was picked, else from the cheapest up.
+local function Filled(item)
+	if state.selectedUnit and not ns.Orders.IsCommodity(item) then
+		local picked = ns.Orders.FillAt(item, state.selectedUnit)
+		if picked then
+			return picked
+		end
+	end
+	return ns.Orders.Fill(item, state.wanted)
+end
 
 local function PaintOrder()
 	stack:Reset()
 	local item = market and state.selectedKey and market.byKey[state.selectedKey]
 	prompt:SetShown(item == nil)
+	-- A live check can find that what was chosen has gone since the scan.
+	prompt:SetBody(state.gone and L.BUY_GONE:format(state.gone) or L.BUY_PICK)
 	if not item then
 		return
 	end
 
-	local filled = ns.Orders.Fill(item, state.wanted)
+	local filled = Filled(item)
 	local deal = ns.Signals:Deal(item, filled.units, filled.cost)
 	local gold = GetMoney()
 	local overBudget = filled.cost > gold
@@ -450,6 +541,12 @@ local function PaintOrder()
 	parts.name:SetTextColor(unpack(Kit.QualityColor(item.quality)))
 	parts.available:SetText(L.BUY_AVAILABLE:format(ns.Comma(item.units)))
 	stack:Add(parts.head)
+
+	-- The price that was picked has gone since the scan: say so plainly.
+	if state.goneUnit then
+		parts.changed:SetBody(L.BUY_PRICE_WENT:format(ns.PlainMoney(state.goneUnit), ns.Comma(item.units), ns.PlainMoney(item.min or 0)), C.bad)
+		stack:Add(parts.changed, 6)
+	end
 
 	parts.quantity:SetValue(tostring(state.wanted))
 	stack:Add(parts.quantityRow, 8)
@@ -498,18 +595,107 @@ local function PaintOrder()
 		stack:Add(parts.more, 2)
 	end
 
-	parts.buy:SetLabel(L.BUY_BUTTON:format(ns.Comma(filled.units)))
-	parts.buy:SetDisabled(overBudget or filled.units == 0)
+	-- The button follows a purchase as it goes: check the price, confirm, done.
+	local buying = ns.Buying.state
+	local mine = buying.key == item.key and buying.phase ~= "idle"
+	if mine and buying.phase == "confirm" then
+		parts.buy:SetLabel(L.BUY_CONFIRM_BUTTON:format(ns.Comma(buying.quantity), ns.PlainMoney(buying.total)))
+		parts.buy:SetDisabled(buying.total > gold)
+	elseif mine and (buying.phase == "quoting" or buying.phase == "buying") then
+		parts.buy:SetLabel(buying.message)
+		parts.buy:SetDisabled(true)
+	elseif filled.byUnit then
+		parts.buy:SetLabel(L.BUY_BUTTON:format(ns.Comma(filled.units)))
+		parts.buy:SetDisabled(overBudget or filled.units == 0)
+	else
+		-- A single item is bought one auction at a time, the cheapest first.
+		local first = filled.lines[1]
+		parts.buy:SetLabel(first and L.BUY_BUTTON_AT:format(ns.PlainMoney(first.tier.unit)) or L.BUY_BUTTON_AUCTION)
+		parts.buy:SetDisabled(not first or first.tier.buyout > gold)
+	end
 	stack:Add(parts.buy, 10)
+	parts.buyStatus:SetShown(mine)
+	if mine then
+		local tone = buying.phase == "failed" and C.bad or (buying.phase == "done" and C.good or C.muted)
+		parts.buyStatus:SetBody(buying.message or "", tone)
+		stack:Add(parts.buyStatus, 4)
+	end
+	PaintStats(item)
+
 	local how = L.BUY_BY_UNIT
 	if not filled.byUnit then
 		how = filled.purchases == 1 and L.BUY_ONE_AUCTION or L.BUY_AUCTIONS:format(ns.Comma(filled.purchases), ns.Comma(filled.purchases))
 	end
-	parts.how:SetBody(how)
-	stack:Add(parts.how, 4)
+	-- How the purchase will go is in the button's tooltip, not under it.
+	parts.buy.how = how
+	parts.buy.note = filled.byUnit and L.BUY_HOW or L.BUY_HOW_AUCTION
+end
+
+-- Under the Buy button: what the scans show about the item (the tooltip's
+-- lines and more), then every price it is listed at now with how many are at
+-- each. The list of prices takes whatever room is left, and no more.
+function PaintStats(item)
+	stack:Add(parts.rule3, 10)
+	parts.statsHead:Set(L.STAT_HEADING, "")
+	stack:Add(parts.statsHead, 6)
+	local shown = 0
+	for _, rules in ipairs({ ns.TooltipLines, ns.ItemStatLines }) do
+		for _, line in ipairs(ns.ItemTooltip:Lines(item.itemID, item.name, rules, true)) do
+			if shown < STAT_LINES then
+				shown = shown + 1
+				parts.stats[shown]:Set(line[1], line[2])
+				stack:Add(parts.stats[shown], 1)
+			end
+		end
+	end
+
+	local points = ns.Market.PricePoints(item)
+	stack:Add(parts.rule4, 8)
+	parts.ladderHead:Set(L.STAT_FOR_SALE, L.STAT_FOR_SALE_COUNT:format(ns.Comma(item.units)))
+	stack:Add(parts.ladderHead, 6)
+	-- How fresh these prices are: checked live, being checked, or the scan's.
+	local check = ns.LiveCheck.state
+	local now = GetServerTime()
+	local from
+	if check.itemID == item.itemID and (check.phase == "waiting" or check.phase == "sent") then
+		from = L.STAT_CHECKING
+	elseif item.checkedAt then
+		from = L.STAT_CHECKED:format(ns.Ago(math.max(0, now - item.checkedAt)))
+	else
+		from = L.STAT_FROM_SCAN:format(ns.Ago(math.max(0, now - (market.time or now))))
+	end
+	-- A check that failed says so, and why: stale prices should not pass as checked.
+	local problem = ns.LiveCheck.problem
+	if problem and problem.itemID == item.itemID and not item.checkedAt then
+		from = problem.text
+	end
+	parts.ladderFrom:Set(from, "")
+	stack:Add(parts.ladderFrom, 0)
+	-- How many rows fit above the bottom of the panel, keeping one for "and more".
+	local room = math.floor(((order:GetHeight() or 0) - stack.y - 8) / LADDER_ROW_HEIGHT)
+	local rows = math.max(1, math.min(LADDER_ROWS, room))
+	if #points > rows then
+		rows = math.max(1, rows - 1)
+	end
+	local most = 1
+	for index = 1, math.min(rows, #points) do
+		most = math.max(most, points[index].units)
+	end
+	for index = 1, math.min(rows, #points) do
+		local point, row = points[index], parts.ladder[index]
+		row:Set(ns.Money(point.unit), ns.Comma(point.units))
+		row.bar:SetWidth(math.max(2, math.floor(LADDER_BAR * point.units / most)))
+		stack:Add(row, 0)
+	end
+	if #points > rows then
+		parts.ladderMore:Set(L.STAT_MORE_PRICES:format(ns.Comma(#points - rows), ns.Money(points[#points].unit)), "")
+		stack:Add(parts.ladderMore, 0)
+	end
 end
 
 local function SetWanted(value)
+	ns.Buying:Cancel() -- a price check is for one quantity
+	state.selectedUnit = nil -- a typed quantity is no longer "up to this price"
 	local item = market and market.byKey[state.selectedKey]
 	state.wanted = math.max(1, math.floor(value or 1))
 	if item then
@@ -567,7 +753,31 @@ local function BuildOrder(parent)
 		Kit.Fill(holder, C.line)
 		return holder
 	end
-	parts.rule1, parts.rule2 = Rule(), Rule()
+	parts.rule1, parts.rule2, parts.rule3, parts.rule4 = Rule(), Rule(), Rule(), Rule()
+
+	-- The scan facts and the list of prices under the Buy button.
+	parts.statsHead = Kit.Pair(parent, "normal", C.accent)
+	parts.ladderHead = Kit.Pair(parent, "normal", C.accent)
+	parts.stats, parts.ladder = {}, {}
+	for index = 1, STAT_LINES do
+		parts.stats[index] = Kit.Pair(parent, "small")
+		parts.stats[index]:SetHeight(LADDER_ROW_HEIGHT)
+	end
+	for index = 1, LADDER_ROWS do
+		local row = Kit.Pair(parent, "small", C.text)
+		row:SetHeight(LADDER_ROW_HEIGHT)
+		-- A bar for how many are at the price, against the most at any price shown.
+		row.bar = row:CreateTexture(nil, "ARTWORK")
+		row.bar:SetColorTexture(unpack(C.accent))
+		row.bar:SetAlpha(0.35)
+		row.bar:SetHeight(LADDER_ROW_HEIGHT - 6)
+		row.bar:SetPoint("LEFT", LADDER_BAR_AT, 0)
+		parts.ladder[index] = row
+	end
+	parts.ladderFrom = Kit.Pair(parent, "small")
+	parts.ladderFrom:SetHeight(LADDER_ROW_HEIGHT)
+	parts.ladderMore = Kit.Pair(parent, "small")
+	parts.ladderMore:SetHeight(LADDER_ROW_HEIGHT)
 
 	parts.total = Kit.Pair(parent, "total", C.text)
 	parts.total:SetHeight(22)
@@ -593,7 +803,8 @@ local function BuildOrder(parent)
 		note:SetWidth(width)
 		return note
 	end
-	parts.dealNote, parts.warning, parts.budget, parts.more, parts.how = Note(), Note(), Note(), Note(), Note()
+	parts.dealNote, parts.warning, parts.budget, parts.more, parts.buyStatus = Note(), Note(), Note(), Note(), Note()
+	parts.changed = Note()
 
 	parts.lines = {}
 	for index = 1, ORDER_LINES do
@@ -601,7 +812,36 @@ local function BuildOrder(parent)
 		parts.lines[index]:SetHeight(16)
 	end
 
-	parts.buy = Kit.Button(parent, { text = "", look = "action", height = 32, width = width, tip = { L.TAB_BUY, L.BUY_NOT_WIRED } })
+	-- One press does one thing: the first asks the server for the live price,
+	-- the second buys at it. A single item is one auction per pair of presses.
+	parts.buy = Kit.Button(parent, { text = "", look = "action", height = 32, width = width, onClick = function()
+		local item = market and state.selectedKey and market.byKey[state.selectedKey]
+		local filled = item and Filled(item)
+		if not filled or filled.units == 0 then
+			return
+		end
+		local buying = ns.Buying.state
+		if buying.phase == "confirm" and buying.key == item.key then
+			ns.Buying:Confirm()
+		elseif filled.byUnit then
+			ns.Buying:Start({ key = item.key, itemID = item.itemID, quantity = filled.units })
+		else
+			-- Buy at the price shown on the button, and only at that price.
+			ns.Buying:Start({
+				key = item.key,
+				itemID = item.itemID,
+				name = item.name,
+				single = true,
+				price = filled.lines[1].tier.unit,
+				-- A live check a moment ago saves asking again.
+				live = item.liveAuctions,
+				checkedAt = item.checkedAt,
+			})
+		end
+	end })
+	Kit.Tip(parts.buy, function(self)
+		return { L.TAB_BUY, self.how, self.note }
+	end)
 end
 
 -- ========= The tab ==========================================================
@@ -628,6 +868,32 @@ local function Create(parent)
 	rail:SetPoint("BOTTOMLEFT")
 	rail:SetWidth(Theme.buy.rail)
 
+	-- The strip between the rail and the filters: one click makes the rail's
+	-- icons bigger, another puts them back.
+	local widen = CreateFrame("Button", nil, parent)
+	widen:SetPoint("TOPLEFT", rail, "TOPRIGHT")
+	widen:SetPoint("BOTTOMLEFT", rail, "BOTTOMRIGHT")
+	widen:SetWidth(pad)
+	widen.glow = Kit.Fill(widen, C.rowHover)
+	widen.glow:Hide()
+	widen.arrow = Kit.Text(widen, "small", C.accent, "CENTER")
+	widen.arrow:SetPoint("CENTER")
+	local function PaintWiden()
+		widen.arrow:SetText(ns.IsEnabled("railLarge") and "<" or ">")
+	end
+	widen.onHover = function(self, over)
+		self.glow:SetShown(over)
+	end
+	Kit.Tip(widen, function()
+		return { ns.IsEnabled("railLarge") and L.BUY_RAIL_SMALLER or L.BUY_RAIL_BIGGER }
+	end)
+	widen:SetScript("OnClick", function()
+		ns.SetEnabled("railLarge", not ns.IsEnabled("railLarge"))
+		PaintWiden()
+	end)
+	ns.Bus:On("SETTING_CHANGED", PaintWiden)
+	PaintWiden()
+
 	local side = Kit.Panel(parent)
 	side:SetPoint("TOPLEFT", rail, "TOPRIGHT", pad, 0)
 	side:SetPoint("BOTTOMLEFT", rail, "BOTTOMRIGHT", pad, 0)
@@ -644,6 +910,9 @@ local function Create(parent)
 	order:SetPoint("TOPRIGHT")
 	order:SetPoint("BOTTOMRIGHT")
 	order:SetWidth(Theme.buy.order)
+	Kit.Split(order, { id = "buy.order", edge = "LEFT", min = Theme.buy.order, max = Theme.buy.order + Theme.panelGrow, onChange = function()
+		ns.Window:RefreshActive()
+	end })
 	BuildOrder(order)
 
 	-- The search box and the quick toggles share one row.
@@ -654,7 +923,7 @@ local function Create(parent)
 	local right
 	for index = #ns.BuyToggles, 1, -1 do
 		local toggle = ns.BuyToggles[index]
-		local button = Kit.Button(toolbar, { text = toggle.label, height = 26, padding = 14, onClick = function()
+		local button = Kit.Button(toolbar, { text = toggle.label, height = 26, padding = 12, tip = { toggle.label, toggle.tip }, onClick = function()
 			state.toggles[toggle.id] = not state.toggles[toggle.id]
 			Refresh()
 		end })
@@ -675,48 +944,105 @@ local function Create(parent)
 	searchBox:SetPoint("RIGHT", right, "LEFT", -5, 0)
 
 	list = Kit.List(parent, {
+		id = "buy",
 		columns = {
 			{
 				id = "name",
 				label = L.BUY_COL_ITEM,
 				flex = true,
-				icon = function(item)
-					return item.icon
+				icon = function(row)
+					return row.icon
 				end,
-				text = function(item)
-					return item.name
+				text = function(row)
+					if row.point then
+						return L.BUY_ROW_PRICE
+					elseif row.more then
+						return L.BUY_ROW_MORE:format(ns.Comma(row.more), ns.Money(row.upTo))
+					end
+					return row.name
 				end,
-				color = function(item)
-					return Kit.QualityColor(item.quality)
+				color = function(row)
+					if row.item then
+						return C.muted
+					end
+					return Kit.QualityColor(row.quality)
 				end,
 			},
-			{ id = "level", label = L.BUY_COL_LEVEL, width = 30, align = "RIGHT", text = function(item)
-				return item.levelType == "REQ_LEVEL_ABBR" and tostring(item.level or "") or ""
+			{ id = "level", label = L.BUY_COL_LEVEL, width = 44, fixed = true, align = "RIGHT", text = function(row)
+				return not row.item and row.levelType == "REQ_LEVEL_ABBR" and tostring(row.level or "") or ""
 			end },
-			{ id = "units", label = L.BUY_COL_AVAILABLE, width = 58, align = "RIGHT", text = function(item)
-				return ns.Comma(item.units)
+			-- An item's row gives the total and the lowest price. Its price rows
+			-- give how many are at each price.
+			{ id = "units", label = L.BUY_COL_AVAILABLE, width = 64, fixed = true, align = "RIGHT", text = function(row)
+				if row.more then
+					return ""
+				end
+				return ns.Comma(row.point and row.point.units or row.units)
 			end },
-			{ id = "min", label = L.BUY_COL_PRICE, width = 84, align = "RIGHT", text = function(item)
-				return ns.Money(item.min)
+			{ id = "min", label = L.BUY_COL_FROM, width = 96, fixed = true, align = "RIGHT", text = function(row)
+				if row.more then
+					return ""
+				end
+				return ns.Money(row.point and row.point.unit or row.min)
 			end },
-			{ id = "deal", label = "", width = 42, align = "RIGHT", badge = function(item)
-				if item.deal and item.deal >= ns.DealBadgeRule.percent then
-					return "-" .. item.deal .. "%"
+			{ id = "deal", label = L.BUY_COL_DEAL, labelColor = C.good, width = 52, fixed = true, align = "RIGHT", badge = function(row)
+				local deal = row.deal
+				if row.item then
+					-- Each price is judged by itself: the cheap one may be a deal
+					-- and the rest not.
+					deal = row.point and row.item.deal and DealAt(row.item, row.point.unit)
+				end
+				if deal and deal >= ns.DealBadgeRule.percent then
+					return "-" .. deal .. "%"
 				end
 			end },
 		},
 		empty = L.BUY_NOTHING,
-		onClick = function(item)
-			state.selectedKey = item.key
-			state.wanted = 1
+		onClick = function(row)
+			if row.more then
+				return
+			end
+			ns.Buying:Cancel() -- a price check is for one item at one price
+			if row.point then
+				-- A price under an opened item: this is the one to buy.
+				local item = row.item
+				state.selectedKey, state.selectedName, state.gone = item.key, item.name, nil
+				state.selectedUnit = row.point.unit
+				state.seenUnit, state.goneUnit = row.point.unit, nil
+				if ns.Orders.IsCommodity(item) then
+					-- Goods are filled from the cheapest up, so picking a price
+					-- means everything up to and including it.
+					local units = 0
+					for _, point in ipairs(ns.Market.PricePoints(item)) do
+						if point.unit <= row.point.unit then
+							units = units + point.units
+						end
+					end
+					state.wanted = units
+				end
+			else
+				-- An item: open it to show every price, or close it again.
+				local item = row
+				local reopen = state.openKey ~= item.key
+				state.openKey = reopen and item.key or nil
+				state.selectedKey, state.selectedName, state.gone = item.key, item.name, nil
+				state.selectedUnit = nil
+				state.seenUnit, state.goneUnit = item.min, nil
+				state.wanted = 1
+				-- When the scan is no longer fresh, ask what the item looks like now.
+				ns.LiveCheck:Request(item)
+			end
 			PaintList(true)
 			PaintOrder()
 		end,
-		isSelected = function(item)
-			return item.key == state.selectedKey
+		isSelected = function(row)
+			if row.point then
+				return row.item.key == state.selectedKey and row.point.unit == state.selectedUnit
+			end
+			return not row.item and row.key == state.selectedKey and state.selectedUnit == nil
 		end,
-		link = function(item)
-			return item.link
+		link = function(row)
+			return row.link
 		end,
 		onSort = function(id)
 			if state.sort.id == id then
@@ -736,3 +1062,48 @@ local function Create(parent)
 end
 
 ns.Window:RegisterTab({ id = "buy", label = L.TAB_BUY, order = 1, Create = Create })
+
+-- The rail's icon size is a setting.
+ns.Bus:On("SETTING_CHANGED", function(id)
+	if id == "railLarge" and rail and ns.charDb.tab == "buy" then
+		ns.Window:RefreshActive()
+	end
+end)
+
+-- A live check replaced an item's listings. The list is rebuilt from the
+-- market, and if what was chosen is no longer for sale the panel says so.
+ns.Bus:On("MARKET_PATCHED", function()
+	facets = nil
+	if state.selectedKey and market and not market.byKey[state.selectedKey] then
+		state.gone, state.selectedKey, state.selectedUnit = state.selectedName, nil, nil
+	end
+	-- The price being looked at (the one picked, or the cheapest) may be gone too.
+	local chosen = state.selectedKey and market and market.byKey[state.selectedKey]
+	if chosen and state.seenUnit and not ns.Orders.FillAt(chosen, state.seenUnit) then
+		state.goneUnit, state.selectedUnit, state.seenUnit = state.seenUnit, nil, chosen.min
+	end
+	if order and ns.charDb.tab == "buy" then
+		ns.Window:RefreshActive()
+	end
+end)
+
+-- The panel says when the chosen item is being checked.
+ns.Bus:On("LIVE_CHECK_CHANGED", function()
+	if order and ns.charDb.tab == "buy" then
+		ns.Window:RefreshActive()
+	end
+end)
+
+-- The order panel follows a purchase as it goes.
+ns.Bus:On("BUYING_CHANGED", function(buying)
+	-- What was just bought is no longer for sale: look again. The same after a
+	-- purchase that did not go through, so the next press is not aimed at an
+	-- auction that has since gone to someone else.
+	local attempted = buying.phase == "done" or (buying.phase == "failed" and buying.auctionID ~= nil)
+	if attempted and market and buying.key and market.byKey[buying.key] then
+		ns.LiveCheck:Request(market.byKey[buying.key], true)
+	end
+	if order and ns.charDb.tab == "buy" then
+		ns.Window:RefreshActive()
+	end
+end)

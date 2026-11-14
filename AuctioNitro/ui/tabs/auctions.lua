@@ -65,6 +65,7 @@ local function Create(parent)
 	refresh:SetPoint("RIGHT", -6, 0)
 
 	list = Kit.List(parent, {
+		id = "auctions",
 		columns = {
 			{
 				id = "name",
@@ -126,7 +127,7 @@ local function Create(parent)
 	return { Refresh = Refresh }
 end
 
-ns.Window:RegisterTab({ id = "auctions", label = L.TAB_AUCTIONS, order = 2.5, Create = Create })
+ns.Window:RegisterTab({ id = "auctions", label = L.TAB_AUCTIONS, order = 4, Create = Create })
 
 ns.Bus:On("OWNED_CHANGED", function()
 	if list and ns.charDb.tab == "auctions" then

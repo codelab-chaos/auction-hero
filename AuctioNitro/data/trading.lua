@@ -98,7 +98,7 @@ ns.DefaultDuration = 3
 
 -- ========= Price confidence =================================================
 -- How far to trust a price read off an item's auctions. Scored 0 to 100:
--- the number of auctions sets the base, how well sellers agree scales it,
+-- the number of different prices sets the base, how well they agree scales it,
 -- and how many scans have seen the item caps it.
 --   min   lowest score that earns the level
 --   pips  filled pips on the meter
@@ -113,13 +113,14 @@ ns.ConfidenceLevels = {
 ns.ConfidencePips = 4
 
 ns.ConfidenceRule = {
-	-- More auctions to compare with means a steadier price.
+	-- More different prices to compare means a steadier price. Identical
+	-- auctions count once: six auctions at one price are one seller's opinion.
 	depth = {
-		{ auctions = 1, score = 15 },
-		{ auctions = 2, score = 30 },
-		{ auctions = 5, score = 60 },
-		{ auctions = 15, score = 85 },
-		{ auctions = 40, score = 100 },
+		{ prices = 1, score = 15 },
+		{ prices = 2, score = 30 },
+		{ prices = 4, score = 60 },
+		{ prices = 8, score = 85 },
+		{ prices = 15, score = 100 },
 	},
 	-- Units priced within this share of the usual price count as agreeing on it.
 	agreementBand = 0.25,
@@ -142,27 +143,52 @@ ns.ConfidenceRule = {
 --   u   usual price: a running average of the scan medians
 --   m   the last scan's median
 --   lo  lowest price ever seen       hi  highest median ever seen
+--   lou how many were at that lowest price, and lot when (nil on old records)
 --   n   scans that saw the item      d   days that saw it
 --   f   first day seen               l   last day seen (days since 1970)
---   h   the points a price graph is drawn from: one per day the item was
---       seen, newest last, packed into one string as
---       "day:median:lowest:units" joined by ";". Several scans on one day
---       leave one point, the latest
+--   h   the points a price graph is drawn from, newest last, packed into
+--       one string as "time:median:lowest:units:unitsAtLowest" joined by
+--       ";" (older points lack the last number). Points are
+--       at least pointHours apart, and the newest scan is always the last
 ns.HistoryRule = {
 	-- How much a new scan moves the usual price. 0.3 means a new scan counts
 	-- for 30% and everything before it for 70%.
 	smoothing = 0.3,
-	-- How many daily points each item keeps for its graph. Older ones fall off.
+	-- How many days back each item's graph points reach. Older ones fall off.
 	-- This is the starting value: the player can change it with /an history,
-	-- within the limits below. A point is about 19 bytes.
+	-- within the limits below. A point is about 25 bytes.
 	graphPoints = 30,
 	graphPointsMin = 7,
 	graphPointsMax = 180,
+	-- The least time between two kept points, in hours. Scans made closer
+	-- together than this update the newest point instead of adding one.
+	pointHours = 8,
 	-- Items not seen for this many days are dropped.
 	forgetDays = 45,
 	-- The usual price comes from history once this many scans have seen the
 	-- item. Before that, it is the current scan's median.
 	trustAfterScans = 2,
+}
+
+-- How long after the game says a search has been answered its results are
+-- read, in seconds, so they are all in.
+ns.SearchSettleSeconds = 0.1
+
+-- ========= Live checks ======================================================
+-- A scan ages. Choosing an item to buy asks the auction house for that one
+-- item's listings as they are now, and patches them into the scan.
+ns.LiveCheckRule = {
+	-- A scan newer than this is trusted as it is, and so is an item checked
+	-- this recently. In minutes.
+	staleMinutes = 5,
+	-- Wait this long after an item is chosen before asking, so clicking down a
+	-- list does not send a request for every row. In seconds.
+	settleSeconds = 0.4,
+	-- A check this recent is as good as asking again: pressing Buy on a single
+	-- item uses its answer and goes straight to the confirm. In seconds.
+	reuseSeconds = 30,
+	-- A long list of auctions comes a page at a time. Read at most this many.
+	maxPages = 20,
 }
 
 -- ========= Buying ===========================================================
@@ -172,9 +198,21 @@ ns.HistoryRule = {
 -- the answer ready. For the rest we go by item class.
 ns.CommodityClassIDs = { [0] = true, [5] = true, [6] = true, [7] = true, [12] = true, [15] = true }
 
--- An item is flagged as a deal in lists when its lowest price sits this far
--- under its usual price and it has at least this many auctions.
-ns.DealBadgeRule = { percent = 30, minListings = 3 }
+-- ========= Deals ============================================================
+-- A price is a deal against the price you would otherwise pay: the baseline.
+--   floorShare      the baseline starts from today's floor, the price reached
+--                   once this share of the units for sale is skipped, so a
+--                   stray low listing is not the price of all the others
+--   floorMinUnits   and never fewer units than this
+--   historyPoints   once an item has this many graph points, the baseline is
+--                   also held down to its usual lowest price, so asking prices
+--                   that have crept up cannot make an ordinary price a deal
+ns.BaselineRule = { floorShare = 0.2, floorMinUnits = 2, historyPoints = 3 }
+
+-- A list row gets a deal badge when its cheapest price sits this far under
+-- the baseline, and the baseline has something behind it: past scans, or at
+-- least minPrices different prices today.
+ns.DealBadgeRule = { percent = 30, minPrices = 3 }
 
 -- ========= The deal meter ===================================================
 -- How good a buy is: how far the price you would pay sits under the item's
@@ -190,13 +228,13 @@ ns.DealLevels = {
 ns.DealPips = 5
 
 ns.DealRule = {
-	fairBand = 10, -- percent over the usual price that still counts as fair
-	greatFrom = 15, -- percent under the usual price that makes it great to buy
-	confidentNeeds = "good", -- an id from ns.ConfidenceLevels
+	fairBand = 10, -- percent over the baseline that still counts as fair
+	greatFrom = 15, -- percent under the baseline that makes it great to buy
+	-- A great price is a confident one when past scans back the baseline, or
+	-- failing that when today's prices agree this well (an id from
+	-- ns.ConfidenceLevels).
+	confidentNeeds = "good",
 	resellFrom = 30, -- percent under that leaves room to resell
-	resellNeeds = "high",
-	-- Below this price confidence there is no deal reading at all.
-	needsConfidence = "fair",
 }
 
 -- ========= Reselling ========================================================
@@ -214,7 +252,7 @@ ns.ResellDefaultMinProfit = 5000 -- copper
 
 -- ========= History charts ===================================================
 -- How far back a chart can look, in days, and where it starts.
-ns.HistoryRanges = { 7, 14, 30 }
+ns.HistoryRanges = { 3, 7, 14, 30 }
 ns.HistoryDefaultRange = 30
 
 -- The two price lines. The colors were checked as a pair on the window's dark

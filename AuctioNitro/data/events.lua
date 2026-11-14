@@ -61,6 +61,8 @@ ns.LoggedEventsCollapsed = {
 	AUCTION_HOUSE_THROTTLED_MESSAGE_SENT = true,
 	AUCTION_HOUSE_THROTTLED_MESSAGE_RESPONSE_RECEIVED = true,
 	AUCTION_HOUSE_THROTTLED_SYSTEM_READY = true,
+	-- Fires in bursts of dozens, which pushed everything else out of the log.
+	AUCTION_CANCELED = true,
 }
 
-ns.LogLimit = 300
+ns.LogLimit = 600

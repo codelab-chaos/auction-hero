@@ -80,6 +80,11 @@ driver:SetScript("OnUpdate", function()
 	end
 end)
 
+-- True when no job is running or waiting.
+function Jobs:IsIdle()
+	return #active == 0
+end
+
 -- Starts a job. onDone gets the job's return values, onError gets the error text.
 function Jobs:Run(work, onDone, onError)
 	local record = {
