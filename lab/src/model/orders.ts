@@ -56,3 +56,11 @@ export function fillOrder(item: MarketItem, wanted: number): Order {
     short: Math.max(0, wanted - units),
   };
 }
+
+// One auction at a chosen unit price, in the shape fillOrder returns: the
+// player picked that price in the list and wants that one, not the cheapest.
+export function fillAt(item: MarketItem, unit: number): Order | null {
+  const tier = item.tiers.find((candidate) => candidate.unit === unit);
+  if (!tier) return null;
+  return { byUnit: false, lines: [{ tier, units: tier.stack, auctions: 1 }], units: tier.stack, cost: tier.buyout, purchases: 1, averageUnit: tier.unit, short: 0 };
+}

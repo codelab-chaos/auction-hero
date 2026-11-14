@@ -7,7 +7,7 @@
 //
 // Stock comes from the latest snapshot; the usual price comes from history.
 // Listing prices can be propped up by auctions that never sell.
-import { ASSUMPTIONS } from "../config/catalog";
+import { ASSUMPTIONS } from "../config/catalog.ts";
 import type { MarketItem, Tier } from "./market";
 
 export interface ResellParams {
@@ -66,8 +66,14 @@ export function marketSize(item: MarketItem): number {
 
 // Plans a purchase of up to auctionLimit auctions, cheapest first. Returns
 // null when the item has no usual price to resell at, or nothing cheap enough.
-export function planResell(item: MarketItem, params: ResellParams, auctionLimit = Infinity): ResellLead | null {
-  const target = item.usual ?? item.median;
+// relistAt overrides the price to relist at, which is otherwise the usual price.
+export function planResell(
+  item: MarketItem,
+  params: Pick<ResellParams, "marginPercent" | "minListings">,
+  auctionLimit = Infinity,
+  relistAt: number | null = null,
+): ResellLead | null {
+  const target = relistAt ?? item.usual ?? item.median;
   if (target === null || item.listings - item.bidOnly < params.minListings) return null;
   const ceiling = target * (1 - params.marginPercent / 100);
 

@@ -414,23 +414,17 @@ h3 {
 }
 
 /* Detail panel */
-.detail-head,
-.post-head {
+.detail-head {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
 }
 
-.detail-head .title,
-.post-head .title {
+.detail-head .title {
   flex: 1;
   font-size: 16px;
   font-weight: 600;
-}
-
-.post-head > div {
-  flex: 1;
 }
 
 .facts {
@@ -455,39 +449,6 @@ h3 {
 .link {
   margin-top: 8px;
   word-break: break-all;
-}
-
-/* Post screen */
-.picker {
-  padding: 12px;
-  margin-bottom: 12px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-}
-
-.picker-results {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.picker-item {
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-  padding: 4px 8px;
-  background: var(--panel-2);
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  color: var(--text);
-  font: inherit;
-  cursor: pointer;
-}
-
-.picker-item:hover {
-  border-color: var(--accent);
 }
 
 .welcome {
@@ -1974,4 +1935,151 @@ h3 {
 .cw-break {
   flex-basis: 100%;
   height: 0;
+}
+
+/* Banker screens */
+.badge-news {
+  margin-left: 6px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.news-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.news-card {
+  padding: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.news-meta {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.news-title {
+  display: block;
+  margin: 2px 0 4px;
+  font-size: 15px;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.news-title:hover {
+  text-decoration: underline;
+}
+
+.news-text {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.news-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.news-item {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 3px 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.news-item:hover {
+  border-color: var(--accent);
+}
+
+/* Market type: the word carries the meaning, the color only helps. */
+.market-type {
+  font-size: 12px;
+}
+
+.market-hot {
+  color: #ffb347;
+}
+
+.market-staple {
+  color: #40d040;
+}
+
+.market-glut,
+.market-quiet,
+.market-unknown {
+  color: var(--muted);
+}
+
+/* Concept Buy: an opened item's prices, and the scan facts under the Buy button */
+.cw-list .table tr.cw-price-row td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.cw-list .table tr.cw-price-row.selected td {
+  background: var(--accent-soft);
+}
+
+.cw-price-label {
+  padding-left: 26px;
+  color: var(--muted);
+}
+
+.cw-stat-head {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  color: var(--accent);
+}
+
+.cw-stat-split,
+.cw-stat,
+.cw-ladder-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cw-stat-count {
+  color: var(--text);
+}
+
+.cw-stat,
+.cw-ladder-row {
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.cw-ladder-row {
+  align-items: center;
+}
+
+.cw-ladder-row .money {
+  flex: 0 0 96px;
+}
+
+.cw-ladder-bar {
+  height: 10px;
+  margin-right: auto;
+  background: var(--accent);
+  opacity: 0.35;
+}
+
+/* The order panel now holds more than the window is tall: let it scroll. */
+.cw-order {
+  overflow-y: auto;
 }

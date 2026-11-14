@@ -10,7 +10,7 @@ import {
   DEAL_RULE,
   DEAL_UNKNOWN,
   type SignalLevel,
-} from "../config/signals";
+} from "../config/signals.ts";
 import type { MarketItem } from "./market";
 
 export interface Signal {
@@ -112,52 +112,55 @@ function money(copper: number): string {
   return [gold ? `${gold}g` : "", gold || silver ? `${silver}s` : "", `${rest}c`].filter(Boolean).join(" ");
 }
 
-// A deal reading: the meter, whether there is enough to judge by at all, and
-// what the order saves against the usual price (negative when it costs more).
+// A deal reading: the meter, whether there is anything to measure against,
+// and what the order saves against the baseline (negative when it costs more).
 export interface Deal extends Signal {
   known: boolean;
   saving: number | null; // copper
 }
 
-// How good it is to buy an order of this item. units and cost describe the
-// whole order, so buying deeper into the ladder weakens the deal.
+// How good it is to buy an order of this item, against the price you would
+// otherwise pay (item.baseline, see model/market.ts). units and cost describe
+// the whole order, so buying deeper into the ladder weakens the deal.
 export function deal(item: MarketItem, units: number, cost: number): Deal {
-  const usual = item.usual ?? item.median;
+  const baseline = item.baseline;
   const unitPrice = units > 0 ? cost / units : null;
-  const confidenceAt = (id: string): number => CONFIDENCE_LEVELS.find((level) => level.id === id)?.min ?? 0;
-  const confidence = priceConfidence(item);
-  if (unitPrice === null || usual === null || confidence.score < confidenceAt(DEAL_RULE.needsConfidence)) {
+  if (unitPrice === null || baseline === null) {
     return {
       known: false,
       saving: null,
       score: 0,
       level: DEAL_UNKNOWN,
       pips: DEAL_PIPS,
-      reasons: ["Too few auctions to know what this usually goes for.", ...confidence.reasons.slice(0, 1)],
+      reasons: ["Too few for sale to know what you would otherwise pay."],
     };
   }
 
-  const under = ((usual - unitPrice) / usual) * 100;
+  // Past scans had a say in the baseline, so it is more than today's asking prices.
+  const backed = (item.typicalLow ?? null) !== null;
+  const under = ((baseline - unitPrice) / baseline) * 100;
   let level: SignalLevel = DEAL_LEVELS.fair;
   if (under < -DEAL_RULE.fairBand) level = DEAL_LEVELS.over;
-  else if (under >= DEAL_RULE.resellFrom && confidence.score >= confidenceAt(DEAL_RULE.resellNeeds)) {
-    level = DEAL_LEVELS.resell;
-  } else if (under >= DEAL_RULE.greatFrom) {
-    level = confidence.score >= confidenceAt(DEAL_RULE.confidentNeeds) ? DEAL_LEVELS.confident : DEAL_LEVELS.great;
+  else if (under >= DEAL_RULE.greatFrom) {
+    const needs = CONFIDENCE_LEVELS.find((entry) => entry.id === DEAL_RULE.confidentNeeds)?.min ?? 0;
+    const sure = backed || priceConfidence(item).score >= needs;
+    level = !sure ? DEAL_LEVELS.great : under >= DEAL_RULE.resellFrom ? DEAL_LEVELS.resell : DEAL_LEVELS.confident;
   }
   const percent = Math.round(Math.abs(under));
-  const reasons = [
-    percent === 0
-      ? `Right at the usual price of ${money(usual)}.`
-      : `${percent}% ${under > 0 ? "under" : "over"} the usual price of ${money(usual)}.`,
-  ];
-  if (level === DEAL_LEVELS.great) reasons.push("Not many auctions behind that usual price, so check it.");
   return {
     known: true,
-    saving: Math.round(usual * units - cost),
+    saving: Math.round(baseline * units - cost),
     score: Math.max(0, Math.min(100, Math.round(under))),
     level,
     pips: DEAL_PIPS,
-    reasons,
+    reasons: [
+      percent === 0
+        ? `Right at the ${money(baseline)} you would otherwise pay.`
+        : `${percent}% ${under > 0 ? "under" : "over"} the ${money(baseline)} you would otherwise pay.`,
+      backed
+        ? "Measured against today's listings and what past scans show its lowest price usually is."
+        : "Measured against today's listings, skipping the cheapest few. Past scans cannot back it yet.",
+      "These are asking prices, not what it has sold for.",
+    ],
   };
 }

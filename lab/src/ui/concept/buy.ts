@@ -1,15 +1,15 @@
 // Concept, Buy tab: categories on the left, a short list in the middle, and
 // an order panel that says what buying a quantity really costs and involves.
 import { DEAL_RULE, levelOf, CHARACTER_LEVEL_TYPE } from "../../config/catalog";
-import { BUY_LIST_LIMIT, BUY_TOGGLES } from "../../config/concept";
+import { BUY_LADDER_ROWS, BUY_LIST_LIMIT, BUY_PRICE_ROWS, BUY_TOGGLES } from "../../config/concept";
 import { BUY_FACETS, BUY_RAIL, type RailEntry } from "../../config/facets";
 import { applyFacets, optionsOf, refineKey, toggleFacetValue, type FacetSelection } from "../../model/facets";
 import { applyFindFilter, DEFAULT_FIND_FILTER, type FindFilter } from "../../model/filters";
-import type { MarketItem } from "../../model/market";
-import { fillOrder } from "../../model/orders";
+import { pricePoints, type MarketItem, type PricePoint } from "../../model/market";
+import { fillAt, fillOrder } from "../../model/orders";
 import type { LabContext } from "../context";
 import { deal } from "../../model/signals";
-import { clear, h, icon, itemName, money, number } from "../dom";
+import { clear, h, icon, itemName, money, moneyText, number } from "../dom";
 import { meter } from "../meter";
 import { renderTable, type Column, type Sort } from "../table";
 
@@ -28,14 +28,16 @@ const LIST_COLUMNS: Column<MarketItem>[] = [
     sort: (item) => levelOf(item, CHARACTER_LEVEL_TYPE),
     render: (item) => number(levelOf(item, CHARACTER_LEVEL_TYPE)),
   },
-  { id: "units", label: "Avail", align: "right", width: "64px", sort: (item) => item.units, render: (item) => number(item.units) },
-  { id: "min", label: "Price", align: "right", width: "100px", sort: (item) => item.min, render: (item) => money(item.min) },
+  // An item's row gives the total and the lowest price. Opened, its price rows
+  // give how many are at each price.
+  { id: "units", label: "For sale", align: "right", width: "64px", tip: "How many are for sale, at all prices.", sort: (item) => item.units, render: (item) => number(item.units) },
+  { id: "min", label: "From", align: "right", width: "100px", tip: "The lowest price. Click the item to see every price.", sort: (item) => item.min, render: (item) => money(item.min) },
   {
     id: "deal",
-    label: "",
+    label: "$",
     align: "right",
     width: "54px",
-    tip: "How far the lowest price is under the usual price.",
+    tip: "How far the lowest price is under what you would otherwise pay.",
     sort: (item) => item.deal,
     render: (item) => (item.deal !== null && item.deal >= DEAL_RULE.percent ? h("span", { class: "badge badge-deal" }, `-${item.deal}%`) : ""),
   },
@@ -48,6 +50,8 @@ export function createBuyTab(ctx: LabContext): { element: HTMLElement; update: (
   let sort: Sort | null = { column: "units", descending: true };
   let selected: MarketItem | null = null;
   let wanted = 1;
+  let openKey: string | null = null; // the item whose prices are listed under it
+  let pickedUnit: number | null = null; // the price picked under it, if one was
 
   const rail = h("div", { class: "cw-rail" });
   const sidebar = h("div", { class: "cw-sidebar" });
@@ -350,17 +354,113 @@ export function createBuyTab(ctx: LabContext): { element: HTMLElement; update: (
           sort = next;
           renderList();
         },
+        // An item opens to show every price, or closes again.
         onRowClick: (item) => {
+          openKey = openKey === item.key ? null : item.key;
           selected = item;
+          pickedUnit = null;
           wanted = 1;
           renderList();
           renderOrder();
         },
-        rowClass: (item) => (item === selected ? "selected" : ""),
+        rowClass: (item) => (item === selected && pickedUnit === null ? "selected" : ""),
+        after: (item) => (item.key === openKey ? priceRows(item) : []),
         limit: BUY_LIST_LIMIT,
         empty: "Nothing matches.",
       }),
     );
+  }
+
+  // How far a unit price sits under what the item would otherwise cost, in
+  // percent, or null when it does not.
+  function dealAt(item: MarketItem, unit: number): number | null {
+    if (item.deal === null || item.baseline === null || unit >= item.baseline) return null;
+    return Math.floor(((item.baseline - unit) / item.baseline) * 100);
+  }
+
+  // The rows under an opened item: one for each price it is listed at, with
+  // how many are at that price. Nothing about what is for sale is left to guess.
+  function priceRows(item: MarketItem): HTMLElement[] {
+    const points = pricePoints(item);
+    const rows = points.slice(0, BUY_PRICE_ROWS).map((point) => {
+      const under = dealAt(item, point.unit);
+      return h(
+        "tr",
+        {
+          class: `clickable cw-price-row ${item === selected && pickedUnit === point.unit ? "selected" : ""}`,
+          onclick: () => pick(item, point),
+        },
+        h("td", null, h("span", { class: "cw-price-label" }, "-  for sale at")),
+        h("td", null, ""),
+        h("td", { class: "right" }, number(point.units)),
+        h("td", { class: "right" }, money(point.unit)),
+        h("td", { class: "right" }, under !== null && under >= DEAL_RULE.percent ? h("span", { class: "badge badge-deal" }, `-${under}%`) : ""),
+      );
+    });
+    const last = points[points.length - 1];
+    if (points.length > BUY_PRICE_ROWS && last) {
+      rows.push(h("tr", { class: "cw-price-row" }, h("td", { colSpan: 5 }, h("span", { class: "cw-price-label" }, `-  and ${number(points.length - BUY_PRICE_ROWS)} more prices, up to `, money(last.unit)))));
+    }
+    return rows;
+  }
+
+  // A price under an opened item: this is the one to buy.
+  function pick(item: MarketItem, point: PricePoint): void {
+    selected = item;
+    pickedUnit = point.unit;
+    if (fillOrder(item, 1).byUnit) {
+      // Goods are filled from the cheapest up, so picking a price means
+      // everything up to and including it.
+      wanted = pricePoints(item).reduce((units, other) => units + (other.unit <= point.unit ? other.units : 0), 0);
+    }
+    renderList();
+    renderOrder();
+  }
+
+  // What the scans show about an item (the addon's tooltip lines and more),
+  // then every price it is listed at now with how many are at each.
+  function statsRows(item: MarketItem): HTMLElement[] {
+    const points = pricePoints(item);
+    const quote = (point: PricePoint): HTMLElement => h("span", null, money(point.unit), `  (${number(point.units)} of ${number(item.units)})`);
+    const row = (label: string, value: HTMLElement | string): HTMLElement => h("div", { class: "cw-stat" }, h("span", { class: "muted" }, label), h("span", null, value));
+    let common: PricePoint | null = null;
+    points.forEach((point, index) => {
+      if (index >= 2 && point.units > (common?.units ?? 1)) common = point;
+    });
+    const scans = item.scansSeen ?? 1;
+    const days = item.daysSeen ?? 1;
+    const facts = [
+      points[0] ? row("Lowest", quote(points[0])) : null,
+      points[1] ? row("Next price up", quote(points[1])) : null,
+      common ? row("Most are at", quote(common)) : null,
+      row("Seen in", `${number(scans)} ${scans === 1 ? "scan" : "scans"} over ${number(days)} ${days === 1 ? "day" : "days"}`),
+      (item.typicalLow ?? null) !== null ? row("Usual lowest", money(item.typicalLow ?? null)) : null,
+      (item.lowestSeen ?? null) !== null ? row("Lowest ever", money(item.lowestSeen ?? null)) : null,
+    ].filter((entry): entry is HTMLElement => entry !== null);
+
+    const shown = points.slice(0, points.length > BUY_LADDER_ROWS ? BUY_LADDER_ROWS - 1 : BUY_LADDER_ROWS);
+    const most = Math.max(1, ...shown.map((point) => point.units));
+    const ladder = shown.map((point) =>
+      h(
+        "div",
+        { class: "cw-ladder-row" },
+        money(point.unit),
+        h("span", { class: "cw-ladder-bar", style: `width:${Math.max(2, Math.round((110 * point.units) / most))}px` }),
+        h("span", null, number(point.units)),
+      ),
+    );
+    const last = points[points.length - 1];
+    if (points.length > shown.length && last) {
+      ladder.push(h("div", { class: "cw-stat muted" }, h("span", null, `and ${number(points.length - shown.length)} more prices, up to `, money(last.unit))));
+    }
+    const age = Math.max(0, Math.round((ctx.asOf - ctx.market.meta.time) / 60));
+    return [
+      h("div", { class: "cw-stat-head" }, "What the scans show"),
+      ...facts,
+      h("div", { class: "cw-stat-head cw-stat-split" }, h("span", null, "For sale now"), h("span", { class: "cw-stat-count" }, `${number(item.units)} in all`)),
+      h("div", { class: "cw-stat muted" }, `from the scan, ${age < 60 ? `${age}m` : `${Math.floor(age / 60)}h ${age % 60}m`} ago`),
+      ...ladder,
+    ];
   }
 
   function renderOrder(): void {
@@ -370,7 +470,10 @@ export function createBuyTab(ctx: LabContext): { element: HTMLElement; update: (
       order.append(h("div", { class: "cw-hint" }, "Pick an item to see what buying it takes."));
       return;
     }
-    const filled = fillOrder(item, wanted);
+    // For a single item, the auction at the price picked in the list when one
+    // was picked, else from the cheapest up.
+    const byPrice = pickedUnit !== null && !fillOrder(item, 1).byUnit ? fillAt(item, pickedUnit) : null;
+    const filled = byPrice ?? fillOrder(item, wanted);
     const budget = ctx.budget();
     const overBudget = budget > 0 && filled.cost > budget;
     const dealSignal = deal(item, filled.units, filled.cost);
@@ -389,7 +492,7 @@ export function createBuyTab(ctx: LabContext): { element: HTMLElement; update: (
     if (filled.lines.length > 8) lines.append(h("div", { class: "muted small" }, `and ${filled.lines.length - 8} more price points`));
 
     order.append(
-      h("div", { class: "cw-order-head" }, icon(item.icon, 32), h("div", null, itemName(item.name, item.quality, ""), h("div", { class: "muted small" }, `${number(item.units)} available`))),
+      h("div", { class: "cw-order-head" }, icon(item.icon, 32), h("div", null, itemName(item.name, item.quality, ""), h("div", { class: "muted small" }, `${number(item.units)} for sale, at all prices`))),
       h(
         "div",
         { class: "cw-quantity" },
@@ -413,7 +516,11 @@ export function createBuyTab(ctx: LabContext): { element: HTMLElement; update: (
       filled.short > 0 ? h("div", { class: "cw-note bad" }, `Only ${number(filled.units)} are for sale.`) : "",
       overBudget ? h("div", { class: "cw-note bad" }, "More than your gold.") : "",
       lines,
-      h("button", { class: "cw-action", disabled: overBudget || filled.units === 0 }, `Buy ${number(filled.units)}`),
+      h(
+        "button",
+        { class: "cw-action", disabled: overBudget || filled.units === 0 },
+        filled.byUnit || !filled.lines[0] ? `Buy ${number(filled.units)}` : `Buy at ${moneyText(filled.lines[0].tier.unit)}`,
+      ),
       h(
         "div",
         { class: "cw-note" },
@@ -423,6 +530,7 @@ export function createBuyTab(ctx: LabContext): { element: HTMLElement; update: (
             ? "One auction, one purchase."
             : `${number(filled.purchases)} auctions. The game sells one per press, so this is ${number(filled.purchases)} purchases.`,
       ),
+      ...statsRows(item),
     );
   }
 
@@ -447,6 +555,7 @@ export function createBuyTab(ctx: LabContext): { element: HTMLElement; update: (
 
   function setWanted(value: number, redrawInput = true): void {
     wanted = Math.max(1, Math.floor(value));
+    pickedUnit = null; // a typed quantity is no longer "up to this price"
     if (redrawInput) {
       renderOrder();
       return;

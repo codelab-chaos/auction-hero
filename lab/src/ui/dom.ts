@@ -52,6 +52,14 @@ export function money(copper: number | null): HTMLElement {
   return span;
 }
 
+// Copper as plain text, for a button label or a tooltip: 12g 34s 56c
+export function moneyText(copper: number): string {
+  const value = Math.floor(copper);
+  const gold = Math.floor(value / 10000);
+  const silver = Math.floor(value / 100) % 100;
+  return [gold ? `${gold.toLocaleString("en-US")}g` : "", gold || silver ? `${silver}s` : "", `${value % 100}c`].filter(Boolean).join(" ");
+}
+
 let missingIcons = new Set<number>();
 
 export function setMissingIcons(ids: Set<number>): void {

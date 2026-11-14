@@ -1,8 +1,9 @@
 // One archive for the SPA. Stock is the latest full snapshot; history is
 // folded once per unique scan. Repeated observations never multiply stock.
-import type { Market, MarketItem } from "./market";
+import { finishMarketItem, type Market, type MarketItem } from "./market.ts";
 import { compareMarkets, type PossibleSale, type DetectionConfidence } from "./possible-sales.ts";
 import { HISTORY_SMOOTHING } from "../config/history.ts";
+import { BASELINE_RULE } from "../config/catalog.ts";
 
 export function uniqueMarkets(markets: Market[]): Market[] {
   const unique = new Map<string, Market>();
@@ -17,7 +18,7 @@ export function aggregateMarket(markets: Market[]): Market {
   const scans = uniqueMarkets(markets);
   const latest = scans[scans.length - 1];
   if (!latest) throw new Error("No fresh full scans available.");
-  const history = new Map<string, { scans: number; usual: number | null }>();
+  const history = new Map<string, { scans: number; usual: number | null; lows: number[]; days: Set<number> }>();
   for (const scan of scans) {
     if (scan.meta.place !== latest.meta.place || scan.meta.source !== latest.meta.source) continue;
     for (const item of scan.items) {
@@ -25,12 +26,25 @@ export function aggregateMarket(markets: Market[]): Market {
       const old = history.get(item.key);
       const usual = item.median === null ? old?.usual ?? null
         : old?.usual == null ? item.median : Math.round(old.usual + (item.median - old.usual) * HISTORY_SMOOTHING);
-      history.set(item.key, { scans: (old?.scans ?? 0) + 1, usual });
+      const lows = old?.lows ?? [];
+      if (item.min !== null) lows.push(item.min);
+      const days = old?.days ?? new Set<number>();
+      days.add(Math.floor(scan.meta.time / 86400));
+      history.set(item.key, { scans: (old?.scans ?? 0) + 1, usual, lows, days });
     }
   }
-  const items: MarketItem[] = latest.items.map((item) => ({
-    ...item, scansSeen: history.get(item.key)?.scans ?? 1, usual: history.get(item.key)?.usual ?? item.median,
-  }));
+  // What an item's lowest price usually is: the middle of the lows the scans saw.
+  const typicalLow = (lows: number[] | undefined): number | null => {
+    if (!lows || lows.length < BASELINE_RULE.historyScans) return null;
+    const sorted = [...lows].sort((a, b) => a - b);
+    return sorted[Math.ceil(sorted.length / 2) - 1] ?? null;
+  };
+  const items: MarketItem[] = latest.items.map((source) => {
+    const seen = history.get(source.key);
+    const item = { ...source, tiers: [...source.tiers], scansSeen: seen?.scans ?? 1, daysSeen: seen?.days.size ?? 1, lowestSeen: seen && seen.lows.length ? Math.min(...seen.lows) : source.min, usual: seen?.usual ?? source.median, typicalLow: typicalLow(seen?.lows) };
+    finishMarketItem(item); // the baseline and the deal depend on the history
+    return item;
+  });
   return { meta: latest.meta, items, byKey: new Map(items.map((item) => [item.key, item])) };
 }
 

@@ -12,6 +12,9 @@ export interface ScanMeta {
   hasItemTypes: boolean; // false for scans made before the addon exported types
   stale?: boolean; // the server did not return a fresh list
   timeLeftBands?: Record<string, { min: number; max: number | null }>;
+  // Items whose rows were replaced by a live check after the scan, and when.
+  // Their rows are not from the scan's own moment.
+  patched?: { id: number; time: number }[];
 }
 
 export interface ItemRecord {
@@ -31,6 +34,7 @@ export interface ItemRecord {
   subClassId: number | null;
   commodity: boolean | null; // bought by the unit rather than by the auction. null when unknown
   maxStack?: number | null; // how many fit in one bag slot. Missing or null when unknown
+  vendorPrice?: number | null; // what a vendor pays for one, in copper. Missing or null when unknown
 }
 
 // [itemIndex, count, buyout, minBid, bid, timeLeft, copies]
@@ -51,4 +55,18 @@ export interface ScanSummary extends ScanMeta {
 
 export interface ScanIndex {
   scans: ScanSummary[];
+}
+
+// What scripts/fetch-news.mjs writes: news articles as plain text.
+export interface NewsArticle {
+  source: string;
+  title: string;
+  link: string;
+  time: number; // seconds
+  text: string;
+}
+
+export interface NewsFile {
+  fetched: number;
+  articles: NewsArticle[];
 }

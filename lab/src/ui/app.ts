@@ -1,9 +1,12 @@
 // The shell: aggregate archive, header, tabs and the detail panel.
-import { POST_SCREEN_ID, SCREENS } from "../config/screens";
-import { loadScan } from "../data/load";
-import type { ScanSummary } from "../data/types";
+import { SCREENS } from "../config/screens";
+import { loadNews, loadScan } from "../data/load";
+import type { NewsFile, ScanSummary } from "../data/types";
 import { buildMarket, type Market } from "../model/market";
 import { aggregateMarket, uniqueMarkets } from "../model/history";
+import { buildFlows, type Flows } from "../model/flow";
+import { matchNews, type NewsIndex } from "../model/news";
+import { nameUnresolved } from "../model/resolve";
 import { marketAtTime } from "../model/timeline";
 import { remember, store, type LabContext, type Screen, type Settings } from "./context";
 import { checkbox, clear, h, moneyInput, number, select } from "./dom";
@@ -21,9 +24,15 @@ export async function mountApp(root: HTMLElement, scans: ScanSummary[]): Promise
   root.append(loading);
   let markets: Market[];
   let market: Market;
+  let newsFile: NewsFile;
   try {
     const files = [...new Set(scans.map((scan) => scan.file))];
-    markets = uniqueMarkets(await Promise.all(files.map(async (file) => buildMarket(await loadScan(file)))));
+    const [loaded, news] = await Promise.all([
+      Promise.all(files.map(async (file) => buildMarket(await loadScan(file)))),
+      loadNews(),
+    ]);
+    markets = nameUnresolved(uniqueMarkets(loaded));
+    newsFile = news;
     market = aggregateMarket(markets);
   } catch (error) {
     loading.replaceChildren(h("p", null, `Could not load the scan archive: ${error instanceof Error ? error.message : String(error)}`),
@@ -48,6 +57,9 @@ export async function mountApp(root: HTMLElement, scans: ScanSummary[]): Promise
   let asOf = Math.floor(Date.now() / 1000);
   let useAssumedBands = true;
   let view = marketAtTime(markets, asOf, useAssumedBands);
+  // Worked out when first asked for, and again after the view changes.
+  let flows: Flows | null = null;
+  let news: NewsIndex | null = null;
   const viewingDate = h("input", { type: "datetime-local", class: "input", value: localDateTime(asOf),
     onchange: () => {
       const value = new Date(viewingDate.value).getTime() / 1000;
@@ -80,15 +92,11 @@ export async function mountApp(root: HTMLElement, scans: ScanSummary[]): Promise
     },
     settings,
     budget: () => Math.max(0, (settings.gold ?? 0) * COPPER_PER_GOLD),
+    flows: () => (flows ??= buildFlows(view.markets, useAssumedBands)),
+    news: () => (news ??= matchNews(newsFile.articles.filter((article) => article.time <= asOf), market.items)),
     openItem: (key) => {
       openKey = key;
       renderDetail();
-    },
-    postItem: (key) => {
-      openKey = null; // the Post screen needs the room
-      renderDetail();
-      showScreen(POST_SCREEN_ID);
-      screen(POST_SCREEN_ID)?.select?.(key);
     },
   };
 
@@ -153,6 +161,8 @@ export async function mountApp(root: HTMLElement, scans: ScanSummary[]): Promise
     dateSelect.value = selectedDate;
     viewingDate.style.display = selectedDate === "custom" ? "" : "none";
     if (changed) {
+      flows = null;
+      news = null;
       built.clear();
       openKey = null;
       clear(detail);

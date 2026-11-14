@@ -1,10 +1,11 @@
-// Settings for the concept's History tab, as data.
+// Settings for the concept's Graphs tab, as data.
 //
 // The charts use only what the game can draw: straight lines, rectangles and
 // text. No curves, gradients or filled areas.
 
 // How far back a chart can look. The middle one is the starting choice.
 export const HISTORY_RANGES = [
+  { days: 3, label: "3d" },
   { days: 7, label: "7d" },
   { days: 14, label: "14d" },
   { days: 30, label: "30d" },

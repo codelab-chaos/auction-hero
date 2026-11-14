@@ -26,6 +26,9 @@ export interface TableOptions<T> {
   limit: number;
   empty: string;
   rowClass?: (row: T) => string;
+  // Extra table rows to put straight under a row, such as the detail of an
+  // opened row. They are not sorted or counted: they belong to their row.
+  after?: (row: T) => HTMLElement[];
 }
 
 // Empty values always sort last, whichever direction.
@@ -82,6 +85,7 @@ export function renderTable<T>(options: TableOptions<T>): HTMLElement {
       line.append(h("td", { class: column.align === "right" ? "right" : "" }, column.render(row)));
     }
     body.append(line);
+    for (const extra of options.after?.(row) ?? []) body.append(extra);
   }
 
   const count =

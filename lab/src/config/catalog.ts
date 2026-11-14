@@ -102,6 +102,18 @@ export const ASSUMPTIONS = {
   auctionCut: 0.05,
 };
 
-// An item is flagged as a deal when its lowest price sits this far under its
-// median and it has at least this many listings (the addon uses the same rule).
-export const DEAL_RULE = { percent: 30, minListings: 3 };
+// A price is a deal against the price you would otherwise pay: the baseline.
+// The addon uses the same rules (ns.BaselineRule in data/trading.lua).
+//   floorShare    the baseline starts from the floor, the price reached once
+//                 this share of the units for sale is skipped, so a stray low
+//                 listing is not the price of all the others
+//   floorMinUnits and never fewer units than this
+//   historyScans  once this many scans have seen an item, the baseline is also
+//                 held down to its usual lowest price, so asking prices that
+//                 have crept up cannot make an ordinary price a deal
+export const BASELINE_RULE = { floorShare: 0.2, floorMinUnits: 2, historyScans: 3 };
+
+// A list row gets a deal badge when its cheapest price sits this far under
+// the baseline, and the baseline has something behind it: past scans, or at
+// least minPrices different prices today.
+export const DEAL_RULE = { percent: 30, minPrices: 3 };

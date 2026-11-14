@@ -16,7 +16,7 @@
 //             identical auctions are collapsed into one entry with a copy count
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { loadItemTypes, loadStackSizes } from "./lib/item-types.mjs";
+import { loadItemTypes, loadStackSizes, loadVendorPrices } from "./lib/item-types.mjs";
 import { parseSavedVariables } from "./lib/lua-table.mjs";
 import { findSavedVariables, INDEX_FILE, SCANS_DIR } from "./lib/paths.mjs";
 
@@ -43,7 +43,7 @@ function linkPayload(link) {
   return match ? match[1] : null;
 }
 
-function convert(snapshot, typeOf, stackOf) {
+function convert(snapshot, typeOf, stackOf, vendorOf) {
   const rows = Array.isArray(snapshot.rows) ? snapshot.rows : Object.values(snapshot.rows);
   const catalog = snapshot.items ?? {};
   const items = [];
@@ -80,6 +80,7 @@ function convert(snapshot, typeOf, stackOf) {
         subClassId: known.subClassID ?? null,
         commodity: known.commodity ?? null, // true when it is bought by the unit
         maxStack: stackOf(itemId), // how many fit in one bag slot, null when unknown
+        vendorPrice: vendorOf(itemId), // what a vendor pays for one, null when unknown
       });
     }
 
@@ -136,6 +137,7 @@ async function main() {
   const known = new Set(index.scans.map((entry) => entry.time));
   const typeOf = await loadItemTypes();
   const stackOf = await loadStackSizes();
+  const vendorOf = await loadVendorPrices();
   mkdirSync(SCANS_DIR, { recursive: true });
 
   // The current file first, then the game's backup of the one before it.
@@ -159,7 +161,7 @@ async function main() {
     if (source.isBackup && known.has(snapshot.meta.time)) continue;
 
     console.log(`reading ${source.path}`);
-    const scan = convert(snapshot, typeOf, stackOf);
+    const scan = convert(snapshot, typeOf, stackOf, vendorOf);
     const fileName = `scan-${scan.meta.time}.json`;
     const text = JSON.stringify(scan);
     writeFileSync(join(SCANS_DIR, fileName), text);

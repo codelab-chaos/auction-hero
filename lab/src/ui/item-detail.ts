@@ -4,6 +4,7 @@ import { EQUIP_SLOTS, LEVEL_TYPE_BY_ID, QUALITY_BY_ID, TIME_BANDS } from "../con
 import { affordable, type MarketItem, type Tier } from "../model/market";
 import type { LabContext } from "./context";
 import { clear, h, icon, itemName, money, number } from "./dom";
+import { dealConfidence } from "../model/deal-confidence";
 import { priceConfidence } from "../model/signals";
 import { meterBlock } from "./meter";
 import { renderTable, type Column } from "./table";
@@ -66,7 +67,8 @@ export function renderItemDetail(panel: HTMLElement, item: MarketItem | null, ct
   if (item.type) facts.append(fact("Type", [item.type, item.subType].filter(Boolean).join(", ")));
   if (item.equipLoc) facts.append(fact("Slot", EQUIP_SLOTS[item.equipLoc] ?? item.equipLoc));
   if (item.bidOnly > 0) facts.append(fact("Bid-only auctions", number(item.bidOnly)));
-  if (item.deal !== null) facts.append(fact("Lowest is under median by", `${item.deal}%`));
+  if (item.baseline !== null) facts.append(fact("You would otherwise pay", money(item.baseline)));
+  if (item.deal !== null) facts.append(fact("Lowest is under that by", `${item.deal}% (${number(item.dealUnits)} at this price)`));
   if (budget > 0) {
     const can = affordable(item, budget);
     facts.append(fact("Your gold buys", h("span", null, `${number(can.units)} units for `, money(can.cost))));
@@ -78,12 +80,12 @@ export function renderItemDetail(panel: HTMLElement, item: MarketItem | null, ct
       { class: "detail-head" },
       icon(item.icon, 40),
       h("div", { class: "title" }, itemName(item.name, item.quality, `item ${item.id} (data never arrived)`)),
-      h("button", { class: "button", onclick: () => ctx.postItem(item.key) }, "Post this"),
       h("button", { class: "button button-quiet", onclick: close }, "Close"),
     ),
     facts,
     h("div", { class: "muted small link" }, item.link ? `link: item:${item.link}` : ""),
     meterBlock("Price confidence", priceConfidence(item)),
+    item.deal !== null ? meterBlock("Deal confidence", dealConfidence(item, ctx.flows())) : "",
     h("h3", null, "Price ladder"),
     renderTable({
       columns: LADDER_COLUMNS,

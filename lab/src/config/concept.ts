@@ -12,7 +12,7 @@ export const CONCEPT_TABS: ConceptTab[] = [
   { id: "buy", label: "Buy" },
   { id: "sell", label: "Sell" },
   { id: "resell", label: "Resell" },
-  { id: "history", label: "History" },
+  { id: "history", label: "Graphs" },
 ];
 
 // Quick toggles above the Buy list.
@@ -84,3 +84,8 @@ export const STARTING_BID_SHARE = 0.8;
 // The most units of an item that may be for sale, in all, for it to be shown
 // as a resell lead. Reselling means buying the market out and relisting it.
 export const RESELL_MAX_ITEMS = 10;
+
+// Prices listed under an opened item in the Buy list, and under "For sale
+// now" in its order panel, at most. The addon uses the same limits.
+export const BUY_PRICE_ROWS = 15;
+export const BUY_LADDER_ROWS = 10;

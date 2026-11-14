@@ -1,5 +1,5 @@
 // Fetches the imported scans. Nothing else in the lab touches the network.
-import type { ScanFile, ScanIndex } from "./types";
+import type { NewsFile, ScanFile, ScanIndex } from "./types";
 
 const DATA_ROOT = "/data";
 
@@ -27,5 +27,14 @@ export async function loadMissingIcons(): Promise<Set<number>> {
     return new Set(await getJson<number[]>("/icons/missing.json"));
   } catch {
     return new Set();
+  }
+}
+
+// News saved by `npm run news`. Empty when it has never been fetched.
+export async function loadNews(): Promise<NewsFile> {
+  try {
+    return await getJson<NewsFile>(`${DATA_ROOT}/news.json`);
+  } catch {
+    return { fetched: 0, articles: [] };
   }
 }
