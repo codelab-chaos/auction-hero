@@ -50,16 +50,45 @@ for index, setting in ipairs(ns.Settings) do
 end
 check("in the agreed order", table.concat(order, ","), "openWithAuctionHouse,itemTooltips,railLarge,logEvents,debug")
 
--- The days of history kept is a number typed into the panel.
-local daysRow = Frames(function(frame)
-	return frame.numberSetting ~= nil
-end)[1]
-check("the box shows the days kept", daysRow.input.text, tostring(ns.HistoryRule.graphPoints))
-daysRow.Commit("20")
-check("typing a number sets it", ns.History:GraphDays(), 20)
-daysRow.Commit("9999")
-check("held to the most allowed", ns.History:GraphDays(), ns.HistoryRule.graphPointsMax)
-daysRow.Commit("15")
+-- The days of history kept is one of a few lengths.
+local function numberRow(id)
+	return Frames(function(frame)
+		return frame.numberSetting ~= nil and frame.numberSetting.id == id
+	end)[1]
+end
+local daysRow = numberRow("historyDays")
+check("the lengths offered", #ns.HistoryRule.dayChoices, 6)
+local seven = ButtonNamed("7 days")
+seven.scripts.OnClick(seven)
+check("picking one sets it", ns.History:GraphDays(), 7)
+checkTrue("a shorter length warns what goes at the next scan", daysRow.warning.shown and daysRow.warning.text:find("oldest 23 days") ~= nil)
+local fourteen = ButtonNamed("14 days")
+fourteen.scripts.OnClick(fourteen)
+checkTrue("counted from the longest since the last scan", daysRow.warning.text:find("oldest 16 days") ~= nil and daysRow.warning.text:find("Pick 30 again") ~= nil)
+local thirty = ButtonNamed("30 days")
+thirty.scripts.OnClick(thirty)
+checkTrue("going back to it before a scan loses nothing", not daysRow.warning.shown)
+ButtonNamed("14 days").scripts.OnClick(ButtonNamed("14 days"))
+FireEvent("AUCTION_HOUSE_CLOSED")
+OpenAuctionHouse()
+SkipTime(16 * 60)
+Scan()
+check("a scan trims, and the warning goes", ns.History:PendingTrim(), nil)
+
+-- Near level is two numbers on one row, each with arrows.
+local range = numberRow("gearRange")
+check("under shows the setting", range.low.box.text, tostring(ns.Gear:Offset("below")))
+range.low.up.scripts.OnClick(range.low.up)
+check("the up arrow adds one", ns.Gear:Offset("below"), 2)
+range.high.down.scripts.OnClick(range.high.down)
+check("the down arrow takes one", ns.Gear:Offset("above"), 0)
+range.high.down.scripts.OnClick(range.high.down)
+check("never under nothing", ns.Gear:Offset("above"), 0)
+range.high.scripts.OnMouseWheel(range.high, 1)
+check("the wheel steps it too", ns.Gear:Offset("above"), 1)
+range.low.box.text = "99"
+range.low.box.scripts.OnTextChanged(range.low.box, true)
+check("typing is held to the most allowed", ns.Gear:Offset("below"), ns.GearLevelRule.max)
 
 -- A row flips its switch.
 local tips

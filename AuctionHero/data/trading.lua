@@ -160,6 +160,8 @@ ns.HistoryRule = {
 	graphPoints = 30,
 	graphPointsMin = 7,
 	graphPointsMax = 180,
+	-- The lengths offered in the settings, in days.
+	dayChoices = { 7, 14, 30, 60, 90, 180 },
 	-- The least time between two kept points, in hours. Scans made closer
 	-- together than this update the newest point instead of adding one.
 	pointHours = 8,

@@ -31,50 +31,57 @@ ns.Settings = {
 -- Settings that are a number, listed in the options panel after their
 -- section's switches. get and set say where the number lives.
 ns.NumberSettings = {
+	-- One of a few lengths. Picking a shorter one says what goes at the next scan.
 	{
 		id = "historyDays",
 		section = "general",
+		control = "choices",
 		label = L.SETTING_HISTORY_DAYS,
 		tip = L.SETTING_HISTORY_DAYS_TIP,
-		limits = function()
-			return ns.HistoryRule.graphPointsMin, ns.HistoryRule.graphPointsMax
+		choices = function()
+			return ns.HistoryRule.dayChoices
 		end,
+		format = L.SETTING_DAYS,
 		get = function()
 			return ns.History:GraphDays()
 		end,
 		set = function(days)
 			ns.History:SetGraphDays(days)
 		end,
+		warning = function()
+			local from, now = ns.History:PendingTrim(), ns.History:GraphDays()
+			return from and L.SETTING_HISTORY_TRIM:format(from - now, from)
+		end,
 	},
+	-- Two numbers on one row: how far under and over the character's level.
 	{
-		id = "gearBelow",
+		id = "gearRange",
 		section = "general",
-		label = L.SETTING_GEAR_BELOW,
-		tip = L.SETTING_GEAR_BELOW_TIP,
+		control = "range",
+		label = L.SETTING_GEAR_RANGE,
+		tip = function()
+			local low, high = ns.Gear:LevelRange()
+			return L.SETTING_GEAR_RANGE_TIP:format(ns.GearLevelRule.max, UnitLevel("player") or 1, low, high)
+		end,
 		limits = function()
 			return 0, ns.GearLevelRule.max
 		end,
-		get = function()
-			return ns.Gear:Offset("below")
-		end,
-		set = function(levels)
-			ns.Gear:SetOffset("below", levels)
-		end,
-	},
-	{
-		id = "gearAbove",
-		section = "general",
-		label = L.SETTING_GEAR_ABOVE,
-		tip = L.SETTING_GEAR_ABOVE_TIP,
-		limits = function()
-			return 0, ns.GearLevelRule.max
-		end,
-		get = function()
-			return ns.Gear:Offset("above")
-		end,
-		set = function(levels)
-			ns.Gear:SetOffset("above", levels)
-		end,
+		low = {
+			get = function()
+				return ns.Gear:Offset("below")
+			end,
+			set = function(levels)
+				ns.Gear:SetOffset("below", levels)
+			end,
+		},
+		high = {
+			get = function()
+				return ns.Gear:Offset("above")
+			end,
+			set = function(levels)
+				ns.Gear:SetOffset("above", levels)
+			end,
+		},
 	},
 }
 

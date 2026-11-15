@@ -597,12 +597,12 @@ L.TIP_SOLD = "You last sold at"
 L.BUY_COL_DEAL = "$"
 
 -- Number settings
-L.SETTING_GEAR_BELOW = "Near level: levels under yours"
-L.SETTING_GEAR_BELOW_TIP = "How many levels under yours the Buy tab's Near level toggle reaches, from %d to %d. At level 12 with 1, it starts at 11."
-L.SETTING_GEAR_ABOVE = "Near level: levels over yours"
-L.SETTING_GEAR_ABOVE_TIP = "How many levels over yours the Buy tab's Near level toggle reaches, from %d to %d. At level 12 with 1, it ends at 13."
+L.SETTING_GEAR_RANGE = "Near level"
+L.SETTING_GEAR_RANGE_TIP = "How many levels under and over yours the Buy tab's Near level toggle reaches, up to %d each way. At your level (%d) it shows items for levels %d to %d."
 L.SETTING_HISTORY_DAYS = "Days of price history to keep"
-L.SETTING_HISTORY_DAYS_TIP = "How far back each item's price graph reaches, from %d to %d days. More days keep more data. A shorter setting trims each item the next time a scan sees it."
+L.SETTING_HISTORY_DAYS_TIP = "How far back each item's price graph reaches. More days keep more data."
+L.SETTING_DAYS = "%d days"
+L.SETTING_HISTORY_TRIM = "The oldest %d days of each item's graph go the next time a scan sees it. Pick %d again before then to keep them."
 
 -- Item stats, under the Buy button
 L.STAT_HEADING = "What the scans show"

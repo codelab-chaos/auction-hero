@@ -373,6 +373,82 @@ function Kit.Input(parent, options)
 	return box
 end
 
+-- ========= Stepper =========================================================
+-- A whole number in a box with up and down arrows beside it. The arrows and
+-- the mouse wheel step it by one; it can also be typed. options: width,
+-- limits() returning lowest and highest, onChange(number). Returns the frame
+-- with :SetNumber(n), which leaves the box alone while it is being typed in.
+function Kit.Stepper(parent, options)
+	local height = options.height or Theme.controlHeight
+	local arrowWidth = 14
+	local stepper = CreateFrame("Frame", nil, parent)
+	stepper:SetSize((options.width or 40) + arrowWidth + 2, height)
+
+	local function Clamp(number)
+		local low, high = options.limits()
+		return math.max(low, math.min(high, math.floor(number)))
+	end
+	local function Change(number)
+		number = Clamp(number)
+		stepper.box:SetValue(tostring(number))
+		options.onChange(number)
+	end
+
+	stepper.box = Kit.Input(stepper, {
+		width = options.width or 40,
+		height = height,
+		numeric = true,
+		maxLetters = options.maxLetters or 3,
+		justify = "CENTER",
+		onChange = function(text)
+			local number = tonumber(text)
+			if number then
+				options.onChange(Clamp(number))
+			end
+		end,
+	})
+	stepper.box:SetPoint("LEFT")
+
+	-- Up on top, down below, each half the box's height.
+	local function Arrow(step, rotation, point)
+		local button = CreateFrame("Button", nil, stepper)
+		button:SetSize(arrowWidth, math.floor(height / 2))
+		button:SetPoint(point, stepper.box, point == "TOPLEFT" and "TOPRIGHT" or "BOTTOMRIGHT", 2, 0)
+		Kit.Fill(button, C.input)
+		button.arrow = button:CreateTexture(nil, "OVERLAY")
+		button.arrow:SetTexture(ARROW)
+		button.arrow:SetSize(8, 8)
+		button.arrow:SetPoint("CENTER")
+		button.arrow:SetRotation(rotation)
+		button.arrow:SetVertexColor(unpack(C.tabText))
+		button.step = step
+		button:SetScript("OnClick", function()
+			Change((tonumber(stepper.box:GetText()) or 0) + step)
+		end)
+		button:SetScript("OnEnter", function(self)
+			self.arrow:SetVertexColor(unpack(C.accent))
+		end)
+		button:SetScript("OnLeave", function(self)
+			self.arrow:SetVertexColor(unpack(C.tabText))
+		end)
+		return button
+	end
+	stepper.up = Arrow(1, math.pi / 2, "TOPLEFT")
+	stepper.down = Arrow(-1, -math.pi / 2, "BOTTOMLEFT")
+
+	stepper:EnableMouseWheel(true)
+	stepper:SetScript("OnMouseWheel", function(_, delta)
+		Change((tonumber(stepper.box:GetText()) or 0) + delta)
+	end)
+
+	function stepper:SetNumber(number)
+		if not self.box:HasFocus() then
+			self.box:SetValue(tostring(number))
+		end
+	end
+	return stepper
+end
+
 -- A price as three boxes, gold, silver and copper, the way the game takes a
 -- price. options: compact, onChange(copper). Returns the row with
 -- :SetAmount(copper) and :GetAmount().

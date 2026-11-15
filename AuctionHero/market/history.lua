@@ -44,11 +44,22 @@ function History:GraphDays()
 end
 
 -- Sets how many days of points to keep, within the allowed range. Records are
--- trimmed to a shorter length as scans next touch them, not all at once.
+-- trimmed to a shorter length as scans next touch them, not all at once, so
+-- until the next scan the longest length since the last one is remembered:
+-- going back to it before then loses nothing.
 function History:SetGraphDays(days)
 	local rule = ns.HistoryRule
+	local before = self:GraphDays()
 	ns.db.graphDays = math.max(rule.graphPointsMin, math.min(rule.graphPointsMax, math.floor(days)))
+	local from = math.max(ns.db.graphTrimFrom or before, before)
+	ns.db.graphTrimFrom = ns.db.graphDays < from and from or nil
 	return ns.db.graphDays
+end
+
+-- The longer length the graphs still reach until the next scan trims them,
+-- or nil when nothing is waiting to be trimmed.
+function History:PendingTrim()
+	return ns.db.graphTrimFrom
 end
 
 -- A graph point as it is stored: "time:median:lowest:units". Points written
@@ -212,6 +223,7 @@ function History:Fold(market)
 	if store.folded[market.time] then
 		return false
 	end
+	ns.db.graphTrimFrom = nil -- this scan trims what it sees to the current length
 	local day = math.floor(market.time / SECONDS_PER_DAY)
 	local records = store.items
 

@@ -15,8 +15,11 @@ local Options = {}
 ns.Options = Options
 
 local ROW_HEIGHT = 40 -- a switch: a label and one line of explanation
-local NUMBER_ROW_HEIGHT = 52 -- a number: its explanation is longer and may take two lines
 local HEADING_HEIGHT = 34 -- a rule and a section name
+local TEXT_LEFT = 34 -- where a row's name starts, lined up with the switches' names
+-- A number setting's row, by its control: a label and a line of explanation,
+-- and for choices room for a warning line under them.
+local NUMBER_ROW_HEIGHT = { choices = 62, range = 44 }
 
 local panel
 local rows = {}
@@ -39,10 +42,7 @@ local function Paint()
 	end
 	for _, row in ipairs(numberRows) do
 		row:SetShown(not row.section.shown or row.section.shown())
-		-- Leave the box alone while it is being typed in.
-		if not row.input:HasFocus() then
-			row.input:SetText(tostring(row.numberSetting.get()))
-		end
+		row:Paint()
 	end
 end
 
@@ -62,35 +62,104 @@ local function BuildHeading(parent, section, top)
 	return heading
 end
 
--- A row for a number: a box to type it in, then its name and explanation.
+-- A number setting's name and explanation, on the left of its row. The
+-- explanation may be worked out each time it is shown.
+local function NumberText(row, setting)
+	local label = Kit.Text(row, "normal", C.text)
+	label:SetPoint("TOPLEFT", TEXT_LEFT, -5)
+	label:SetText(setting.label)
+	row.tip = Kit.Text(row, "small", C.muted)
+	row.tip:SetPoint("TOPLEFT", TEXT_LEFT, -21)
+	row.tip:SetJustifyH("LEFT")
+	row.tip:SetWordWrap(true)
+	local function Tip()
+		return type(setting.tip) == "function" and setting.tip() or setting.tip or ""
+	end
+	row.tip:SetText(Tip())
+	return Tip
+end
+
+-- One of a few values, as a row of buttons on the right; a warning line under
+-- the explanation when the setting has something to say about the pick.
+local function BuildChoicesRow(row, setting)
+	local Tip = NumberText(row, setting)
+	local items = {}
+	for _, value in ipairs(setting.choices()) do
+		items[#items + 1] = { label = setting.format and setting.format:format(value) or tostring(value), value = value }
+	end
+	local choices = Kit.Choices(row, {
+		items = items,
+		size = "small",
+		padding = 10,
+		isActive = function(item)
+			return item.value == setting.get()
+		end,
+		onPick = function(item)
+			setting.set(item.value)
+			ns.Bus:Fire("SETTING_CHANGED", setting.id)
+		end,
+	})
+	choices:SetPoint("TOPRIGHT", -8, -3)
+	row.tip:SetPoint("RIGHT", choices, "LEFT", -12, 0)
+	row.warning = Kit.Text(row, "small", C.bad)
+	row.warning:SetPoint("TOPLEFT", TEXT_LEFT, -39)
+	row.warning:SetPoint("RIGHT", -8, 0)
+	row.warning:SetJustifyH("LEFT")
+	row.warning:SetWordWrap(true)
+	function row:Paint()
+		choices:Refresh()
+		self.tip:SetText(Tip())
+		local warning = setting.warning and setting.warning()
+		self.warning:SetText(warning or "")
+		self.warning:SetShown(warning ~= nil)
+	end
+end
+
+-- Two numbers on one row, under and over: "- [1] -> + [1]", each with arrows.
+local function BuildRangeRow(row, setting)
+	local Tip = NumberText(row, setting)
+	local function Stepper(part)
+		return Kit.Stepper(row, {
+			width = 34,
+			limits = setting.limits,
+			onChange = function(number)
+				part.set(number)
+				ns.Bus:Fire("SETTING_CHANGED", setting.id)
+			end,
+		})
+	end
+	local high = Stepper(setting.high)
+	high:SetPoint("TOPRIGHT", -8, -3)
+	local plus = Kit.Text(row, "normal", C.text)
+	plus:SetPoint("RIGHT", high, "LEFT", -4, 0)
+	plus:SetText("+")
+	local arrow = Kit.Text(row, "normal", C.muted)
+	arrow:SetPoint("RIGHT", plus, "LEFT", -10, 0)
+	arrow:SetText("->")
+	local low = Stepper(setting.low)
+	low:SetPoint("RIGHT", arrow, "LEFT", -10, 0)
+	local minus = Kit.Text(row, "normal", C.text)
+	minus:SetPoint("RIGHT", low, "LEFT", -4, 0)
+	minus:SetText("-")
+	row.tip:SetPoint("RIGHT", minus, "LEFT", -12, 0)
+	row.low, row.high = low, high
+	function row:Paint()
+		low:SetNumber(setting.low.get())
+		high:SetNumber(setting.high.get())
+		self.tip:SetText(Tip())
+	end
+end
+
+local NUMBER_ROWS = { choices = BuildChoicesRow, range = BuildRangeRow }
+
+-- A row for a number setting, built by the kind of control its data names.
 local function BuildNumberRow(parent, setting, top)
 	local row = CreateFrame("Frame", nil, parent)
 	row:SetPoint("TOPLEFT", 16, -top)
 	row:SetPoint("TOPRIGHT", -16, -top)
-	row:SetHeight(NUMBER_ROW_HEIGHT - 6)
-	-- Takes what was typed, kept inside the setting's limits.
-	function row.Commit(text)
-		local low, high = setting.limits()
-		local number = tonumber(text)
-		if number then
-			setting.set(math.max(low, math.min(high, math.floor(number))))
-			ns.Bus:Fire("SETTING_CHANGED", setting.id)
-		end
-	end
-	row.input = Kit.Input(row, { width = 44, numeric = true, maxLetters = 3, justify = "CENTER", onChange = row.Commit })
-	row.input:SetPoint("TOPLEFT", 8, -3)
-	local low, high = setting.limits()
-	local label = Kit.Text(row, "normal", C.text)
-	label:SetPoint("TOPLEFT", 62, -5)
-	label:SetText(setting.label)
-	local tip = Kit.Text(row, "small", C.muted)
-	tip:SetPoint("TOPLEFT", 62, -21)
-	tip:SetPoint("RIGHT", -8, 0)
-	tip:SetPoint("BOTTOM", 0, 2)
-	tip:SetJustifyV("TOP")
-	tip:SetWordWrap(true)
-	tip:SetText((setting.tip or ""):format(low, high))
+	row:SetHeight(NUMBER_ROW_HEIGHT[setting.control] - 6)
 	row.numberSetting = setting
+	NUMBER_ROWS[setting.control](row, setting)
 	return row
 end
 
@@ -167,7 +236,7 @@ local function Build()
 				local row = BuildNumberRow(panel, setting, top)
 				row.section = section
 				numberRows[#numberRows + 1] = row
-				top = top + NUMBER_ROW_HEIGHT
+				top = top + NUMBER_ROW_HEIGHT[setting.control]
 			end
 		end
 	end
