@@ -368,6 +368,8 @@ function C_AuctionHouse.PlaceBid(auctionID, amount)
 	if not MOCK.bidFails then C_Timer.After(0, function() FireEvent("AUCTION_HOUSE_PURCHASE_COMPLETED", auctionID) end) end
 end
 
+-- The game's Open All tells C_Mail when it starts and stops taking the mail.
+C_Mail = { SetOpeningAll = function() end }
 -- The mailbox: MAIL is a list of { kind, item, bid, buyout, deposit, cut, subject, daysLeft }.
 MAIL = {}
 function GetInboxNumItems() return #MAIL end

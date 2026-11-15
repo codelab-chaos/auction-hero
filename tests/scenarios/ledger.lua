@@ -70,23 +70,27 @@ MAIL = {
 	{ "seller_temp_invoice", "item 2001", 60, 60, 0, 0, "Sale pending", 29.9 },
 }
 FireEvent("MAIL_SHOW")
+Tick(15) -- read once the mailbox settles
 check("two sales are entered, and nothing else", #entries(), 6)
 local sale = entries()[5]
 check("a sale", sale.kind, "sale")
 check("of the quantity in the subject", sale.quantity, 4)
 check("for the price, plus the deposit back, less the cut", sale.amount, 59)
-check("dated when the mail arrived", sale.time, GetServerTime())
+checkTrue("dated when the mail arrived", math.abs(sale.time - GetServerTime()) <= 1)
 
 -- Reading the same mailbox again, a little later, adds nothing.
 Tick(100)
 FireEvent("MAIL_INBOX_UPDATE")
+Tick(15)
 check("the same mail is not entered twice", #entries(), 6)
 -- Nor after a reload, when only the saved ledger remembers.
 table.remove(MAIL, 1)
 FireEvent("MAIL_INBOX_UPDATE")
+Tick(15)
 check("one of the two taken from the box", #entries(), 6)
 MAIL[#MAIL + 1] = { "seller", "item 2001", 60, 60, 2, 3, "Auction successful: item 2001 (4)", 30.01 }
 FireEvent("MAIL_INBOX_UPDATE")
+Tick(15)
 check("a new mail alike in detail but arriving later is a new sale", #entries(), 7)
 
 -- Adding it up: 10 ore bought for 70, 12 sold for 177 (10 of them ours).
@@ -120,3 +124,28 @@ checkTrue("profit says it went up", shows("^%+77c$"))
 checkTrue("with counts under the amounts", shows("^%d+ sold$") and shows("^%d+ bought$"))
 ButtonNamed("Every trade").scripts.OnClick(ButtonNamed("Every trade"))
 checkTrue("and switches to every trade", ButtonNamed("By item") ~= nil)
+
+-- The game's Open All: the mailbox is read once as it starts, so no sale is
+-- missed before its mail is emptied, not while it takes the mail, and again
+-- when it ends.
+local before = #entries()
+MAIL[#MAIL + 1] = { "seller", "item 2001", 90, 90, 2, 3, "Auction successful: item 2001 (6)", 29.5 }
+C_Mail.SetOpeningAll(true)
+check("read as Open All starts", #entries(), before + 1)
+local reads = 0
+local realInvoice = GetInboxInvoiceInfo
+GetInboxInvoiceInfo = function(index)
+	reads = reads + 1
+	return realInvoice(index)
+end
+for _ = 1, 2 do
+	table.remove(MAIL, 1)
+	FireEvent("MAIL_INBOX_UPDATE")
+	Tick(15)
+end
+check("not read while it takes the mail", reads, 0)
+C_Mail.SetOpeningAll(false)
+Tick(15)
+checkTrue("read again once it ends", reads > 0)
+check("with nothing entered twice", #entries(), before + 1)
+GetInboxInvoiceInfo = realInvoice

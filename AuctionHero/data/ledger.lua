@@ -22,6 +22,10 @@ ns.LedgerRules = {
 	invoices = { seller = "sale" },
 	-- Where a mail's subject carries the quantity: "Auction successful: Linen Cloth (20)".
 	quantityPatterns = { "%((%d+)%)%s*$" },
+	-- The mailbox is read this long after it last changed, not on every
+	-- change, so its readings stay out of the way of the game's own mail
+	-- requests. In seconds.
+	settleSeconds = 0.5,
 }
 
 -- The tiles across the top of the Ledger tab, left to right. value is a field

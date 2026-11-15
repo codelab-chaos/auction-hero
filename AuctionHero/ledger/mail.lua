@@ -5,6 +5,11 @@
 -- deposit came back. The mailbox is read whenever it is open; nothing is
 -- taken from it or changed.
 --
+-- The mailbox changes in bursts (each mail taken during Open All is one), so
+-- it is read once it settles, not on every change. While the game's Open All
+-- runs it is not read at all: it is read once as Open All starts, so no sale
+-- is missed before its mail is emptied, and again when it ends.
+--
 -- Mail has no id, so a mail read twice must not be entered twice. A mail is
 -- known by its invoice details and the moment it arrived (worked out from the
 -- days it has left). Several mails alike in every detail are counted.
@@ -101,8 +106,50 @@ local function Scan()
 	end
 end
 
+local openingAll = false -- the game's Open All is taking the mail
+local waiting = false -- a reading is due once the mailbox settles
+local changedAt = 0
+
+local function ReadWhenSettled()
+	changedAt = GetTime()
+	if waiting or openingAll then
+		return
+	end
+	waiting = true
+	local function Check()
+		if openingAll then
+			waiting = false
+		elseif GetTime() - changedAt >= ns.LedgerRules.settleSeconds then
+			waiting = false
+			Scan()
+		else
+			C_Timer.After(ns.LedgerRules.settleSeconds, Check)
+		end
+	end
+	C_Timer.After(ns.LedgerRules.settleSeconds, Check)
+end
+
+-- The game's Open All says when it starts and stops taking the mail.
+if C_Mail and C_Mail.SetOpeningAll then
+	hooksecurefunc(C_Mail, "SetOpeningAll", function(on)
+		if on then
+			Scan() -- everything, before any of it is emptied
+		end
+		openingAll = on and true or false
+		if not on then
+			ReadWhenSettled()
+		end
+	end)
+end
+
 local frame = CreateFrame("Frame")
-for _, event in ipairs({ "MAIL_SHOW", "MAIL_INBOX_UPDATE" }) do
+for _, event in ipairs({ "MAIL_SHOW", "MAIL_INBOX_UPDATE", "MAIL_CLOSED" }) do
 	pcall(frame.RegisterEvent, frame, event)
 end
-frame:SetScript("OnEvent", Scan)
+frame:SetScript("OnEvent", function(_, event)
+	if event == "MAIL_CLOSED" then
+		openingAll = false
+		return
+	end
+	ReadWhenSettled()
+end)
