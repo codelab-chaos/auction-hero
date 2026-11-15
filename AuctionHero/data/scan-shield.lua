@@ -20,8 +20,24 @@ ns.ScanShield = {
 	creepHalfSeconds = 6,
 	quipSeconds = 4, -- how long each quip stays
 	doneSeconds = 2.5, -- how long the result shows before the shield lifts
-	coinTurnSeconds = 2, -- one turn of the spinning coin
 	coinIcon = ns.Theme.brandIcon, -- the brand coin, see data\theme.lua
+	-- While the scan runs, small coins rain onto the brand coin. Each drop
+	-- falls the slot's height in fallSeconds, speeding up as it goes, and
+	-- fades over the last fadeShare of its fall. The drops are spread evenly
+	-- through one fall; x is each drop's offset from the slot's middle.
+	coinRain = {
+		slot = 32, -- the brand coin's size, and the height the drops fall
+		size = 12,
+		fallSeconds = 1.1,
+		fadeShare = 0.35,
+		drops = {
+			{ icon = "Interface\\MoneyFrame\\UI-GoldIcon", x = -7 },
+			{ icon = "Interface\\MoneyFrame\\UI-SilverIcon", x = 6 },
+			{ icon = "Interface\\MoneyFrame\\UI-GoldIcon", x = 1 },
+			{ icon = "Interface\\MoneyFrame\\UI-CopperIcon", x = -3 },
+			{ icon = "Interface\\MoneyFrame\\UI-GoldIcon", x = 9 },
+		},
+	},
 	stageIcons = {
 		done = "Interface\\RaidFrame\\ReadyCheck-Ready",
 		current = "Interface\\RaidFrame\\ReadyCheck-Waiting",

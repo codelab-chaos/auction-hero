@@ -70,6 +70,33 @@ local function Detail(now)
 	return L.SHIELD_ASKING
 end
 
+-- ========= Coin rain ========================================================
+-- Where a drop is in its fall (0 at the top, 1 landed): how far down the
+-- slot it is, speeding up like a real fall, and how faded it is by then.
+local function Drop(share)
+	local rain = Rule.coinRain
+	local depth = -rain.size + (rain.slot + rain.size) * share * share
+	local fadeFrom = 1 - rain.fadeShare
+	local alpha = share < fadeFrom and 1 or (1 - share) / rain.fadeShare
+	return depth, alpha
+end
+
+local function RainCoins(now)
+	local rain = Rule.coinRain
+	local count = #parts.drops
+	for index, drop in ipairs(parts.drops) do
+		local share = (now / rain.fallSeconds + (index - 1) / count) % 1
+		local depth, alpha = Drop(share)
+		drop:ClearAllPoints()
+		drop:SetPoint("TOP", parts.chute, "TOP", rain.drops[index].x, -depth)
+		drop:SetAlpha(alpha)
+	end
+end
+
+local function StopRain()
+	parts.chute:Hide()
+end
+
 -- ========= Painting =========================================================
 local function Paint()
 	if not shield or not run then
@@ -147,6 +174,20 @@ local function Build()
 	parts.coin:SetPoint("TOPLEFT", pad, -pad)
 	parts.coin:SetTexture(Rule.coinIcon)
 
+	-- The coins raining onto the brand coin, clipped to its slot.
+	local rain = Rule.coinRain
+	parts.chute = CreateFrame("Frame", nil, card)
+	parts.chute:SetSize(rain.slot, rain.slot)
+	parts.chute:SetPoint("CENTER", parts.coin, "CENTER")
+	parts.chute:SetClipsChildren(true)
+	parts.drops = {}
+	for index, spec in ipairs(rain.drops) do
+		local drop = parts.chute:CreateTexture(nil, "OVERLAY")
+		drop:SetSize(rain.size, rain.size)
+		drop:SetTexture(spec.icon)
+		parts.drops[index] = drop
+	end
+
 	parts.title = Kit.Text(card, "large", C.accent)
 	parts.title:SetPoint("TOPLEFT", parts.coin, "TOPRIGHT", 10, -1)
 	parts.quip = Kit.Text(card, "small", C.muted)
@@ -206,15 +247,15 @@ local function Build()
 	})
 	parts.cancel:SetPoint("BOTTOM", 0, 14)
 
-	-- The clock, the creeping bar, the spinning coin and the quips move here.
+	-- The clock, the creeping bar, the coin rain and the quips move here.
 	local since, quipAt = 0, 0
 	shield:SetScript("OnUpdate", function(_, elapsed)
 		if not run then
 			return
 		end
 		local now = GetTime()
-		if not run.finishedAt and parts.coin.SetRotation then
-			parts.coin:SetRotation((now / Rule.coinTurnSeconds) % 1 * 2 * math.pi)
+		if not run.finishedAt then
+			RainCoins(now)
 		end
 		if now - quipAt >= Rule.quipSeconds then
 			quipAt = now
@@ -249,6 +290,7 @@ local function Raise(state)
 		focus:ClearFocus()
 	end
 	parts.quip:SetText(NextQuip())
+	parts.chute:Show()
 	shield:Show()
 end
 
@@ -262,9 +304,7 @@ end
 local function Finish()
 	run.finishedAt = GetTime()
 	parts.quip:SetText("")
-	if parts.coin.SetRotation then
-		parts.coin:SetRotation(0)
-	end
+	StopRain()
 	Paint()
 	local mine = run
 	C_Timer.After(Rule.doneSeconds, function()
