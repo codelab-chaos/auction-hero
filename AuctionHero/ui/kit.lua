@@ -169,6 +169,14 @@ function Kit.Button(parent, options)
 	button.label = Kit.Text(button, options.size or "normal", look.text, options.justify or "CENTER")
 	button.label:SetPoint("LEFT", options.inset or 6, 0)
 	button.label:SetPoint("RIGHT", -(options.inset or 6), 0)
+	-- An icon in place of the text, centred, as big as the button allows.
+	if options.icon then
+		local size = (options.height or Theme.controlHeight) - 8
+		button.icon = button:CreateTexture(nil, "ARTWORK")
+		button.icon:SetSize(size, size)
+		button.icon:SetPoint("CENTER")
+		button.icon:SetTexture(options.icon)
+	end
 
 	local function Paint()
 		local active, hover = button.active, button.hover and not button.disabled

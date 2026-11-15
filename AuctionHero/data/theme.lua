@@ -34,6 +34,8 @@ ns.Theme = {
 	brandIconSize = 20,
 	tabHeight = 27,
 	tabWidth = 84,
+	tabIconWidth = 40, -- a tab that shows an icon instead of its name
+	debugTabIcon = "Interface\\TargetingFrame\\UI-TargetingFrame-Skull", -- the Debug tab's skull
 	pad = 8, -- padding around a tab's body, and the gap between its columns
 
 	-- Column widths. The middle column of each tab takes what is left.

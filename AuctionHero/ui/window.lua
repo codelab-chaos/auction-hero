@@ -77,27 +77,48 @@ local function ShowTab(id)
 	for _, button in pairs(tabButtons) do
 		button:Hide()
 	end
-	local x = Theme.pad
-	for _, tab in ipairs(visible) do
+	-- Tabs run from the left; a tab with align = "right" sits at the right end
+	-- instead, in the same order. A tab with an icon shows it in place of its
+	-- name, which becomes its tooltip.
+	local function Button(tab)
 		local button = tabButtons[tab.id]
 		if not button then
 			button = Kit.Button(frame, {
-				text = tab.label,
+				text = not tab.icon and tab.label or nil,
+				icon = tab.icon,
+				tip = tab.icon and { tab.label } or nil,
 				look = "tab",
 				size = "large",
-				width = Theme.tabWidth,
+				width = tab.icon and Theme.tabIconWidth or Theme.tabWidth,
 				height = Theme.tabHeight,
 				onClick = function()
 					ShowTab(tab.id)
 				end,
 			})
+			button.tabId = tab.id
 			tabButtons[tab.id] = button
 		end
 		button:ClearAllPoints()
-		button:SetPoint("TOPLEFT", x, -(Theme.titleHeight + 6))
 		button:SetActive(tab.id == chosen.id)
 		button:Show()
-		x = x + Theme.tabWidth + 2
+		return button, (tab.icon and Theme.tabIconWidth or Theme.tabWidth) + 2
+	end
+	local top = -(Theme.titleHeight + 6)
+	local left, right = Theme.pad, Theme.pad
+	local rightTabs = {}
+	for _, tab in ipairs(visible) do
+		if tab.align == "right" then
+			rightTabs[#rightTabs + 1] = tab
+		else
+			local button, width = Button(tab)
+			button:SetPoint("TOPLEFT", left, top)
+			left = left + width
+		end
+	end
+	for index = #rightTabs, 1, -1 do
+		local button, width = Button(rightTabs[index])
+		button:SetPoint("TOPRIGHT", -right, top)
+		right = right + width
 	end
 
 	for id, tab in pairs(built) do

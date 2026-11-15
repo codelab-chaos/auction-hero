@@ -178,7 +178,7 @@ local function Create(parent)
 	return { Refresh = Refresh }
 end
 
-ns.Window:RegisterTab({ id = "debug", label = L.TAB_DEBUG, order = 9, debug = true, Create = Create })
+ns.Window:RegisterTab({ id = "debug", label = L.TAB_DEBUG, order = 9, debug = true, align = "right", icon = ns.Theme.debugTabIcon, Create = Create })
 
 -- The log view fills in as events arrive.
 ns.Bus:On("LOG_ADDED", function()

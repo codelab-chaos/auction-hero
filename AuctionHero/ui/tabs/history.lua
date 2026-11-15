@@ -367,4 +367,4 @@ local function Create(parent)
 	return { Refresh = Refresh }
 end
 
-ns.Window:RegisterTab({ id = "history", label = L.TAB_HISTORY, order = 6, Create = Create })
+ns.Window:RegisterTab({ id = "history", label = L.TAB_HISTORY, order = 6, align = "right", Create = Create })

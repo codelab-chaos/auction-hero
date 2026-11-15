@@ -70,3 +70,20 @@ checkTrue("there was plenty to click", clicked > 500)
 -- A player with almost no gold.
 MONEY = 3
 ns.Window:RefreshActive()
+
+-- Graphs and Debug sit at the right end of the tab row; Debug is a skull.
+SlashCmdList.AUCTIONHERO("debug")
+Tick(2)
+local function tabButton(id)
+	return Frames(function(frame)
+		return frame.tabId == id
+	end)[1]
+end
+check("Buy runs from the left", tabButton("buy").lastPoint[1], "TOPLEFT")
+check("Graphs sits at the right", tabButton("history").lastPoint[1], "TOPRIGHT")
+check("Debug too", tabButton("debug").lastPoint[1], "TOPRIGHT")
+check("Debug at the very end", tabButton("debug").lastPoint[2], -ns.Theme.pad)
+check("with Graphs before it", tabButton("history").lastPoint[2], -(ns.Theme.pad + ns.Theme.tabIconWidth + 2))
+checkTrue("Debug shows a skull, not its name", tabButton("debug").icon ~= nil and tabButton("debug").label.text == "")
+SlashCmdList.AUCTIONHERO("debug")
+Tick(2)
