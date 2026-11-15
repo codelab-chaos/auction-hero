@@ -87,3 +87,24 @@ check("with Graphs before it", tabButton("history").lastPoint[2], -(ns.Theme.pad
 checkTrue("Debug shows a skull, not its name", tabButton("debug").icon ~= nil and tabButton("debug").label.text == "")
 SlashCmdList.AUCTIONHERO("debug")
 Tick(2)
+
+-- Closing the window can close the auction house too, when the player asks.
+local closes = 0
+C_AuctionHouse.CloseAuctionHouse = function()
+	closes = closes + 1
+end
+OpenAuctionHouse()
+ns.Window:Show()
+local frame = _G.AuctionHeroWindow or Frames(function(f) return f.scripts.OnHide ~= nil and f.scripts.OnShow ~= nil end)[1]
+check("off by default", ns.SettingById.closeAuctionHouse.default, false)
+ns.SetEnabled("closeAuctionHouse", false)
+frame:Hide()
+check("off: the auction house stays open", closes, 0)
+ns.SetEnabled("closeAuctionHouse", true)
+ns.Window:Show()
+frame:Hide()
+check("on: closing the window closes the auction house", closes, 1)
+ns.Window:Show()
+ns.Downloader.IsRunning = function() return true end
+frame:Hide()
+check("but never while a scan runs", closes, 1)

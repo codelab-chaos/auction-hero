@@ -144,6 +144,8 @@ ns.L = {
 	-- Settings
 	SETTING_OPEN_WITH_AH = "Open with the auction house",
 	SETTING_OPEN_WITH_AH_TIP = "Shows this window whenever the auction house opens.",
+	SETTING_CLOSE_AH = "Close the auction house with this window",
+	SETTING_CLOSE_AH_TIP = "Closing this window closes the auction house too. Not while a scan is running, so the scan is not lost.",
 	SETTING_LOG_EVENTS = "Record auction house events",
 	SETTING_LOG_EVENTS_TIP = "Keeps a log of the auction house events the client fires, with their payloads.",
 	ON = "on",

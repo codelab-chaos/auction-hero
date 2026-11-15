@@ -22,6 +22,7 @@ ns.SettingSections = {
 -- In the order the options panel lists them within their section.
 ns.Settings = {
 	{ id = "openWithAuctionHouse", section = "general", default = true, label = L.SETTING_OPEN_WITH_AH, tip = L.SETTING_OPEN_WITH_AH_TIP },
+	{ id = "closeAuctionHouse", section = "general", default = false, label = L.SETTING_CLOSE_AH, tip = L.SETTING_CLOSE_AH_TIP },
 	{ id = "itemTooltips", section = "general", default = true, label = L.SETTING_ITEM_TOOLTIPS, tip = L.SETTING_ITEM_TOOLTIPS_TIP },
 	{ id = "railLarge", section = "general", default = false, label = L.SETTING_RAIL_LARGE, tip = L.SETTING_RAIL_LARGE_TIP },
 	{ id = "logEvents", section = "debug", default = true, label = L.SETTING_LOG_EVENTS, tip = L.SETTING_LOG_EVENTS_TIP },

@@ -401,6 +401,11 @@ local function Build()
 	end)
 	frame:SetScript("OnHide", function()
 		ns.charDb.windowShown = false
+		-- The player's choice: closing this window closes the auction house
+		-- too. Never while a scan runs, which closing would throw away.
+		if ns.IsEnabled("closeAuctionHouse") and ns.auctionHouseOpen and not ns.Downloader:IsRunning() then
+			pcall(C_AuctionHouse.CloseAuctionHouse)
+		end
 	end)
 	-- The scan's age and the wait for the next one move with the clock.
 	C_Timer.NewTicker(20, function()
