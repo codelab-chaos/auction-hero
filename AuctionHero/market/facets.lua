@@ -121,10 +121,7 @@ function Facets:Build(items)
 			if category.keepOrder and a.order ~= b.order then
 				return a.order < b.order
 			end
-			if a.count ~= b.count then
-				return a.count > b.count
-			end
-			return a.label < b.label
+			return a.label < b.label -- alphabetical
 		end)
 
 		local options = {}
@@ -157,7 +154,7 @@ function Facets:Build(items)
 		facets[#facets + 1] = facet
 	end
 
-	-- Quality: one box per quality, drawn as the swatches at the top of the rail.
+	-- Quality: one box per quality, drawn as color swatches (see ns.BuySidebarTop and ns.BuyRail).
 	local quality = {
 		id = ns.QualityFacet.id,
 		label = ns.QualityFacet.label,

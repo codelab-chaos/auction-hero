@@ -46,6 +46,36 @@ ns.NumberSettings = {
 			ns.History:SetGraphDays(days)
 		end,
 	},
+	{
+		id = "gearBelow",
+		section = "general",
+		label = L.SETTING_GEAR_BELOW,
+		tip = L.SETTING_GEAR_BELOW_TIP,
+		limits = function()
+			return 0, ns.GearLevelRule.max
+		end,
+		get = function()
+			return ns.Gear:Offset("below")
+		end,
+		set = function(levels)
+			ns.Gear:SetOffset("below", levels)
+		end,
+	},
+	{
+		id = "gearAbove",
+		section = "general",
+		label = L.SETTING_GEAR_ABOVE,
+		tip = L.SETTING_GEAR_ABOVE_TIP,
+		limits = function()
+			return 0, ns.GearLevelRule.max
+		end,
+		get = function()
+			return ns.Gear:Offset("above")
+		end,
+		set = function(levels)
+			ns.Gear:SetOffset("above", levels)
+		end,
+	},
 }
 
 ns.SettingById = {}

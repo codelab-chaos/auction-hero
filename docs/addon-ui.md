@@ -8,11 +8,22 @@ It is drawn from plain textures and text, not the game's stock button art, so it
 
 Everything Auction Hero does runs off scan data. A scan is what the Buy, Sell and Resell tabs list, what the going rates, deals, price history and item tooltips are worked out from, and so what makes the auction house easier to use and easier to profit from. Keeping and loading that data is fundamental operation, never an optional extra: a scan is saved whole, and there is no switch to turn that off.
 
+## How a scan is kept
+
+The game answers a full scan with one row of twenty values per auction. Most of that repeats: more than half of all auctions are exact copies of another, and everything about an item is said again on every one of its auctions. So the addon keeps a scan as two lists (`listings` in `data/schemas.lua`):
+
+- **Variants:** one entry per distinct item as it is listed, holding its name, icon, quality, level, id and link.
+- **Rows:** one per distinct listing of a variant, holding the stack size, starting bid, buyout, current bid and time left, and how many identical auctions it stands for.
+
+Left out are the seller and bidder names a full scan never fills, the sale status that is always the same, and the bid increment nothing reads. On a real scan of 223,564 auctions this is 31,568 variants and 107,015 rows, about a fifth of the size on disk.
+
+The market the tabs read is the same whichever way the scan is kept, auction for auction and price for price. A scan saved by an earlier build still loads as it is, and the next scan is kept the new way. Code reads a row through `ns.RowReader`, which knows where each field is.
+
 ## What is there
 
 - **Title bar:** a Scan button with how long ago the last scan was beside it (the button waits 15 minutes after a scan, the server's limit), and your gold.
 - **Footer:** the last thing the addon did (a scan, a post, a refusal). Hover it for the last 15.
-- **Buy:** a left rail of quick toggles (quality swatches, one-hand, two-hand, shield, the eight armor slots), collapsible category checkboxes, search with "Can use", "Afford" and "Deals", a sortable item list, and an order panel with quantity, total, the five-pip deal meter and what you save. Under the Buy button the panel shows what the scans know about the chosen item: the tooltip's lines, how many scans over how many days have seen it, its usual lowest price, its lowest ever (with how many were at that price and when), and last of all every price it is listed at now with how many are at each.
+- **Buy:** a left rail of quick toggles (one-hand, two-hand, ranged, shield, the eight armor slots, cloaks; it scrolls with the mouse wheel when the window is short), collapsible category checkboxes under a row of six square quality swatches, search with "Picks", "Use", "Afford", "Better", "Near level" and "Deals" ("Picks" also turns on "Use" and "Afford") ("Better" is gear that beats what you wear, by stats weighted for your class; "Picks" is the upgrades you can wear today, sorted by gain, biggest first, and the "Gain" column says how much better each is; "Near level" is a required level within a few levels of yours, set in the options; both run on `data/gear.lua`), a sortable item list, and an order panel with quantity, total, the five-pip deal meter and what you save. Under the Buy button the panel shows what the scans know about the chosen item: the tooltip's lines, how many scans over how many days have seen it, its usual lowest price, its lowest ever (with how many were at that price and when), and last of all every price it is listed at now with how many are at each.
 - **Sell:** your real bags as a grid (an item spread over several stacks is one choice), sale type, price in gold, silver and copper, the five price rules, price confidence with its facts line, how many to post, duration, and the competition ladder with your auctions slotted in.
 - **Resell:** discount and minimum profit settings, "I can afford" and "Top deals", the list of leads, and the Buy, Relist, Keep plan.
 - **Graphs:** pick an item and see its usual and lowest price as lines and the units for sale as bars, over 3, 7, 14 or 30 days, with a hover readout. It draws from the first scan, and a note says it is early until two days are in.

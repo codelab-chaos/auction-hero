@@ -30,9 +30,12 @@ local state = {
 
 local market, facets, listable, makeFilter -- rebuilt when the market changes
 local rail, sidebar, toolbar, list, order, prompt, searchBox
-local railTiles, sideRows, toggleButtons = {}, {}, {}
+local railView, railContent, railFades -- the rail scrolls when it is taller than the window
+local railScroll = 0
+local railTiles, sideTiles, sideRows, toggleButtons = {}, {}, {}, {}
 local Refresh
 local lastOrder -- item key -> where it stood in the list as last sorted
+local gainOf, valueOf -- gear gain and gain per gold, rebuilt each time the list is painted
 
 -- ========= Filtering ========================================================
 local function Prepare()
@@ -61,12 +64,18 @@ local function FilteredItems()
 	local passes = makeFilter(state.selection)
 	local gold = GetMoney()
 	local dealFrom = ns.DealBadgeRule.percent
+	local better = state.toggles.betterOnly and ns.Gear:Better()
+	local near = state.toggles.nearLevel and ns.Gear:Near()
+	local suggested = state.toggles.suggested and valueOf
 	local rows = {}
 	for _, item in ipairs(listable) do
 		local keep = (search == "" or item.name:lower():find(search, 1, true) ~= nil)
 			and (not state.toggles.usableOnly or item.usable)
 			and (not state.toggles.dealsOnly or (item.deal ~= nil and item.deal >= dealFrom))
 			and (not state.toggles.affordableOnly or (ns.Orders.CheapestAuction(item) or math.huge) <= gold)
+			and (not better or better(item))
+			and (not near or near(item))
+			and (not suggested or suggested(item) ~= nil)
 			and (passes == nil or passes(item))
 		if keep then
 			rows[#rows + 1] = item
@@ -77,10 +86,12 @@ end
 
 -- ========= The rail =========================================================
 -- Each tile is a checkbox over a color or an icon, named by its tooltip.
-local function Tile(index)
-	local tile = railTiles[index]
+-- Tiles are kept in pools: the rail's, and the row at the top of the
+-- category column.
+local function Tile(pool, parent, index)
+	local tile = pool[index]
 	if not tile then
-		tile = CreateFrame("Button", nil, rail)
+		tile = CreateFrame("Button", nil, parent)
 		tile.fill = Kit.Fill(tile, C.input)
 		tile.art = tile:CreateTexture(nil, "ARTWORK")
 		tile.art:SetPoint("TOPLEFT", 1, -1)
@@ -95,7 +106,7 @@ local function Tile(index)
 		tile:SetScript("OnClick", function(self)
 			self.onClick()
 		end)
-		railTiles[index] = tile
+		pool[index] = tile
 	end
 	return tile
 end
@@ -112,22 +123,46 @@ local function TileSize()
 	return ns.IsEnabled("railLarge") and math.floor(Theme.tile * Theme.tileLargeScale + 0.5) or Theme.tile
 end
 
-local function PaintTile(tile, spec, y)
-	local size = TileSize()
-	local height = spec.swatch and math.floor(size * Theme.swatch / Theme.tile + 0.5) or size
-	tile:ClearAllPoints()
-	tile:SetPoint("TOP", rail, "TOP", 0, -y)
-	tile:SetSize(size, height)
+local function TileHeight(spec, size)
+	return spec.swatch and math.floor(size * Theme.swatch / Theme.tile + 0.5) or size
+end
+
+-- Whether the game has an icon file. Asked once per path.
+local iconKnown = {}
+local function HasIcon(path)
+	if iconKnown[path] == nil then
+		iconKnown[path] = not GetFileIDFromPath or GetFileIDFromPath(path) ~= nil
+	end
+	return iconKnown[path]
+end
+
+-- Paints a tile's look. Where it goes is up to the caller.
+local function PaintTile(tile, spec, width, height)
+	tile:SetSize(width, height)
 	tile.tip = spec.tip
 	tile.onClick = spec.onClick
-	if spec.swatch then
+	tile.art:SetDesaturated(spec.desaturate == true)
+	-- A swatch with an icon: the icon, faded when off, in its quality's color.
+	-- Without one, or when the game has no such icon, a square of the color.
+	local pictured = spec.swatch and spec.icon and HasIcon(spec.icon) and tile.art:SetTexture(spec.icon) ~= false
+	if pictured then
+		tile.fill:SetColorTexture(unpack(C.input))
+		tile.art:Show()
+		tile.art:SetAlpha(spec.on and 1 or Theme.swatchIconOff)
+		tile.border:SetColor(spec.on and spec.color or Dim({ spec.color[1] * 2, spec.color[2] * 2, spec.color[3] * 2 }))
+		tile.mark:SetVertexColor(1, 1, 1)
+		tile.mark:ClearAllPoints()
+		tile.mark:SetPoint("CENTER")
+		tile.mark:SetSize(width, width)
+	elseif spec.swatch then
 		tile.art:Hide()
 		tile.fill:SetColorTexture(unpack(spec.on and spec.color or Dim(spec.color)))
 		tile.border:SetColor(spec.on and C.white or Dim({ spec.color[1] * 2, spec.color[2] * 2, spec.color[3] * 2 }))
 		tile.mark:SetVertexColor(0, 0, 0)
 		tile.mark:ClearAllPoints()
 		tile.mark:SetPoint("CENTER")
-		tile.mark:SetSize(height + 4, height + 4)
+		local side = math.min(width, height) + 4
+		tile.mark:SetSize(side, side)
 	else
 		tile.fill:SetColorTexture(unpack(C.input))
 		tile.art:SetTexture(spec.icon)
@@ -137,7 +172,7 @@ local function PaintTile(tile, spec, y)
 		tile.mark:SetVertexColor(1, 1, 1)
 		tile.mark:ClearAllPoints()
 		tile.mark:SetPoint("CENTER")
-		tile.mark:SetSize(size, size)
+		tile.mark:SetSize(width, width)
 	end
 	tile.mark:SetShown(spec.on)
 	tile:Show()
@@ -173,9 +208,12 @@ local function TilesFor(entry)
 		local facet = FacetById(ns.QualityFacet.id)
 		local ticked = state.selection[facet.id] or {}
 		for _, option in ipairs(facet.options) do
+			local look = ns.QualityIcons[option.quality] or {}
 			Add(facet.id, option.value, ticked[option.value] == true, {
 				swatch = true,
 				color = Kit.QualityColor(option.quality),
+				icon = look.icon,
+				desaturate = look.desaturate,
 				tip = L.RAIL_TIP:format(facet.label, option.label),
 			})
 		end
@@ -204,6 +242,22 @@ local function TilesFor(entry)
 end
 
 local railRules = {}
+local RAIL_TOP, TILE_GAP, RULE_GAP = 6, 4, 8
+
+-- The rail keeps its tiles at the size chosen and scrolls, with the mouse
+-- wheel, when they run taller than the window. A fade at either end says
+-- there is more that way.
+local function ScrollRail(offset)
+	local room = railView:GetHeight() or 0
+	local most = math.max(0, (railContent:GetHeight() or 0) - room)
+	railScroll = math.max(0, math.min(most, offset))
+	railContent:ClearAllPoints()
+	railContent:SetPoint("TOPLEFT", railView, "TOPLEFT", 0, railScroll)
+	railContent:SetPoint("TOPRIGHT", railView, "TOPRIGHT", 0, railScroll)
+	railFades.top:SetShown(railScroll > 0)
+	railFades.bottom:SetShown(railScroll < most)
+end
+
 local function PaintRail()
 	rail:SetWidth(TileSize() + Theme.buy.rail - Theme.tile)
 	for _, tile in ipairs(railTiles) do
@@ -212,7 +266,8 @@ local function PaintRail()
 	for _, rule in ipairs(railRules) do
 		rule:Hide()
 	end
-	local y, used, rules = 6, 0, 0
+	local size = TileSize()
+	local y, used, rules = RAIL_TOP, 0, 0
 	for _, section in ipairs(ns.BuyRail) do
 		local specs = {}
 		for _, entry in ipairs(section) do
@@ -225,21 +280,26 @@ local function PaintRail()
 				rules = rules + 1
 				local rule = railRules[rules]
 				if not rule then
-					rule = Kit.Rule(rail)
+					rule = Kit.Rule(railContent)
 					rule:SetWidth(20)
 					railRules[rules] = rule
 				end
 				rule:ClearAllPoints()
-				rule:SetPoint("TOP", rail, "TOP", 0, -(y + 2))
+				rule:SetPoint("TOP", railContent, "TOP", 0, -(y + 2))
 				rule:Show()
-				y = y + 8
+				y = y + RULE_GAP
 			end
 			for _, spec in ipairs(specs) do
 				used = used + 1
-				y = y + PaintTile(Tile(used), spec, y) + 4
+				local tile, height = Tile(railTiles, railContent, used), TileHeight(spec, size)
+				tile:ClearAllPoints()
+				tile:SetPoint("TOP", railContent, "TOP", 0, -y)
+				y = y + PaintTile(tile, spec, size, height) + TILE_GAP
 			end
 		end
 	end
+	railContent:SetHeight(y)
+	ScrollRail(railScroll)
 end
 
 -- ========= The category column =============================================
@@ -342,6 +402,32 @@ local function PaintSidebar()
 		y = y + PaintSideRow(SideRow(used), spec, y)
 	end
 
+	-- The rows of square tiles at the top (see ns.BuySidebarTop), each as
+	-- wide as the column allows and no bigger than a rail tile.
+	for _, tile in ipairs(sideTiles) do
+		tile:Hide()
+	end
+	local tiles = 0
+	local width = sidebar.content:GetWidth()
+	if not width or width < 40 then
+		width = Theme.buy.sidebar - 16
+	end
+	for _, entry in ipairs(ns.BuySidebarTop) do
+		local specs = TilesFor(entry)
+		if #specs > 0 then
+			local gap = Theme.sideTileGap
+			local size = math.min(Theme.tile, math.floor((width - gap * (#specs - 1)) / #specs))
+			for index, spec in ipairs(specs) do
+				tiles = tiles + 1
+				local tile = Tile(sideTiles, sidebar.content, tiles)
+				tile:ClearAllPoints()
+				tile:SetPoint("TOPLEFT", sidebar.content, "TOPLEFT", (index - 1) * (size + gap), -y)
+				PaintTile(tile, spec, size, size)
+			end
+			y = y + size + 8
+		end
+	end
+
 	for _, facet in ipairs(facets) do
 		if not facet.rail and #facet.options > 0 then
 			local ticked = state.selection[facet.id] or {}
@@ -437,6 +523,10 @@ local SORT_VALUES = {
 	deal = function(item)
 		return item.deal
 	end,
+	gain = function(item)
+		local gain = gainOf and gainOf(item)
+		return gain and gain > 0 and gain or nil
+	end,
 }
 
 -- How far a unit price sits under what the item would otherwise cost, in
@@ -468,6 +558,8 @@ end
 -- stood, so what the player is looking at does not jump away: an item whose
 -- bargain has just sold stays put, with its new numbers, until the next sort.
 local function PaintList(keepScroll)
+	gainOf = ns.Gear:Gains()
+	valueOf = ns.Gear:ValuePerGold(ns.Orders.CheapestAuction)
 	local items = FilteredItems()
 	if keepScroll and lastOrder then
 		-- The chosen item stays even when it no longer passes the filters.
@@ -542,9 +634,11 @@ local function PaintOrder()
 	parts.available:SetText(L.BUY_AVAILABLE:format(ns.Comma(item.units)))
 	stack:Add(parts.head)
 
-	-- The price that was picked has gone since the scan: say so plainly.
+	-- The price that was picked has gone since the scan: say so in two words,
+	-- and what changed when hovered.
 	if state.goneUnit then
-		parts.changed:SetBody(L.BUY_PRICE_WENT:format(ns.PlainMoney(state.goneUnit), ns.Comma(item.units), ns.PlainMoney(item.min or 0)), C.bad)
+		parts.changed.detail = L.BUY_PRICE_WENT:format(ns.PlainMoney(state.goneUnit), ns.Comma(item.units), ns.PlainMoney(item.min or 0))
+		parts.changed:SetBody(L.BUY_PRICES_UPDATED, C.bad)
 		stack:Add(parts.changed, 6)
 	end
 
@@ -805,6 +899,10 @@ local function BuildOrder(parent)
 	end
 	parts.dealNote, parts.warning, parts.budget, parts.more, parts.buyStatus = Note(), Note(), Note(), Note(), Note()
 	parts.changed = Note()
+	parts.changed:EnableMouse(true)
+	Kit.Tip(parts.changed, function(self)
+		return { L.BUY_PRICES_UPDATED, self.detail }
+	end)
 
 	parts.lines = {}
 	for index = 1, ORDER_LINES do
@@ -867,6 +965,39 @@ local function Create(parent)
 	rail:SetPoint("TOPLEFT")
 	rail:SetPoint("BOTTOMLEFT")
 	rail:SetWidth(Theme.buy.rail)
+	-- The tiles sit in a view the height of the rail, and scroll in it.
+	railView = CreateFrame("Frame", nil, rail)
+	railView:SetPoint("TOPLEFT", 1, -1)
+	railView:SetPoint("BOTTOMRIGHT", -1, 1)
+	railView:SetClipsChildren(true)
+	railContent = CreateFrame("Frame", nil, railView)
+	railContent:SetHeight(1)
+	railView:EnableMouseWheel(true)
+	railView:SetScript("OnMouseWheel", function(_, delta)
+		ScrollRail(railScroll - delta * (TileSize() + TILE_GAP) * Theme.railWheelTiles)
+	end)
+	-- A window made taller or shorter changes how far the rail can scroll.
+	railView:SetScript("OnSizeChanged", function()
+		if facets then
+			ScrollRail(railScroll)
+		end
+	end)
+	-- The fades sit on a layer above the tiles.
+	local edges = CreateFrame("Frame", nil, railView)
+	edges:SetAllPoints()
+	edges:SetFrameLevel(railContent:GetFrameLevel() + 10)
+	local clear = { C.panel[1], C.panel[2], C.panel[3], 0 }
+	railFades = {
+		top = Kit.Gradient(edges, C.panel, clear, "OVERLAY"),
+		bottom = Kit.Gradient(edges, clear, C.panel, "OVERLAY"),
+	}
+	for side, fade in pairs(railFades) do
+		fade:ClearAllPoints()
+		fade:SetPoint(side == "top" and "TOPLEFT" or "BOTTOMLEFT")
+		fade:SetPoint(side == "top" and "TOPRIGHT" or "BOTTOMRIGHT")
+		fade:SetHeight(Theme.railFade)
+		fade:Hide()
+	end
 
 	-- The strip between the rail and the filters: one click makes the rail's
 	-- icons bigger, another puts them back.
@@ -925,6 +1056,14 @@ local function Create(parent)
 		local toggle = ns.BuyToggles[index]
 		local button = Kit.Button(toolbar, { text = toggle.label, height = 26, padding = 12, tip = { toggle.label, toggle.tip }, onClick = function()
 			state.toggles[toggle.id] = not state.toggles[toggle.id]
+			if state.toggles[toggle.id] then
+				if toggle.sort then
+					state.sort = { id = toggle.sort.id, descending = toggle.sort.descending }
+				end
+				for _, id in ipairs(toggle.turnsOn or {}) do
+					state.toggles[id] = true
+				end
+			end
 			Refresh()
 		end })
 		button.id = toggle.id
@@ -984,6 +1123,11 @@ local function Create(parent)
 					return ""
 				end
 				return ns.Money(row.point and row.point.unit or row.min)
+			end },
+			-- How much better than what you wear, for gear that is.
+			{ id = "gain", label = L.BUY_COL_GAIN, width = 48, fixed = true, align = "RIGHT", text = function(row)
+				local gain = not row.item and SORT_VALUES.gain(row)
+				return gain and ("+%.1f"):format(gain) or ""
 			end },
 			{ id = "deal", label = L.BUY_COL_DEAL, labelColor = C.good, width = 52, fixed = true, align = "RIGHT", badge = function(row)
 				local deal = row.deal
@@ -1066,6 +1210,13 @@ ns.Window:RegisterTab({ id = "buy", label = L.TAB_BUY, order = 1, Create = Creat
 -- The rail's icon size is a setting.
 ns.Bus:On("SETTING_CHANGED", function(id)
 	if id == "railLarge" and rail and ns.charDb.tab == "buy" then
+		ns.Window:RefreshActive()
+	end
+end)
+
+-- What you wear, your level or the Near level range changed.
+ns.Bus:On("GEAR_CHANGED", function()
+	if list and ns.charDb.tab == "buy" then
 		ns.Window:RefreshActive()
 	end
 end)

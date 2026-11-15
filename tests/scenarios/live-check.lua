@@ -158,5 +158,13 @@ if row then
 	check("and shows them", market.byKey["2001:Copper Ore"].min, 140)
 	-- The numbers changed, but the item stays where the player was looking.
 	check("the list keeps its order until the next sort", order(), before)
-	checkTrue("and the panel says the price looked at is gone", wasLowest == 140 or has("^The one at .* is gone%. 2 for sale now, from 1s 40c%.$"))
+	checkTrue("and the panel says the prices were updated", wasLowest == 140 or has("^Prices updated$"))
+	-- What changed is there when the note is hovered.
+	local detail = wasLowest == 140
+	for _, frame in ipairs(Frames(function(frame)
+		return frame.detail ~= nil
+	end)) do
+		detail = detail or frame.detail:find("^The one at .* is gone%. 2 for sale now, from 1s 40c%.$") ~= nil
+	end
+	checkTrue("and what changed when hovered", detail)
 end

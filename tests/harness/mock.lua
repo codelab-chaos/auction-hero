@@ -16,6 +16,14 @@ function debugprofilestop() prof = prof + 1.5; return prof end
 function GetBuildInfo() return "1.60.1", "70888", "Nov 10 2026", 16001 end
 function GetRealmName() return "TestRealm" end
 function UnitFactionGroup() return "Alliance" end
+-- The character, what it wears and the stats of items by link. Scenarios set these.
+PLAYER = { level = 12, class = "ROGUE" }
+EQUIPPED = {} -- inventory slot -> item link
+ITEM_STATS = {} -- item link -> what GetItemStats returns
+function UnitLevel() return PLAYER.level end
+function UnitClass() return "Class", PLAYER.class end
+function GetInventoryItemLink(_, slot) return EQUIPPED[slot] end
+function GetItemStats(link) return ITEM_STATS[link] end
 ITEM_QUALITY_COLORS = {}
 for q = 0, 5 do ITEM_QUALITY_COLORS[q] = { hex = "|cff00000" .. q }; _G["ITEM_QUALITY" .. q .. "_DESC"] = "Q" .. q end
 Enum = { AuctionHouseSortOrder = { Price = 0, Name = 1 } }

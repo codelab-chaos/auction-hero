@@ -14,8 +14,9 @@ local C = Theme.color
 local Options = {}
 ns.Options = Options
 
-local ROW_HEIGHT = 58 -- a label and up to two lines of explanation
-local HEADING_HEIGHT = 40 -- a rule and a section name
+local ROW_HEIGHT = 40 -- a switch: a label and one line of explanation
+local NUMBER_ROW_HEIGHT = 52 -- a number: its explanation is longer and may take two lines
+local HEADING_HEIGHT = 34 -- a rule and a section name
 
 local panel
 local rows = {}
@@ -66,7 +67,7 @@ local function BuildNumberRow(parent, setting, top)
 	local row = CreateFrame("Frame", nil, parent)
 	row:SetPoint("TOPLEFT", 16, -top)
 	row:SetPoint("TOPRIGHT", -16, -top)
-	row:SetHeight(ROW_HEIGHT - 6)
+	row:SetHeight(NUMBER_ROW_HEIGHT - 6)
 	-- Takes what was typed, kept inside the setting's limits.
 	function row.Commit(text)
 		local low, high = setting.limits()
@@ -166,7 +167,7 @@ local function Build()
 				local row = BuildNumberRow(panel, setting, top)
 				row.section = section
 				numberRows[#numberRows + 1] = row
-				top = top + ROW_HEIGHT
+				top = top + NUMBER_ROW_HEIGHT
 			end
 		end
 	end

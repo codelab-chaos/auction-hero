@@ -11,8 +11,10 @@ It works from what it sees in game. There is no outside price feed.
 ## What it does
 
 - **Buy:** quick filters down the side (quality, weapon hand, armor slot),
-  category checkboxes, search, and a deal meter that says how a price compares
-  with what the item usually goes for. Goods sold by the unit can be bought
+  category checkboxes, search, toggles for gear you can use, gear better than
+  what you wear (stats weighted for your class) and gear near your level, and
+  a deal meter that says how a price compares with what the item usually goes
+  for. Goods sold by the unit can be bought
   from here in two presses.
 - **Sell:** your bags as a grid, price rules (match, undercut, quick sale and
   so on), how confident the price is, and the competition you would be listed

@@ -45,7 +45,11 @@ ns.Theme = {
 	controlHeight = 24, -- buttons and inputs
 	tile = 26, -- rail tiles
 	tileLargeScale = 1.25, -- how much bigger they get when the rail is widened
+	railFade = 14, -- the fade at an end of the rail with more tiles past it
+	railWheelTiles = 2, -- tiles the rail moves per turn of the mouse wheel
+	sideTileGap = 4, -- between the square tiles at the top of the category column
 	swatch = 12, -- rail quality swatches (their height)
+	swatchIconOff = 0.45, -- how faded a quality icon is when it is not ticked
 	bagSlot = 40,
 
 	-- A narrow sans-serif, the closest the client ships to the concept's font.

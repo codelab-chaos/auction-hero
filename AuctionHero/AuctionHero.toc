@@ -26,6 +26,7 @@ data\activity.lua
 data\ledger.lua
 data\tooltip.lua
 data\facets.lua
+data\gear.lua
 feed\links.lua
 feed\replicate.lua
 feed\browse.lua
@@ -41,6 +42,7 @@ market\orders.lua
 market\facets.lua
 market\resell.lua
 inventory\bags.lua
+inventory\gear.lua
 trade\posting.lua
 trade\sell-search.lua
 trade\owned.lua

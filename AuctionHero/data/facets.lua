@@ -14,7 +14,7 @@
 --   boxes      the checkboxes to offer in place of the game's raw subtypes.
 --              An item goes in the first box it fits: { label, subClassIDs,
 --              slots, inRail }. Items that fit none keep their own subtype
---   keepOrder  list the boxes in the order written, not most common first
+--   keepOrder  list the boxes in the order written, not alphabetically
 --   iconSlots  the equip slot that best pictures a box
 --   flat       no header and no expander: the boxes sit straight in the column
 --   refine     on/off toggles that narrow only this category's items:
@@ -40,12 +40,14 @@ for _, entry in ipairs(BODY_SLOTS) do
 	end
 end
 
--- How a weapon is held. Ranged weapons are neither, so these leave them alone.
--- pictureSubClass picks the icon: a one-handed sword and a two-handed axe, so
--- the two tiles look different at a glance.
+-- How a weapon is held: in one hand, in two, or at range (bows, guns,
+-- crossbows, wands and thrown weapons). pictureSubClass picks the icon: a
+-- one-handed sword, a two-handed axe and a bow, so the tiles look different
+-- at a glance.
 local WEAPON_HANDS = {
 	{ label = L.HAND_ONE, slots = { "INVTYPE_WEAPON", "INVTYPE_WEAPONMAINHAND", "INVTYPE_WEAPONOFFHAND" }, pictureSubClass = 7 },
 	{ label = L.HAND_TWO, slots = { "INVTYPE_2HWEAPON" }, pictureSubClass = 1 },
+	{ label = L.HAND_RANGED, slots = { "INVTYPE_RANGED", "INVTYPE_RANGEDRIGHT", "INVTYPE_THROWN" }, pictureSubClass = 2 },
 }
 
 -- The auction house's top-level categories. The game has one Armor class; we
@@ -85,7 +87,7 @@ ns.ItemCategories = {
 		classIDs = { 4 },
 		notSlots = BODY_SLOT_NAMES,
 		boxes = {
-			{ label = L.BOX_CLOAKS, slots = { "INVTYPE_CLOAK" } },
+			{ label = L.BOX_CLOAKS, slots = { "INVTYPE_CLOAK" }, inRail = true },
 			{ label = L.BOX_NECK, slots = { "INVTYPE_NECK" } },
 			{ label = L.BOX_FINGER, slots = { "INVTYPE_FINGER" } },
 			{ label = L.BOX_TRINKET, slots = { "INVTYPE_TRINKET" } },
@@ -95,7 +97,6 @@ ns.ItemCategories = {
 			{ label = L.BOX_TABARD, slots = { "INVTYPE_TABARD" } },
 			{ label = L.BOX_RELICS, subClassIDs = { 7, 8, 9 } }, -- libram, idol, totem
 		},
-		keepOrder = true,
 	},
 	{ id = "containers", label = L.CAT_CONTAINERS, classIDs = { 1, 11 } }, -- bags, and quivers and ammo pouches
 	{ id = "consumables", label = L.CAT_CONSUMABLES, classIDs = { 0 } },
@@ -107,7 +108,7 @@ ns.ItemCategories = {
 	{ id = "quest", label = L.CAT_QUEST, classIDs = { 12 }, flat = true },
 }
 
--- The quality facet: its boxes are the swatches at the top of the rail.
+-- The quality facet: its boxes are color swatches, square tiles at the top of the category column.
 ns.QualityFacet = { id = "quality", label = L.FACET_QUALITY, qualities = { 0, 1, 2, 3, 4, 5 } } -- poor to legendary
 
 -- The left strip, top to bottom, as sections with a divider between them.
@@ -116,15 +117,41 @@ ns.QualityFacet = { id = "quality", label = L.FACET_QUALITY, qualities = { 0, 1,
 --   { refine = id }         the toggles of that category's refine
 --   { box = label, of = id } one box of a category
 ns.BuyRail = {
-	{ { quality = true } },
-	-- What goes in your hands: the two weapon holds, then shields.
+	-- What goes in your hands: one-hand, two-hand and ranged, then shields.
 	{ { refine = "weapons" }, { box = L.BOX_SHIELD, of = "accessories" } },
-	{ { refine = "armor" } },
+	-- What you wear: the body slots, then the back.
+	{ { refine = "armor" }, { box = L.BOX_CLOAKS, of = "accessories" } },
+}
+
+-- The quality squares' icons, by quality: icons the game has had since the
+-- start, since Forever does not carry later expansions' art. desaturate
+-- draws it in gray. A quality with no icon here, or whose icon the game
+-- does not have, is a plain square of its color.
+local ICONS = "Interface\\Icons\\"
+ns.QualityIcons = {
+	[0] = { icon = ICONS .. "inv_stone_06" }, -- poor
+	[1] = { icon = ICONS .. "inv_misc_gem_diamond_01", desaturate = true }, -- common
+	[2] = { icon = ICONS .. "inv_misc_gem_emerald_01" }, -- uncommon
+	[3] = { icon = ICONS .. "inv_misc_gem_sapphire_01" }, -- rare
+	[4] = { icon = ICONS .. "inv_misc_gem_amethyst_01" }, -- epic
+	[5] = { icon = ICONS .. "inv_misc_gem_opal_01" }, -- legendary
+}
+
+-- The top of the category column: rows of square tiles, one row per entry
+-- (the same entries as the rail's). Moving an entry between here and
+-- ns.BuyRail moves its tiles.
+ns.BuySidebarTop = {
+	{ quality = true },
 }
 
 -- The quick toggles beside the search box.
+-- Left to right. sort: how the list is sorted when the toggle is turned on.
+-- turnsOn: the toggles turned on with it.
 ns.BuyToggles = {
+	{ id = "suggested", label = L.BUY_SUGGESTED, tip = L.BUY_SUGGESTED_TIP, sort = { id = "gain", descending = true }, turnsOn = { "usableOnly", "affordableOnly" } },
 	{ id = "usableOnly", label = L.BUY_CAN_USE, tip = L.BUY_CAN_USE_TIP },
 	{ id = "affordableOnly", label = L.BUY_CAN_AFFORD, tip = L.BUY_CAN_AFFORD_TIP },
+	{ id = "betterOnly", label = L.BUY_BETTER, tip = L.BUY_BETTER_TIP },
+	{ id = "nearLevel", label = L.BUY_NEAR_LEVEL, tip = L.BUY_NEAR_LEVEL_TIP },
 	{ id = "dealsOnly", label = L.BUY_DEALS, tip = L.BUY_DEALS_TIP },
 }
