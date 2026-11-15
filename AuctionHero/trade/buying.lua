@@ -107,10 +107,20 @@ function goods.TimedOut()
 end
 
 goods.events = {
+	-- The first quote leads to the confirm. The server can quote again while
+	-- the confirm is showing (Blizzard's own dialog watches for it); the newest
+	-- quote is what a confirm spends, so it replaces what is shown. A rise is
+	-- said out loud, with how much, so the confirm button is never pressed on
+	-- a total lower than the real one.
 	COMMODITY_PRICE_UPDATED = function(unit, total)
-		if Buying.state.phase == "quoting" then
+		local phase = Buying.state.phase
+		if phase == "quoting" then
 			attempt = attempt + 1
 			Publish("confirm", L.BUY_CONFIRM_PRICE, { unit = unit, total = total })
+		elseif phase == "confirm" and total ~= Buying.state.total then
+			local rise = total - (Buying.state.total or 0)
+			ns.EventLog:Note("commodity price changed", order.itemID, Buying.state.total, total)
+			Publish("confirm", rise > 0 and L.BUY_PRICE_ROSE:format(ns.PlainMoney(rise)) or L.BUY_CONFIRM_PRICE, { unit = unit, total = total })
 		end
 	end,
 	COMMODITY_PRICE_UNAVAILABLE = function()

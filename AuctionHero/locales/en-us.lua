@@ -533,6 +533,7 @@ L.CMD_HELP_OPTIONS = "/ah options  open the options"
 -- Buying
 L.BUY_QUOTING = "Asking the auction house for the price..."
 L.BUY_CONFIRM_PRICE = "This is the price right now. Press again to buy."
+L.BUY_PRICE_ROSE = "The price just went up by %s. Check the new total, then press again to buy."
 L.BUY_CONFIRM_BUTTON = "Confirm: %s for %s"
 L.BUY_BUYING = "Buying..."
 L.BUY_DONE = "Bought. It is in your mail."

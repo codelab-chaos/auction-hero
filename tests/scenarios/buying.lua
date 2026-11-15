@@ -62,3 +62,22 @@ local before = #BUYS
 ns.Buying:Start(order)
 check("closed auction house", phase(), "failed")
 check("nothing sent when closed", #BUYS, before)
+
+-- The server can quote again while the confirm is showing. The newest quote
+-- is what a confirm spends, so it is the one shown, and a rise is said out loud.
+OpenAuctionHouse()
+MOCK.quoteUnit = 7
+ns.Buying:Start({ key = "2001:Copper Ore", itemID = 2001, quantity = 10 })
+Tick(2)
+check("a quote to confirm", phase(), "confirm")
+check("at the first price", ns.Buying.state.total, 70)
+FireEvent("COMMODITY_PRICE_UPDATED", 9, 90)
+check("still waiting for a confirm", phase(), "confirm")
+check("now at the new total", ns.Buying.state.total, 90)
+checkMatch("and it says the price went up", ns.Buying.state.message, "went up by")
+FireEvent("COMMODITY_PRICE_UPDATED", 8, 80)
+check("a drop is shown too", ns.Buying.state.total, 80)
+check("without a warning", ns.Buying.state.message, ns.L.BUY_CONFIRM_PRICE)
+ns.Buying:Confirm()
+Tick(2)
+check("and the confirm goes through", phase(), "done")
