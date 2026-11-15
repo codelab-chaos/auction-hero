@@ -30,3 +30,13 @@ OpenAuctionHouse()
 before = #SEARCHES
 ShowTab("sell")
 checkTrue("the Sell tab asked for its first item", #SEARCHES > before)
+
+-- Another item's search answer is not taken as this one's.
+FireEvent("AUCTION_HOUSE_CLOSED")
+OpenAuctionHouse()
+ns.SellSearch:Request("2003:Light Leather")
+check("sent for the leather", ns.SellSearch.state.phase, "sent")
+FireEvent("COMMODITY_SEARCH_RESULTS_UPDATED", 9999)
+check("an answer about another item is ignored", ns.SellSearch.state.phase, "sent")
+FireEvent("COMMODITY_SEARCH_RESULTS_UPDATED", 2003)
+check("its own answer is taken", ns.SellSearch.state.phase, "done")

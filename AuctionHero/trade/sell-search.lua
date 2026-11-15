@@ -107,7 +107,7 @@ local frame = CreateFrame("Frame")
 for _, event in ipairs({ "AUCTION_HOUSE_NEW_RESULTS_RECEIVED", "ITEM_SEARCH_RESULTS_UPDATED", "COMMODITY_SEARCH_RESULTS_UPDATED", "AUCTION_HOUSE_THROTTLED_SYSTEM_READY" }) do
 	pcall(frame.RegisterEvent, frame, event)
 end
-frame:SetScript("OnEvent", function(_, event)
+frame:SetScript("OnEvent", function(_, event, subject)
 	if not wanted then
 		return
 	end
@@ -118,6 +118,12 @@ frame:SetScript("OnEvent", function(_, event)
 		return
 	end
 	if SellSearch.state.phase ~= "sent" or (event == "COMMODITY_SEARCH_RESULTS_UPDATED") ~= wanted.commodity then
+		return
+	end
+	-- The Buy tab, a live check and the game's own window search too. Only an
+	-- answer about this item counts: the event names the item searched for.
+	local itemID = wanted.commodity and subject or (type(subject) == "table" and subject.itemID)
+	if itemID and itemID ~= wanted.itemID then
 		return
 	end
 	local ok, listings, count = pcall(wanted.commodity and ReadCommodity or ReadItems)
