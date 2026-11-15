@@ -21,21 +21,29 @@ ns.ScanShield = {
 	quipSeconds = 4, -- how long each quip stays
 	doneSeconds = 2.5, -- how long the result shows before the shield lifts
 	coinIcon = ns.Theme.brandIcon, -- the brand coin, see data\theme.lua
-	-- While the scan runs, small coins rain onto the brand coin. Each drop
-	-- falls the slot's height in fallSeconds, speeding up as it goes, and
-	-- fades over the last fadeShare of its fall. The drops are spread evenly
-	-- through one fall; x is each drop's offset from the slot's middle.
+	-- While the scan runs, a light rain of coins sprinkles down the whole card,
+	-- behind its text. Each drop starts at the top edge somewhere along it,
+	-- falls the card's height in a time between fallSeconds' two values,
+	-- sways a little, fades in at the top and out before the bottom, then
+	-- starts again somewhere else. Sizes and coins are picked per fall; a coin
+	-- listed more often falls more often.
 	coinRain = {
-		slot = 32, -- the brand coin's size, and the height the drops fall
-		size = 12,
-		fallSeconds = 1.1,
-		fadeShare = 0.35,
-		drops = {
-			{ icon = "Interface\\MoneyFrame\\UI-GoldIcon", x = -7 },
-			{ icon = "Interface\\MoneyFrame\\UI-SilverIcon", x = 6 },
-			{ icon = "Interface\\MoneyFrame\\UI-GoldIcon", x = 1 },
-			{ icon = "Interface\\MoneyFrame\\UI-CopperIcon", x = -3 },
-			{ icon = "Interface\\MoneyFrame\\UI-GoldIcon", x = 9 },
+		count = 12,
+		fallSeconds = { 3.2, 5 },
+		size = { 8, 13 },
+		alpha = 0.55, -- at its brightest: light, so the text stays easy to read
+		fadeIn = 0.12, -- share of the fall spent fading in
+		fadeOut = 0.3, -- and fading out
+		sway = 5, -- how far a drop drifts left and right
+		swaySeconds = 2.4, -- one drift there and back
+		margin = 10, -- kept clear at the card's edges
+		icons = {
+			"Interface\\MoneyFrame\\UI-GoldIcon",
+			"Interface\\MoneyFrame\\UI-GoldIcon",
+			"Interface\\MoneyFrame\\UI-GoldIcon",
+			"Interface\\MoneyFrame\\UI-SilverIcon",
+			"Interface\\MoneyFrame\\UI-SilverIcon",
+			"Interface\\MoneyFrame\\UI-CopperIcon",
 		},
 	},
 	stageIcons = {

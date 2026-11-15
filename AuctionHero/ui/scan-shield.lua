@@ -71,30 +71,49 @@ local function Detail(now)
 end
 
 -- ========= Coin rain ========================================================
--- Where a drop is in its fall (0 at the top, 1 landed): how far down the
--- slot it is, speeding up like a real fall, and how faded it is by then.
-local function Drop(share)
+-- A number between a range's two values, picked at random.
+local function Between(range)
+	return range[1] + (range[2] - range[1]) * math.random()
+end
+
+-- A drop starting a new fall: somewhere new along the top, a new size and coin.
+local function NewFall(drop, cycle)
 	local rain = Rule.coinRain
-	local depth = -rain.size + (rain.slot + rain.size) * share * share
-	local fadeFrom = 1 - rain.fadeShare
-	local alpha = share < fadeFrom and 1 or (1 - share) / rain.fadeShare
-	return depth, alpha
+	drop.cycle = cycle
+	drop.size = math.floor(Between(rain.size) + 0.5)
+	drop.x = rain.margin + (Rule.card.width - 2 * rain.margin) * math.random()
+	drop:SetSize(drop.size, drop.size)
+	drop:SetTexture(rain.icons[math.random(#rain.icons)])
+end
+
+-- How bright a drop is at this share of its fall (0 at the top, 1 at the foot).
+local function Brightness(share)
+	local rain = Rule.coinRain
+	local fade = math.min(1, share / rain.fadeIn, (1 - share) / rain.fadeOut)
+	return rain.alpha * math.max(0, fade)
 end
 
 local function RainCoins(now)
 	local rain = Rule.coinRain
-	local count = #parts.drops
-	for index, drop in ipairs(parts.drops) do
-		local share = (now / rain.fallSeconds + (index - 1) / count) % 1
-		local depth, alpha = Drop(share)
+	local fall = Rule.card.height - 2 * rain.margin
+	for _, drop in ipairs(parts.drops) do
+		local position = now / drop.seconds + drop.offset
+		local cycle = math.floor(position)
+		if drop.cycle ~= cycle then
+			NewFall(drop, cycle)
+		end
+		local share = position - cycle
+		local sway = rain.sway * math.sin((now / rain.swaySeconds + drop.offset) * 2 * math.pi)
 		drop:ClearAllPoints()
-		drop:SetPoint("TOP", parts.chute, "TOP", rain.drops[index].x, -depth)
-		drop:SetAlpha(alpha)
+		drop:SetPoint("TOP", parts.card, "TOPLEFT", drop.x + sway, -(rain.margin + (fall - drop.size) * share))
+		drop:SetAlpha(Brightness(share))
 	end
 end
 
-local function StopRain()
-	parts.chute:Hide()
+local function ShowRain(shown)
+	for _, drop in ipairs(parts.drops) do
+		drop:SetShown(shown)
+	end
 end
 
 -- ========= Painting =========================================================
@@ -174,17 +193,17 @@ local function Build()
 	parts.coin:SetPoint("TOPLEFT", pad, -pad)
 	parts.coin:SetTexture(Rule.coinIcon)
 
-	-- The coins raining onto the brand coin, clipped to its slot.
+	-- The coin rain: drawn on the card above its fill and below its text and
+	-- bar, so it reads as a light sprinkle behind everything. Each drop keeps
+	-- its own speed, and starts part way through a fall so they never line up.
 	local rain = Rule.coinRain
-	parts.chute = CreateFrame("Frame", nil, card)
-	parts.chute:SetSize(rain.slot, rain.slot)
-	parts.chute:SetPoint("CENTER", parts.coin, "CENTER")
-	parts.chute:SetClipsChildren(true)
+	parts.card = card
 	parts.drops = {}
-	for index, spec in ipairs(rain.drops) do
-		local drop = parts.chute:CreateTexture(nil, "OVERLAY")
-		drop:SetSize(rain.size, rain.size)
-		drop:SetTexture(spec.icon)
+	for index = 1, rain.count do
+		local drop = card:CreateTexture(nil, "BORDER")
+		drop.seconds = Between(rain.fallSeconds)
+		drop.offset = (index - 1) / rain.count + math.random() * 0.5
+		drop:SetAlpha(0)
 		parts.drops[index] = drop
 	end
 
@@ -290,7 +309,7 @@ local function Raise(state)
 		focus:ClearFocus()
 	end
 	parts.quip:SetText(NextQuip())
-	parts.chute:Show()
+	ShowRain(true)
 	shield:Show()
 end
 
@@ -304,7 +323,7 @@ end
 local function Finish()
 	run.finishedAt = GetTime()
 	parts.quip:SetText("")
-	StopRain()
+	ShowRain(false)
 	Paint()
 	local mine = run
 	C_Timer.After(Rule.doneSeconds, function()
