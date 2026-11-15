@@ -35,6 +35,13 @@ local function Owned()
 	return state.key and ns.Bags:Find(state.key)
 end
 
+-- Why there is no market to read yet (the scan is still being read, or there
+-- is none), or nil when there is one.
+local function MarketPending()
+	local market, reason = ns.Window:Market()
+	return not market and reason or nil
+end
+
 -- The market's view of the chosen item, or nil when nobody is selling it.
 local function Listed()
 	local market = ns.Window:Market()
@@ -427,7 +434,7 @@ PaintSummary = function()
 		parts.posting:Set(left, "")
 		parts.total:Set(L.SELL_BUYOUT, "")
 		parts.receive:Set("", "")
-		parts.warning:SetBody(L.SELL_NO_PRICE, C.muted)
+		parts.warning:SetBody(MarketPending() or L.SELL_NO_PRICE, C.muted)
 		parts.warning:Show()
 		return
 	end
@@ -593,7 +600,7 @@ PaintLadder = function()
 		You()
 	end
 
-	local note = L.SELL_NOT_LISTED
+	local note = MarketPending() or L.SELL_NOT_LISTED
 	if listed then
 		note = unitsAhead == 0 and L.SELL_CHEAPEST or L.SELL_AHEAD:format(ns.Comma(unitsAhead))
 	end

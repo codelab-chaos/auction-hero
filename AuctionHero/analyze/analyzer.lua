@@ -52,6 +52,7 @@ Bus:On("SNAPSHOT_CHANGED", function()
 			return
 		end
 		ns.Print("analysis failed: " .. message)
+		ns.EventLog:Note("analysis failed", message)
 		ns.AnalysisStatus = { phase="error", message=message }
 		Bus:Fire("ANALYSIS_STATE", false)
 		Bus:Fire("ANALYSIS_READY")

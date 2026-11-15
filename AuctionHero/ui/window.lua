@@ -180,11 +180,21 @@ local function UpdateScanBar(state)
 		statusText:SetText(StatusText[state.phase](state))
 		statusText:SetTextColor(unpack(state.phase == "failed" and C.bad or C.muted))
 	elseif not running then
-		-- Beside the button: only when the last scan was. The rest of what is
-		-- known about it sits at the right of the footer.
+		-- Beside the button: only when the last scan was, or that it is still
+		-- being read. The rest of what is known about it sits at the right of
+		-- the footer.
+		local analysis = ns.AnalysisStatus and ns.AnalysisStatus.phase
 		local age = ScanAge()
-		statusText:SetText(age and ns.Ago(age) or "")
-		statusText:SetTextColor(unpack(C.muted))
+		if analysis == "loading" then
+			statusText:SetText(L.WIN_ANALYZING)
+			statusText:SetTextColor(unpack(C.muted))
+		elseif analysis == "error" then
+			statusText:SetText(L.WIN_ANALYSIS_FAILED)
+			statusText:SetTextColor(unpack(C.bad))
+		else
+			statusText:SetText(age and ns.Ago(age) or "")
+			statusText:SetTextColor(unpack(C.muted))
+		end
 	end
 	if footerStatus then
 		footerStatus:SetText(IdleStatus())
