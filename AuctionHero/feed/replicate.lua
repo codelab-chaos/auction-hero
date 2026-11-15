@@ -1,5 +1,8 @@
 -- Replicate fetcher: downloads every auction with C_AuctionHouse.ReplicateItems.
 -- Runs inside a job (see jobs.lua), so it can wait and spread work over frames.
+-- The game answers with one row per auction (the source's wire schema). Once
+-- they are all read, they are folded into the shape a scan is kept in (the
+-- source's schema): one entry per distinct item, one row per distinct listing.
 -- Returns rows and an info table, or nil and a failure reason key.
 local _, ns = ...
 local Jobs = ns.Jobs
@@ -91,8 +94,66 @@ local function ResolveCommodities(items, source, ctx)
 	end
 end
 
+-- Folds one row per auction into the kept shape. Which wire field goes where
+-- is read off the kept schema, so the two schemas are all that has to agree.
+-- Returns the rows and the variants they point into.
+local function Fold(wireRows, wire, kept)
+	local variantFields, rowFields = {}, {}
+	for position, field in ipairs(kept.fields) do
+		local from = wire.index[field.id]
+		if field.variant and from then
+			variantFields[field.variant] = from
+		elseif from and not field.virtual then
+			rowFields[#rowFields + 1] = { from = from, to = position }
+		end
+	end
+	local variantAt, copiesAt = kept.index.variant, kept.index.copies
+	local variants, variantByKey = {}, {}
+	local rows, rowByKey = {}, {}
+	local parts = {}
+
+	for count, wireRow in ipairs(wireRows) do
+		for place = 1, kept.variants do
+			parts[place] = tostring(wireRow[variantFields[place]])
+		end
+		local variantKey = table.concat(parts, "\031", 1, kept.variants)
+		local variant = variantByKey[variantKey]
+		if not variant then
+			local entry = {}
+			for place = 1, kept.variants do
+				entry[place] = wireRow[variantFields[place]]
+			end
+			variant = #variants + 1
+			variants[variant] = entry
+			variantByKey[variantKey] = variant
+		end
+
+		parts[1] = variant
+		for place, field in ipairs(rowFields) do
+			parts[place + 1] = tostring(wireRow[field.from])
+		end
+		local rowKey = table.concat(parts, "\031", 1, #rowFields + 1)
+		local row = rowByKey[rowKey]
+		if row then
+			row[copiesAt] = row[copiesAt] + 1
+		else
+			row = {}
+			for _, field in ipairs(rowFields) do
+				row[field.to] = wireRow[field.from]
+			end
+			row[variantAt], row[copiesAt] = variant, 1
+			rows[#rows + 1] = row
+			rowByKey[rowKey] = row
+		end
+		if count % 500 == 0 then
+			ns.Breathe()
+		end
+	end
+	return rows, variants
+end
+
 ns.Fetchers.replicate = function(source, ctx)
-	local schema = ns.Schemas[source.schema]
+	local schema = ns.Schemas[source.wire]
 	local info = { returns = 0, incomplete = 0 }
 	-- Save the actual client boundaries for offline expiry estimates. Raw
 	-- replicate bands are 1..4; the modern API takes the named enum values.
@@ -203,5 +264,8 @@ ns.Fetchers.replicate = function(source, ctx)
 	info.items = CatalogItems(rows, schema)
 	ResolveCommodities(info.items, source, ctx)
 
-	return rows, info
+	info.count = total -- auctions, which is more than the rows they fold into
+	local kept
+	kept, info.variants = Fold(rows, schema, ns.Schemas[source.schema])
+	return kept, info
 end

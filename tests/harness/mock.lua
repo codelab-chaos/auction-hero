@@ -155,17 +155,21 @@ C_AuctionHouse = {}
 function C_AuctionHouse.ReplicateItems()
 	if MOCK.replicateAnswers then C_Timer.After(0, function() C_Timer.After(0, function() FireEvent("REPLICATE_ITEM_LIST_UPDATE") end) end) end
 end
-function C_AuctionHouse.GetNumReplicateItems() return MOCK.empty and 0 or N end
+-- MOCK.repeats adds that many auctions to the end of the list, each an exact
+-- copy of one of the first few, the way a real auction house is full of
+-- identical auctions.
+local function Auction(i) return replicate[i < N and i or (i - N) % 7] end
+function C_AuctionHouse.GetNumReplicateItems() return MOCK.empty and 0 or N + (MOCK.repeats or 0) end
 function C_AuctionHouse.GetReplicateItemInfo(i)
-	local r = replicate[i]
+	local r = Auction(i)
 	if i % 9 == 0 and not firstRead[i] then
 		firstRead[i] = true
 		return nil, nil, r[3], r[4], nil, r[6], r[7], r[8], r[9], r[10], r[11], nil, nil, r[14], nil, r[16], r[17], false
 	end
 	return table.unpack(r, 1, 18)
 end
-function C_AuctionHouse.GetReplicateItemLink(i) if i % 9 == 0 and firstRead[i] == true and not replicate[i].linked then replicate[i].linked = true return nil end return replicate[i].link end
-function C_AuctionHouse.GetReplicateItemTimeLeft(i) return replicate[i].timeLeft end
+function C_AuctionHouse.GetReplicateItemLink(i) if i % 9 == 0 and firstRead[i] == true and not Auction(i).linked then Auction(i).linked = true return nil end return Auction(i).link end
+function C_AuctionHouse.GetReplicateItemTimeLeft(i) return Auction(i).timeLeft end
 function C_AuctionHouse.IsThrottledMessageSystemReady() return true end
 local browse, pages = {}, 0
 local function Page(from, to)

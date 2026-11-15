@@ -379,15 +379,11 @@ end
 
 function Builders.rows(view, state, snapshot, analysis)
 	local schema = ns.Schemas[snapshot.meta.schema]
-	local index = schema.index
 	local source = ns.SourceById[snapshot.meta.source]
-	local nameAt = index[source.listing.name]
-	local qualityAt = index[source.listing.quality]
+	local nameField, qualityField = source.listing.name, source.listing.quality
 	local rows = snapshot.rows
-
-	local function Read(row, field)
-		return row[index[field]]
-	end
+	-- Reads one field of a row, wherever the snapshot keeps it.
+	local Read = ns.RowReader(snapshot)
 
 	local elements = {}
 	local item = state.itemKey and analysis.derived.byKey[state.itemKey]
@@ -398,7 +394,7 @@ function Builders.rows(view, state, snapshot, analysis)
 	else
 		for position = 1, #rows do
 			local row = rows[position]
-			if Matches(row[nameAt], state.search) then
+			if Matches(Read(row, nameField), state.search) then
 				elements[#elements + 1] = row
 			end
 		end
@@ -409,11 +405,11 @@ function Builders.rows(view, state, snapshot, analysis)
 		info = L.INFO_ROWS_FOR:format(ns.Comma(#item.rows), item.name or item.key)
 	end
 
-	local itemIdAt = index[source.listing.itemID]
+	local itemIdField = source.listing.itemID
 	local usual = CellWith(Read)
 	local function Cell(row, column)
 		if column.format == "rowName" then
-			return QualityColor(row[qualityAt], row[nameAt] or ("item:" .. tostring(row[itemIdAt])))
+			return QualityColor(Read(row, qualityField), Read(row, nameField) or ("item:" .. tostring(Read(row, itemIdField))))
 		end
 		return usual(row, column)
 	end
@@ -422,15 +418,16 @@ function Builders.rows(view, state, snapshot, analysis)
 		columns = view.columnsBySource[snapshot.meta.source],
 		elements = elements,
 		Cell = Cell,
-		-- The tooltip lists every stored field of the row: the object model, as it arrived.
+		-- The tooltip lists every field kept for the row: the object model, as it is held.
 		Tip = function(row)
 			local lines = {}
-			for position = 1, schema.count do
-				local value = row[position]
-				local text = ns.EventLog.Describe(value, 0)
-				lines[#lines + 1] = ("|cffffd100%s|r = %s"):format(schema.fields[position].id, text)
+			for _, field in ipairs(schema.fields) do
+				if not field.virtual then
+					local text = ns.EventLog.Describe(Read(row, field.id), 0)
+					lines[#lines + 1] = ("|cffffd100%s|r = %s"):format(field.id, text)
+				end
 			end
-			return { title = row[nameAt] or L.UNKNOWN, lines = lines }
+			return { title = Read(row, nameField) or L.UNKNOWN, lines = lines }
 		end,
 		info = info,
 		filteredToItem = item ~= nil,

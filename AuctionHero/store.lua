@@ -1,8 +1,10 @@
 -- Store: the cache of downloads. It keeps the latest snapshot of each source,
 -- so a browse sweep never replaces a full scan, and saves them across reloads.
--- A snapshot is { meta = {...}, rows = { row, row, ... }, items = {...} }.
--- Rows follow the schema named in meta.schema (see data\schemas.lua). items is
--- optional: item id -> { type, subType, equipLoc, classID, subClassID }.
+-- A snapshot is { meta = {...}, rows = { row, row, ... }, items = {...}, variants = {...} }.
+-- Rows follow the schema named in meta.schema (see data\schemas.lua), and are
+-- read with ns.RowReader. items is optional: item id -> { type, subType,
+-- equipLoc, classID, subClassID }. variants is there for a schema whose rows
+-- point into it (a full scan): one entry per distinct item as listed.
 --
 -- One snapshot is "active": the one the views show.
 --
@@ -94,10 +96,10 @@ function Store:PatchItem(sourceId, itemID, rows, time, name)
 		return false
 	end
 	-- With a name, only that variant of the item is replaced.
-	local at, nameAt = schema.index.itemID, schema.index.name
+	local get = ns.RowReader(snapshot)
 	local kept = {}
 	for _, row in ipairs(snapshot.rows) do
-		if row[at] ~= itemID or (name and row[nameAt] ~= name) then
+		if get(row, "itemID") ~= itemID or (name and get(row, "name") ~= name) then
 			kept[#kept + 1] = row
 		end
 	end
@@ -157,8 +159,8 @@ Bus:On("READY", function()
 	end
 end)
 
-Bus:On("DOWNLOAD_FINISHED", function(meta, rows, items)
-	snapshots[meta.source] = { meta = meta, rows = rows, items = items }
+Bus:On("DOWNLOAD_FINISHED", function(meta, rows, items, variants)
+	snapshots[meta.source] = { meta = meta, rows = rows, items = items, variants = variants }
 	inMemoryOnly[meta.source] = true
 	activeId = meta.source
 	ns.db.lastFetch[meta.source] = meta.time

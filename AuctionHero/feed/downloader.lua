@@ -74,7 +74,7 @@ function Downloader:Start(sourceId)
 			schema = source.schema,
 			time = GetServerTime(),
 			elapsed = GetTime() - startedAt,
-			count = #rows,
+			count = info.count or #rows, -- auctions, however many rows they are kept as
 			place = ("%s / %s"):format(GetRealmName() or "?", UnitFactionGroup("player") or "?"),
 			build = BuildInfoText(),
 			returns = info.returns,
@@ -82,7 +82,7 @@ function Downloader:Start(sourceId)
 			stale = info.stale,
 			timeLeftBands = info.timeLeftBands,
 		}
-		Bus:Fire("DOWNLOAD_FINISHED", meta, rows, info.items)
+		Bus:Fire("DOWNLOAD_FINISHED", meta, rows, info.items, info.variants)
 		Report(source, "done", { count = meta.count, elapsed = meta.elapsed })
 	end, function(message)
 		Fail("FAIL_ERROR", message)

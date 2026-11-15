@@ -33,16 +33,16 @@ check("and their counts", points[2].units, 10)
 
 -- And in the saved scan, which says it was patched.
 local snapshot = ns.Store:GetSourceSnapshot("replicate")
-local at = ns.Schemas.replicate.index
+local get = ns.RowReader(snapshot)
 local rows, units = 0, 0
 for _, row in ipairs(snapshot.rows) do
-	if row[at.itemID] == 2001 then
-		rows, units = rows + 1, units + row[at.count]
+	if get(row, "itemID") == 2001 then
+		rows, units = rows + 1, units + get(row, "count") * get(row, "copies")
 	end
 end
 check("the saved scan has the live rows for the item", rows, 2)
 check("and their units", units, 13)
-check("other items are untouched", snapshot.rows[2][at.itemID] ~= nil, true)
+check("other items are untouched", get(snapshot.rows[2], "itemID") ~= nil, true)
 check("the scan notes the patch", snapshot.meta.patched[1].id, 2001)
 checkTrue("and when", snapshot.meta.patched[1].time ~= nil)
 check("the same table is what is saved", AuctionHeroDB.snapshots.replicate, snapshot)

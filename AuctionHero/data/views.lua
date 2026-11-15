@@ -72,6 +72,7 @@ ns.Views = {
 				{ field = "name", label = L.COL_ITEM, flex = true, format = "rowName" },
 				{ field = "itemID", label = L.COL_ID, width = 54, align = "RIGHT", format = "plain" },
 				{ field = "count", label = L.COL_COUNT, width = 46, align = "RIGHT", format = "number" },
+				{ field = "copies", label = L.COL_COPIES, width = 60, align = "RIGHT", format = "number" },
 				{ field = "buyoutPrice", label = L.COL_BUYOUT, width = 104, align = "RIGHT", format = "moneyOrBlank" },
 				{ field = "minBid", label = L.COL_MIN_BID, width = 104, align = "RIGHT", format = "money" },
 				{ field = "bidAmount", label = L.COL_BID, width = 96, align = "RIGHT", format = "moneyOrBlank" },

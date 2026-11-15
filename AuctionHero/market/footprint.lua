@@ -42,7 +42,7 @@ function Footprint:Read()
 	local memory = Memory()
 	return {
 		megabytes = memory and memory / BYTES_PER_MB,
-		auctions = snapshot and snapshot.rows and #snapshot.rows or 0,
+		auctions = snapshot and snapshot.rows and ns.AuctionCount(snapshot) or 0,
 		items = items,
 		points = points,
 		days = ns.History:GraphDays(),

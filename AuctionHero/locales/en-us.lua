@@ -81,6 +81,7 @@ ns.L = {
 	COL_DEAL = "Below median",
 	COL_ID = "ID",
 	COL_COUNT = "Count",
+	COL_COPIES = "Auctions",
 	COL_BUYOUT = "Buyout",
 	COL_UNIT = "Per unit",
 	COL_MIN_BID = "Min bid",

@@ -2,7 +2,9 @@
 -- The code that talks to the server lives in feed\<id>.lua and registers itself
 -- in ns.Fetchers under the same id.
 --
---   schema            which entry of ns.Schemas its rows follow
+--   schema            which entry of ns.Schemas its kept rows follow
+--   wire              which entry the game's own answer follows, when a scan
+--                     is read in one shape and kept in another (see feed\replicate.lua)
 --   cooldownSeconds   reported server cooldown, shown as a hint only
 --   timeoutSeconds    how long to wait for the server before giving up
 --   retrySeconds      wait between passes over rows whose data had not arrived
@@ -29,7 +31,8 @@ ns.Sources = {
 		id = "replicate",
 		label = L.SOURCE_REPLICATE,
 		tip = L.SOURCE_REPLICATE_TIP,
-		schema = "replicate",
+		schema = "listings",
+		wire = "replicate",
 		cooldownSeconds = 900,
 		timeoutSeconds = 45,
 		retrySeconds = 1.5,
@@ -53,6 +56,7 @@ ns.Sources = {
 			bid = "bidAmount",
 			-- No owner: the full scan never returns seller or bidder names.
 			timeLeft = "timeLeft",
+			copies = "copies",
 			link = "link",
 			icon = "texture",
 			level = "level",

@@ -66,23 +66,19 @@ end
 -- Returns one stats table per schema field, in schema order.
 function Profile:Run(snapshot)
 	local schema = ns.Schemas[snapshot.meta.schema]
-	local index = schema.index
 	local fields = schema.fields
+	local get = ns.RowReader(snapshot)
 	local all = {}
 	for position, field in ipairs(fields) do
 		all[position] = NewStats(position, field)
 	end
 
-	local parse = ns.Links.Parse
+	-- Every field is read the same way, wherever it is kept. A row that stands
+	-- for several identical auctions is still looked at once: this measures
+	-- what the fields hold, not how many auctions there are.
 	for count, row in ipairs(snapshot.rows) do
 		for position, field in ipairs(fields) do
-			local value
-			if field.virtual then
-				value = parse(row[index[field.virtual.from]])[field.virtual.part]
-			else
-				value = row[position]
-			end
-			Observe(all[position], value)
+			Observe(all[position], get(row, field.id))
 		end
 		if count % 100 == 0 then
 			ns.Breathe()

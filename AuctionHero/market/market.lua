@@ -83,29 +83,26 @@ local function Finish(item)
 	end
 end
 
--- Where each part of a listing sits in a row of this snapshot.
+-- Which field feeds each part of a listing in this snapshot, and the function
+-- that reads a field of one of its rows.
 local function Places(snapshot)
 	local source = ns.SourceById[snapshot.meta.source]
 	if not source or source.aggregated or not snapshot.rows then
 		return nil
 	end
-	local index = ns.Schemas[snapshot.meta.schema].index
-	local at = {}
-	for part, fieldId in pairs(source.listing) do
-		at[part] = index[fieldId]
-	end
-	return at, index
+	return source.listing, ns.RowReader(snapshot)
 end
 
--- Adds one raw row to the items being built.
-local function AddRow(items, byKey, row, at, index, catalog)
-	local name = row[at.name]
+-- Adds one row to the items being built. A row may stand for several
+-- identical auctions.
+local function AddRow(items, byKey, row, at, get, catalog)
+	local name = get(row, at.name)
 	-- A row whose details never arrived has no name and cannot be told
 	-- apart from its item's other variants, so it is left out.
 	if not name or name == "" then
 		return
 	end
-	local itemID = row[at.itemID]
+	local itemID = get(row, at.itemID)
 	local key = itemID .. ":" .. name
 	local item = byKey[key]
 	if not item then
@@ -114,12 +111,12 @@ local function AddRow(items, byKey, row, at, index, catalog)
 			key = key,
 			itemID = itemID,
 			name = name,
-			quality = row[at.quality],
-			icon = row[at.icon],
-			link = row[at.link],
-			level = row[at.level],
-			levelType = row[at.levelType],
-			usable = row[index.usable] == true,
+			quality = get(row, at.quality),
+			icon = get(row, at.icon),
+			link = get(row, at.link),
+			level = get(row, at.level),
+			levelType = get(row, at.levelType),
+			usable = get(row, "usable") == true,
 			type = known.type,
 			subType = known.subType,
 			classID = known.classID,
@@ -136,11 +133,12 @@ local function AddRow(items, byKey, row, at, index, catalog)
 		items[#items + 1] = item
 	end
 
-	local stack = math.max(1, row[at.quantity] or 1)
-	local buyout = row[at.buyout] or 0
-	item.listings = item.listings + 1
+	local stack = math.max(1, get(row, at.quantity) or 1)
+	local buyout = get(row, at.buyout) or 0
+	local copies = at.copies and get(row, at.copies) or 1
+	item.listings = item.listings + copies
 	if buyout > 0 then
-		local timeLeft = row[at.timeLeft] or 0
+		local timeLeft = get(row, at.timeLeft) or 0
 		local tierKey = stack .. ":" .. buyout .. ":" .. timeLeft
 		local tier = item.tierByKey[tierKey]
 		if not tier then
@@ -148,18 +146,18 @@ local function AddRow(items, byKey, row, at, index, catalog)
 			item.tierByKey[tierKey] = tier
 			item.tiers[#item.tiers + 1] = tier
 		end
-		tier.copies = tier.copies + 1
-		tier.units = tier.units + stack
-		item.units = item.units + stack
+		tier.copies = tier.copies + copies
+		tier.units = tier.units + stack * copies
+		item.units = item.units + stack * copies
 	else
-		item.bidOnly = item.bidOnly + 1
+		item.bidOnly = item.bidOnly + copies
 	end
 end
 
 -- Returns { items = {...}, byKey = {...} }, or nil when the snapshot's source
 -- has no individual auctions to build ladders from.
 function Market:Build(snapshot)
-	local at, index = Places(snapshot)
+	local at, get = Places(snapshot)
 	if not at then
 		return nil
 	end
@@ -167,7 +165,7 @@ function Market:Build(snapshot)
 	local items, byKey = {}, {}
 
 	for count, row in ipairs(snapshot.rows) do
-		AddRow(items, byKey, row, at, index, catalog)
+		AddRow(items, byKey, row, at, get, catalog)
 		if count % 200 == 0 then
 			ns.Breathe()
 		end
@@ -179,7 +177,7 @@ function Market:Build(snapshot)
 			ns.Breathe()
 		end
 	end
-	return { items = items, byKey = byKey, time = snapshot.meta.time, place = snapshot.meta.place, listings = #snapshot.rows, stale = snapshot.meta.stale }
+	return { items = items, byKey = byKey, time = snapshot.meta.time, place = snapshot.meta.place, listings = ns.AuctionCount(snapshot), stale = snapshot.meta.stale }
 end
 
 -- Replaces everything a built market holds for one item id with what these
@@ -189,7 +187,7 @@ end
 -- one, everything under the item id.
 -- Returns the items now held for that id, each marked with checkedAt.
 function Market:Patch(market, snapshot, itemID, rows, time, name)
-	local at, index = Places(snapshot)
+	local at, get = Places(snapshot)
 	if not at then
 		return {}
 	end
@@ -203,7 +201,7 @@ function Market:Patch(market, snapshot, itemID, rows, time, name)
 	end
 	local fresh, byKey = {}, {}
 	for _, row in ipairs(rows) do
-		AddRow(fresh, byKey, row, at, index, snapshot.items or {})
+		AddRow(fresh, byKey, row, at, get, snapshot.items or {})
 	end
 	for _, item in ipairs(fresh) do
 		Finish(item)

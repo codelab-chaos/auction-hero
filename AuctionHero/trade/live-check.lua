@@ -48,24 +48,18 @@ end
 
 -- A scan row for one live auction: a copy of a row the scan already has for
 -- the item (for its icon, quality and level), with the live details set.
-local function Row(template, at, details)
-	local row = {}
-	for position = 1, at.rowLength do
-		row[position] = template[position]
-	end
-	for field, value in pairs(details) do
-		row[at[field]] = value
-	end
-	return row
+local function Row(snapshot, template, details)
+	return ns.MakeRow(snapshot, template, details)
 end
 
 -- The scan's rows for this item, by name, to copy from.
-local function Templates(snapshot, at)
+local function Templates(snapshot)
+	local get = ns.RowReader(snapshot)
 	local byName, any = {}, nil
 	for _, row in ipairs(snapshot.rows) do
-		if row[at.itemID] == wanted.itemID then
+		if get(row, "itemID") == wanted.itemID then
 			any = any or row
-			local name = row[at.name]
+			local name = get(row, "name")
 			if name and name ~= "" then
 				byName[name] = byName[name] or row
 			end
@@ -77,8 +71,8 @@ end
 -- The live auctions as scan rows, or nil when they could not be read. For
 -- single items it also returns the auctions themselves by item name, each
 -- { auctionID, buyout, quantity, mine }, for the Buy button to use.
-local function ReadRows(snapshot, at)
-	local byName, any = Templates(snapshot, at)
+local function ReadRows(snapshot)
+	local byName, any = Templates(snapshot)
 	if not any then
 		return nil
 	end
@@ -88,7 +82,7 @@ local function ReadRows(snapshot, at)
 		for index = 1, ok and count or 0 do
 			local found, info = pcall(C_AuctionHouse.GetCommoditySearchResultInfo, wanted.itemID, index)
 			if found and info and info.unitPrice and (info.quantity or 0) > 0 then
-				rows[#rows + 1] = Row(any, at, { count = info.quantity, buyoutPrice = info.unitPrice * info.quantity, minBid = 0, bidAmount = 0, timeLeft = 4 })
+				rows[#rows + 1] = Row(snapshot, any, { count = info.quantity, buyoutPrice = info.unitPrice * info.quantity, minBid = 0, bidAmount = 0, timeLeft = 4 })
 			end
 		end
 		return rows
@@ -107,7 +101,7 @@ local function ReadRows(snapshot, at)
 				quantity = math.max(1, info.quantity or 1),
 				mine = info.containsOwnerItem == true,
 			})
-			rows[#rows + 1] = Row(byName[name] or any, at, {
+			rows[#rows + 1] = Row(snapshot, byName[name] or any, {
 				name = name,
 				link = info.itemLink,
 				count = math.max(1, info.quantity or 1),
@@ -131,8 +125,6 @@ local function Answered()
 	if not (snapshot and market and schema) then
 		return Finish()
 	end
-	-- Where each field sits in a row, and how long a row is.
-	local at = setmetatable({ rowLength = schema.count }, { __index = schema.index })
 	local gone = wanted.itemKey == false -- the auction house lists none of it
 	-- A long list comes a page at a time. Patching in part of it would wipe
 	-- out what is on the pages not yet read, so ask for the rest first.
@@ -152,7 +144,7 @@ local function Answered()
 	if gone then
 		rows, auctions = {}, {}
 	else
-		rows, auctions, problem = ReadRows(snapshot, at)
+		rows, auctions, problem = ReadRows(snapshot)
 	end
 	local itemID = wanted.itemID
 	LiveCheck.problem = not rows and { itemID = itemID, text = ns.L.STAT_CHECK_UNREAD:format(problem or "") } or nil

@@ -45,45 +45,46 @@ local Classifiers = {
 }
 
 -- ========= Reading rows =====================================================
--- Builds a function that fills one reusable listing table from a raw row.
-local function ListingReader(source, schema)
-	local at = {}
-	for part, fieldId in pairs(source.listing) do
-		at[part] = schema.index[fieldId]
-	end
+-- Builds a function that fills one reusable listing table from a row.
+-- at names the field that feeds each part of a listing, and get reads a field
+-- of a row wherever it is kept (see ns.RowReader).
+local function ListingReader(source, get)
+	local at = source.listing
 	local parse = ns.Links.Parse
 	local listing = {}
 
 	return function(row)
-		local quantity = row[at.quantity] or 1
+		local quantity = get(row, at.quantity) or 1
 		if quantity < 1 then
 			quantity = 1
 		end
-		local link = at.link and row[at.link]
+		local link = at.link and get(row, at.link)
 		local parsed = parse(link)
-		local buyout = row[at.buyout] or 0
+		local buyout = get(row, at.buyout) or 0
 
-		local name = row[at.name]
+		local name = get(row, at.name)
 		if name == "" then
 			name = nil -- the row's data had not arrived
 		end
-		listing.itemID = row[at.itemID]
-		listing.suffix = (at.suffix and row[at.suffix]) or parsed.suffix or 0
+		listing.itemID = get(row, at.itemID)
+		listing.suffix = (at.suffix and get(row, at.suffix)) or parsed.suffix or 0
 		listing.name = name
-		listing.quality = row[at.quality]
+		listing.quality = get(row, at.quality)
 		listing.quantity = quantity
+		-- A row may stand for several identical auctions.
+		listing.copies = at.copies and get(row, at.copies) or 1
 		listing.buyout = buyout
 		listing.unit = buyout > 0 and (source.priceIsPerStack and buyout / quantity or buyout) or nil
 		listing.value = source.priceIsPerStack and buyout or buyout * quantity
-		listing.bid = at.bid and row[at.bid] or 0
-		listing.owner = at.owner and row[at.owner]
-		listing.timeLeft = at.timeLeft and row[at.timeLeft]
+		listing.bid = at.bid and get(row, at.bid) or 0
+		listing.owner = at.owner and get(row, at.owner)
+		listing.timeLeft = at.timeLeft and get(row, at.timeLeft)
 		listing.link = link
 		listing.linkType = parsed.type
 		if at.isCommodity then
-			listing.kind = (row[at.isPet] and "pet")
-				or (row[at.isCommodity] and "commodity")
-				or (row[at.isEquipment] and "equipment")
+			listing.kind = (get(row, at.isPet) and "pet")
+				or (get(row, at.isCommodity) and "commodity")
+				or (get(row, at.isEquipment) and "equipment")
 				or "other"
 		end
 		-- What tells this variant of the item id apart from the others, if anything.
@@ -167,11 +168,11 @@ local function FinishItem(item)
 end
 
 -- ========= Groups ===========================================================
-local function CountInto(counts, key)
+local function CountInto(counts, key, times)
 	if key == nil then
 		key = false -- shown as "Unknown"
 	end
-	counts[key] = (counts[key] or 0) + 1
+	counts[key] = (counts[key] or 0) + (times or 1)
 end
 
 local function SortKey(value)
@@ -228,8 +229,7 @@ Derive.Applies = Applies
 -- ========= Run ==============================================================
 function Derive:Run(snapshot)
 	local source = ns.SourceById[snapshot.meta.source]
-	local schema = ns.Schemas[snapshot.meta.schema]
-	local read = ListingReader(source, schema)
+	local read = ListingReader(source, ns.RowReader(snapshot))
 
 	local groupDefinitions, groupCounts = {}, {}
 	for _, definition in ipairs(ns.SummaryGroups) do
@@ -241,7 +241,7 @@ function Derive:Run(snapshot)
 
 	local items, byKey = {}, {}
 	local totals = {
-		rows = #snapshot.rows,
+		rows = ns.AuctionCount(snapshot),
 		units = 0,
 		value = 0,
 		withBuyout = 0,
@@ -262,28 +262,30 @@ function Derive:Run(snapshot)
 			items[#items + 1] = item
 		end
 
-		item.listings = item.listings + 1
-		item.quantity = item.quantity + listing.quantity
+		-- Everything below counts auctions, so a row counts once per copy.
+		local copies = listing.copies
+		item.listings = item.listings + copies
+		item.quantity = item.quantity + listing.quantity * copies
 		item.rows[#item.rows + 1] = position
 		item.name = item.name or listing.name
 		item.link = item.link or listing.link
-		totals.units = totals.units + listing.quantity
+		totals.units = totals.units + listing.quantity * copies
 
 		if listing.unit then
 			item.prices[#item.prices + 1] = listing.unit
-			item.weights[#item.weights + 1] = listing.quantity
-			item.value = item.value + listing.value
-			totals.value = totals.value + listing.value
-			totals.withBuyout = totals.withBuyout + 1
+			item.weights[#item.weights + 1] = listing.quantity * copies
+			item.value = item.value + listing.value * copies
+			totals.value = totals.value + listing.value * copies
+			totals.withBuyout = totals.withBuyout + copies
 		else
-			item.bidOnly = item.bidOnly + 1
-			totals.bidOnly = totals.bidOnly + 1
+			item.bidOnly = item.bidOnly + copies
+			totals.bidOnly = totals.bidOnly + copies
 		end
 		if listing.bid > 0 then
-			totals.withBids = totals.withBids + 1
+			totals.withBids = totals.withBids + copies
 		end
 		if listing.quantity > 1 then
-			totals.stacked = totals.stacked + 1
+			totals.stacked = totals.stacked + copies
 		end
 
 		local owner = listing.owner
@@ -299,7 +301,7 @@ function Derive:Run(snapshot)
 		end
 
 		for _, definition in ipairs(groupDefinitions) do
-			CountInto(groupCounts[definition.id], Classifiers[definition.by](listing))
+			CountInto(groupCounts[definition.id], Classifiers[definition.by](listing), copies)
 		end
 
 		if position % 100 == 0 then
