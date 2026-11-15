@@ -83,7 +83,9 @@ local function NewFall(drop, cycle)
 	drop.size = math.floor(Between(rain.size) + 0.5)
 	drop.x = rain.margin + (Rule.card.width - 2 * rain.margin) * math.random()
 	drop:SetSize(drop.size, drop.size)
-	drop:SetTexture(rain.icons[math.random(#rain.icons)])
+	local icon = rain.icons[math.random(#rain.icons)]
+	drop:SetTexture(icon)
+	drop.shine:SetTexture(icon)
 end
 
 -- How bright a drop is at this share of its fall (0 at the top, 1 at the foot).
@@ -104,15 +106,19 @@ local function RainCoins(now)
 		end
 		local share = position - cycle
 		local sway = rain.sway * math.sin((now / rain.swaySeconds + drop.offset) * 2 * math.pi)
+		local depth = (fall - drop.size) * share ^ rain.gravity -- falling under gravity
+		local bright = Brightness(share)
 		drop:ClearAllPoints()
-		drop:SetPoint("TOP", parts.card, "TOPLEFT", drop.x + sway, -(rain.margin + (fall - drop.size) * share))
-		drop:SetAlpha(Brightness(share))
+		drop:SetPoint("TOP", parts.card, "TOPLEFT", drop.x + sway, -(rain.margin + depth))
+		drop:SetAlpha(bright)
+		drop.shine:SetAlpha(bright * rain.shine)
 	end
 end
 
 local function ShowRain(shown)
 	for _, drop in ipairs(parts.drops) do
 		drop:SetShown(shown)
+		drop.shine:SetShown(shown)
 	end
 end
 
@@ -201,9 +207,11 @@ local function Build()
 	parts.drops = {}
 	for index = 1, rain.count do
 		local drop = card:CreateTexture(nil, "BORDER")
-		if rain.glow then
-			drop:SetBlendMode("ADD")
-		end
+		-- The shine: the same coin added on top, following it exactly.
+		drop.shine = card:CreateTexture(nil, "BORDER", nil, 1)
+		drop.shine:SetBlendMode("ADD")
+		drop.shine:SetAllPoints(drop)
+		drop.shine:SetAlpha(0)
 		drop.seconds = Between(rain.fallSeconds)
 		drop.offset = (index - 1) / rain.count + math.random() * 0.5
 		drop:SetAlpha(0)

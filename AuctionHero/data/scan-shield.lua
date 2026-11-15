@@ -21,21 +21,23 @@ ns.ScanShield = {
 	quipSeconds = 4, -- how long each quip stays
 	doneSeconds = 2.5, -- how long the result shows before the shield lifts
 	coinIcon = ns.Theme.brandIcon, -- the brand coin, see data\theme.lua
-	-- While the scan runs, a light rain of coins sprinkles down the whole card,
-	-- behind its text. Each drop starts at the top edge somewhere along it,
-	-- falls the card's height in a time between fallSeconds' two values,
-	-- sways a little, fades in at the top and out before the bottom, then
-	-- starts again somewhere else. Sizes and coins are picked per fall; a coin
-	-- listed more often falls more often. Gold only, at full brightness.
+	-- While the scan runs, gold coins rain down the whole card, behind its text.
+	-- Each drop starts at the top edge somewhere along it and falls the
+	-- card's height under gravity (slow at first, faster and faster: depth
+	-- grows with the square of time, to the power gravity), in a time between
+	-- fallSeconds' two values. It sways a little, is bright almost at once and
+	-- fades only near the bottom, then starts again somewhere else. A drop is
+	-- the coin plus an added copy of it on top (shine), so it gleams.
 	coinRain = {
 		count = 12,
-		fallSeconds = { 3.2, 5 },
-		size = { 8, 13 },
+		fallSeconds = { 1.6, 2.6 },
+		gravity = 2, -- 1 falls at a steady speed, 2 like a dropped coin
+		size = { 12, 18 },
 		alpha = 1, -- at its brightest
-		glow = true, -- drawn added onto the card, so the gold shines
-		fadeIn = 0.12, -- share of the fall spent fading in
-		fadeOut = 0.3, -- and fading out
-		sway = 5, -- how far a drop drifts left and right
+		shine = 0.6, -- how strong the added copy on top is, 0 for none
+		fadeIn = 0.03, -- share of the fall spent fading in
+		fadeOut = 0.15, -- and fading out
+		sway = 4, -- how far a drop drifts left and right
 		swaySeconds = 2.4, -- one drift there and back
 		margin = 10, -- kept clear at the card's edges
 		icons = {
