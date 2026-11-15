@@ -40,7 +40,9 @@ end
 
 -- How many days back an item's graph points reach: the player's choice, else the default.
 function History:GraphDays()
-	return ns.db.graphDays or ns.HistoryRule.graphPoints
+	local rule = ns.HistoryRule
+	-- A longer length saved before the cap is read as the cap.
+	return math.min(ns.db.graphDays or rule.graphPoints, rule.graphPointsMax)
 end
 
 -- Sets how many days of points to keep, within the allowed range. Records are

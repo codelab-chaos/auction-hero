@@ -65,7 +65,10 @@ local function numberRow(id)
 	end)[1]
 end
 local daysRow = numberRow("historyDays")
-check("the lengths offered", #ns.HistoryRule.dayChoices, 6)
+check("the lengths offered", #ns.HistoryRule.dayChoices, 3)
+AuctionHeroDB.graphDays = 180
+check("a longer length saved before the cap reads as the cap", ns.History:GraphDays(), 30)
+AuctionHeroDB.graphDays = nil
 local seven = ButtonNamed("7 days")
 seven.scripts.OnClick(seven)
 check("picking one sets it", ns.History:GraphDays(), 7)
