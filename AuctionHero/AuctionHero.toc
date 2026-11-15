@@ -27,6 +27,7 @@ data\ledger.lua
 data\tooltip.lua
 data\facets.lua
 data\gear.lua
+data\scan-shield.lua
 feed\links.lua
 feed\replicate.lua
 feed\browse.lua
@@ -59,6 +60,7 @@ ui\view-model.lua
 ui\kit.lua
 ui\chart.lua
 ui\window.lua
+ui\scan-shield.lua
 ui\tabs\buy.lua
 ui\tabs\sell.lua
 ui\tabs\auctions.lua

@@ -244,8 +244,14 @@ local function Build()
 		SavePosition()
 	end)
 
+	-- The brand: a gold coin, then the name.
+	local brand = title:CreateTexture(nil, "ARTWORK")
+	brand:SetSize(Theme.brandIconSize, Theme.brandIconSize)
+	brand:SetPoint("LEFT", 10, 0)
+	brand:SetTexture(Theme.brandIcon)
+	brand:SetTexCoord(0.07, 0.93, 0.07, 0.93) -- without the icon's own frame
 	local name = Kit.Text(title, "title", C.accent)
-	name:SetPoint("LEFT", 12, 0)
+	name:SetPoint("LEFT", brand, "RIGHT", 6, 0)
 	name:SetText(L.TITLE)
 
 	-- The game's own red close button, so closing looks like every other window.

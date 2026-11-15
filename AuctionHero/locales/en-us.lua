@@ -626,3 +626,37 @@ L.BUY_NOT_FOUND = "Could not find this item at the auction house. Looked up by n
 L.BUY_PRICES_UPDATED = "Prices updated"
 L.BUY_PRICE_WENT = "The one at %s is gone. %s for sale now, from %s."
 L.BUY_PROBLEM = "The auction house reported a problem (code %s). Your gold was %s before and is %s now, so it does not look bought. Check your mail to be sure."
+
+-- The scan shield: covers the tabs while a scan runs
+L.SHIELD_TITLE = "Scanning the auction house"
+L.SHIELD_DONE_TITLE = "Scan complete"
+L.SHIELD_CANCELLING = "Cancelling..."
+L.SHIELD_CLOSE = "Close"
+L.SHIELD_STAGE_ASK = "Ask the server for every auction"
+L.SHIELD_STAGE_READ = "Read the auctions"
+L.SHIELD_STAGE_DETAILS = "Fill in item details"
+L.SHIELD_STAGE_PRICE = "Price it all against your history"
+L.SHIELD_ASKING = "The server is packing up every auction..."
+L.SHIELD_READING = "%s of %s auctions"
+L.SHIELD_RESOLVING = "%s auctions still need item details (pass %d)"
+L.SHIELD_PRICING = "Comparing %s auctions with what they usually go for"
+L.SHIELD_RATE = "%s a second"
+L.SHIELD_ELAPSED = "%s so far"
+L.SHIELD_LAST = "Last scan: %s auctions"
+L.SHIELD_RESULT = "%s auctions in %s"
+L.SHIELD_RESULT_CHANGE = "%s auctions in %s, %s since the last scan"
+L.SHIELD_TIP = "The tabs are paused so nothing changes under you while the scan runs. Cancel stops the scan; the last one stays in use."
+L.SHIELD_QUIPS = {
+	"Counting every copper ore in town...",
+	"Asking the auctioneer very nicely...",
+	"Shaking out the linen cloth...",
+	"Weighing gold by the coin...",
+	"Peeking under every stack...",
+	"Sorting the treasure from the trash...",
+	"Looking for swords priced like daggers...",
+	"Haggling with nobody in particular...",
+	"Reading the fine print on every bid...",
+	"Polishing the good stuff...",
+	"Checking which bargains are real...",
+	"Dusting off forgotten recipes...",
+}
