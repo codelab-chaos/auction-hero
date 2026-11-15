@@ -55,6 +55,7 @@ Copy the `AuctionHero` folder into
 | `tests/` | The addon's tests, run against a mocked game client |
 | `docs/` | Research notes and how the window is put together |
 | `scripts/deploy.sh` | Copies the addon into a local game install |
+| `scripts/package.py` | Builds an installable ZIP (into `dist/`) |
 
 ## Development
 
@@ -71,6 +72,37 @@ The tests load the addon's real files into a Lua interpreter with a fake game
 client and drive it the way a player would. They catch broken behavior and Lua
 errors. They cannot show how the window looks or prove what the real server
 does, so anything that talks to the server is also checked in game.
+
+## Builds and releases
+
+Every push to `main` and every pull request runs Lua 5.1 syntax checks, the
+addon tests, packaging tests and an installable ZIP build. Download test
+builds from the **Checks and package** workflow's `AuctionHero-build`
+artifact on the Actions page. These builds do not publish a release.
+
+To build a ZIP locally (the source's TOC is not changed):
+
+```sh
+python3 scripts/package.py                         # version from the TOC
+python3 scripts/package.py --version 0.2.0-alpha.1 # stamped into the ZIP only
+```
+
+To publish a release, push a version tag. The **Release** workflow runs every
+check, stamps the version into the packaged TOC and publishes a **GitHub
+Release** with the ZIP, its SHA-256 checksum and generated notes. A version
+with a suffix (`0.2.0-alpha.1`, `0.2.0-rc.1`) is published as a prerelease,
+which is how alpha builds go out; a plain version (`0.2.0`) becomes the
+latest release.
+
+```sh
+git tag -a v0.2.0-alpha.1 -m 'Auction Hero 0.2.0-alpha.1'
+git push origin v0.2.0-alpha.1
+```
+
+A release can also be started from **Actions -> Release -> Run workflow** on
+`main`. A failed check prevents publication, an existing tag is never reused,
+and pushing ordinary commits never publishes anything. Same pipeline as Quest
+Party's.
 
 ## ahero-lab
 

@@ -1,17 +1,23 @@
-name: Checks
+name: Checks and package
 
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      version:
+        description: Version to stamp into the packaged addon
+        type: string
+        default: ''
 
 permissions:
   contents: read
 
 jobs:
-  addon:
-    name: Addon syntax and tests
+  check:
+    name: Test and build addon
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -34,3 +40,20 @@ jobs:
         run: |
           npm ci
           npm test
+      - name: Test packaging
+        run: python3 -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Build installable ZIP
+        env:
+          BUILD_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ -n "$BUILD_VERSION" ]]; then
+            python3 scripts/package.py --version "$BUILD_VERSION"
+          else
+            python3 scripts/package.py
+          fi
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: AuctionHero-build
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14

@@ -1,3 +1,5 @@
 .deploy-target
 node_modules/
 .claude/
+dist/
+__pycache__/
