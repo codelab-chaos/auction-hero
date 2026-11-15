@@ -99,6 +99,23 @@ local function Done()
 	Publish(state)
 end
 
+-- The game does not always say a post went through. If it stays silent,
+-- the bags settle it: the item leaving them means it was posted. Started for
+-- every request sent, the first press and the confirm alike.
+local function AwaitAnswer()
+	attempt = attempt + 1
+	local mine = attempt
+	C_Timer.After(ANSWER_SECONDS, function()
+		if mine == attempt and Posting.state.phase == "posting" then
+			if LeftTheBags() then
+				Done()
+			else
+				Fail(L.POST_NO_ANSWER)
+			end
+		end
+	end)
+end
+
 local function AskToConfirm()
 	if not sent then
 		return
@@ -202,8 +219,6 @@ function Posting:Post(request)
 
 	local owned = ns.Bags:Find(request.key)
 	sent = { confirm = confirm, args = args, key = request.key, had = owned and owned.total or 0 }
-	attempt = attempt + 1
-	local mine = attempt
 
 	-- Ask the game first, before anything else happens in this press. The game
 	-- only accepts a post as the direct result of a real click or key press,
@@ -221,18 +236,7 @@ function Posting:Post(request)
 	if needsConfirmation then
 		return AskToConfirm()
 	end
-
-	-- The game does not always say a post went through. If it stays silent,
-	-- the bags settle it: the item leaving them means it was posted.
-	C_Timer.After(ANSWER_SECONDS, function()
-		if mine == attempt and Posting.state.phase == "posting" then
-			if LeftTheBags() then
-				Done()
-			else
-				Fail(L.POST_NO_ANSWER)
-			end
-		end
-	end)
+	AwaitAnswer()
 end
 
 -- The second press, when the game asked for one.
@@ -247,8 +251,9 @@ function Posting:Confirm()
 	Publish(state)
 	local ok, err = pcall(waiting.confirm, unpack(waiting.args, 1, 5))
 	if not ok then
-		Fail(tostring(err))
+		return Fail(tostring(err))
 	end
+	AwaitAnswer()
 end
 
 -- Backs out of a post waiting for confirmation.

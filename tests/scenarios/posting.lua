@@ -80,6 +80,17 @@ ns.Posting:Confirm()
 check("the second press confirms", sent(), "confirm 2003 3 53 121")
 Tick(5)
 check("and it finishes", phase(), "done")
+
+-- A confirm the game never answers is settled by the bags, as a first press
+-- is, instead of waiting for ever.
+local realConfirm = C_AuctionHouse.ConfirmPostCommodity
+C_AuctionHouse.ConfirmPostCommodity = function() end
+ns.Posting:Post({ key = leather, commodity = true, duration = 3, quantity = 53, unit = 121, buyout = true })
+ns.Posting:Confirm()
+check("a silent confirm waits", phase(), "posting")
+Tick(200)
+check("then gives up, the item still in the bags", phase(), "failed")
+C_AuctionHouse.ConfirmPostCommodity = realConfirm
 MOCK.needsConfirm = false
 
 -- The game refuses.
