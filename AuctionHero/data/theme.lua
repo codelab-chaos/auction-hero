@@ -50,6 +50,7 @@ ns.Theme = {
 	railFade = 14, -- the fade at an end of the rail with more tiles past it
 	railWheelTiles = 2, -- tiles the rail moves per turn of the mouse wheel
 	sideTileGap = 4, -- between the square tiles at the top of the category column
+	ledgerTile = { width = 118, headline = 150, height = 48, gap = 16 }, -- the totals across the Ledger tab
 	swatch = 12, -- rail quality swatches (their height)
 	swatchIconOff = 0.45, -- how faded a quality icon is when it is not ticked
 	bagSlot = 40,

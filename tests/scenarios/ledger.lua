@@ -110,8 +110,13 @@ checkMatch("the footer tells of the sale", ns.Activity:Latest().text, "Sold 4 it
 
 -- The tab shows it both ways.
 ShowTab("ledger")
-checkTrue("the summary states the profit", #Frames(function(frame)
-	return frame.text and strip(frame.text):find("^Profit ")
-end) > 0)
+local function shows(pattern)
+	return #Frames(function(frame)
+		return type(frame.text) == "string" and strip(frame.text):find(pattern) ~= nil
+	end) > 0
+end
+checkTrue("the totals are tiles, profit first", shows("^PROFIT$") and shows("^EARNED$") and shows("^UNSOLD STOCK$"))
+checkTrue("profit says it went up", shows("^%+77c$"))
+checkTrue("with counts under the amounts", shows("^%d+ sold$") and shows("^%d+ bought$"))
 ButtonNamed("Every trade").scripts.OnClick(ButtonNamed("Every trade"))
 checkTrue("and switches to every trade", ButtonNamed("By item") ~= nil)

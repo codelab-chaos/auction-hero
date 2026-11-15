@@ -7,7 +7,7 @@ local Theme = ns.Theme
 local C = Theme.color
 
 local state = { view = "items", sort = { items = { id = "profit", descending = true }, entries = { id = "time", descending = true } } }
-local lists, summary, toggle = {}, nil, nil
+local lists, tiles, toggle = {}, {}, nil
 
 local function Coins(copper)
 	return copper ~= 0 and ns.Money(copper) or ""
@@ -115,16 +115,58 @@ local function Refresh()
 	toggle:SetLabel(state.view == "items" and L.LEDGER_SHOW_ENTRIES or L.LEDGER_SHOW_ITEMS)
 
 	local _, totals = ns.Ledger:Summary()
-	summary:SetText(L.LEDGER_SUMMARY:format(Signed(totals.profit) ~= "" and Signed(totals.profit) or ns.Money(0), ns.Money(totals.spent), ns.Money(totals.earned), ns.Money(totals.fees), ns.Money(totals.heldCost)))
+	for index, spec in ipairs(ns.LedgerTiles) do
+		local tile, amount = tiles[index], totals[spec.value] or 0
+		if spec.signed then
+			tile.value:SetText((amount > 0 and "+" or "") .. (amount ~= 0 and Signed(amount) or ns.Money(0)))
+			tile.value:SetTextColor(unpack(amount < 0 and C.bad or amount > 0 and C.good or C.text))
+		else
+			tile.value:SetText(ns.Money(amount))
+		end
+		if spec.count then
+			tile.line:SetText(spec.line:format(ns.Comma(totals[spec.count] or 0)))
+		end
+	end
+end
+
+-- One tile of the totals: a small label, the amount under it, and a line
+-- under that when the tile has a count. Hover for what it means.
+local function Tile(parent, spec)
+	local tile = CreateFrame("Frame", nil, parent)
+	tile:SetSize(spec.headline and Theme.ledgerTile.headline or Theme.ledgerTile.width, Theme.ledgerTile.height)
+	tile.label = Kit.Text(tile, "small", C.muted)
+	tile.label:SetPoint("TOPLEFT", 0, -2)
+	tile.label:SetText(spec.label:upper())
+	tile.value = Kit.Text(tile, spec.headline and "total" or "large", C.text)
+	tile.value:SetPoint("TOPLEFT", tile.label, "BOTTOMLEFT", 0, -4)
+	tile.line = Kit.Text(tile, "small", C.muted)
+	tile.line:SetPoint("TOPLEFT", tile.value, "BOTTOMLEFT", 0, -3)
+	tile:EnableMouse(true)
+	Kit.Tip(tile, { spec.label, spec.tip })
+	return tile
 end
 
 local function Create(parent)
+	-- The totals sit under the list, as its footing.
 	local bar = Kit.Panel(parent)
-	bar:SetPoint("TOPLEFT")
-	bar:SetPoint("TOPRIGHT")
-	bar:SetHeight(36)
-	summary = Kit.Text(bar, "normal", C.text)
-	summary:SetPoint("LEFT", 10, 0)
+	bar:SetPoint("BOTTOMLEFT")
+	bar:SetPoint("BOTTOMRIGHT")
+	bar:SetHeight(Theme.ledgerTile.height + 16)
+	-- The totals, as tiles with a thin rule between them.
+	local x = 14
+	for index, spec in ipairs(ns.LedgerTiles) do
+		local tile = Tile(bar, spec)
+		tile:SetPoint("TOPLEFT", x, -8)
+		tiles[index] = tile
+		x = x + tile:GetWidth()
+		if index < #ns.LedgerTiles then
+			local rule = bar:CreateTexture(nil, "ARTWORK")
+			rule:SetColorTexture(unpack(C.line))
+			rule:SetSize(1, Theme.ledgerTile.height - 6)
+			rule:SetPoint("TOPLEFT", x, -11)
+			x = x + Theme.ledgerTile.gap
+		end
+	end
 	toggle = Kit.Button(bar, { text = L.LEDGER_SHOW_ENTRIES, padding = 16, tip = { L.TAB_LEDGER, L.LEDGER_TIP }, onClick = function()
 		state.view = state.view == "items" and "entries" or "items"
 		Refresh()
@@ -146,8 +188,8 @@ local function Create(parent)
 				Refresh()
 			end,
 		})
-		list:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 0, -6)
-		list:SetPoint("BOTTOMRIGHT")
+		list:SetPoint("TOPLEFT")
+		list:SetPoint("BOTTOMRIGHT", bar, "TOPRIGHT", 0, 6)
 		lists[id] = list
 	end
 	return { Refresh = Refresh }
@@ -156,7 +198,7 @@ end
 ns.Window:RegisterTab({ id = "ledger", label = L.TAB_LEDGER, order = 5, Create = Create })
 
 ns.Bus:On("LEDGER_CHANGED", function()
-	if summary and ns.charDb.tab == "ledger" then
+	if #tiles > 0 and ns.charDb.tab == "ledger" then
 		ns.Window:RefreshActive()
 	end
 end)

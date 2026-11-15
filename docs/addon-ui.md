@@ -68,7 +68,7 @@ The panel under the Buy button says how fresh its prices are: from the scan, bei
 
 ## Ledger
 
-The Ledger tab keeps every auction house trade the character makes, for good, in the character's saved variables (`AuctionHeroCharDB.ledger`). It shows the trades added up by item, or one line per trade.
+The Ledger tab keeps every auction house trade the character makes, for good, in the character's saved variables (`AuctionHeroCharDB.ledger`). Under the list, the totals sit as tiles: profit first and largest (green when up, red when down), then earned, spent, deposits and unsold stock, with how many sold, bought and held under them; hover a tile for what it means. Above them, the trades added up by item, or one line per trade. The tiles are data in `data/ledger.lua` (`ns.LedgerTiles`).
 
 - **Buys and deposits** are written down when the game confirms them. The addon watches the game's own buy and post calls, so a trade made in the game's window is recorded too.
 - **Sales** are read from auction house mail, the only place that states the price, the auction house's cut and the deposit handed back. Open the mailbox to bring them in. Nothing in the mailbox is touched. A mail read twice is entered once.
