@@ -22,6 +22,8 @@ local TEXT_LEFT = 34 -- where a row's name starts, lined up with the switches' n
 local NUMBER_ROW_HEIGHT = { choices = 62, range = 44 }
 
 local panel
+local scroll -- the settings under the title, scrolled with the mouse wheel
+local placed = {} -- every heading and row, with where its foot is in the scroll
 local rows = {}
 
 local numberRows = {}
@@ -44,6 +46,14 @@ local function Paint()
 		row:SetShown(not row.section.shown or row.section.shown())
 		row:Paint()
 	end
+	-- Scroll only as far as the last row showing.
+	local foot = 0
+	for _, item in ipairs(placed) do
+		if item.frame:IsShown() then
+			foot = math.max(foot, item.foot)
+		end
+	end
+	scroll:SetContentHeight(foot + 8)
 end
 
 -- A rule across the panel with the section's name under it.
@@ -168,7 +178,7 @@ local function BuildRow(parent, setting, top)
 	row:SetPoint("TOPLEFT", 16, -top)
 	row:SetPoint("TOPRIGHT", -16, -top)
 	row:SetHeight(ROW_HEIGHT - 6)
-	row.hover = Kit.Fill(row, C.rowHover, "BACKGROUND")
+	row.hover = Kit.Fill(row, C.settingsRow, "BACKGROUND")
 	row.hover:Hide()
 	row.box = Kit.Check(row, 16)
 	row.box:SetPoint("TOPLEFT", 8, -5)
@@ -201,8 +211,8 @@ local function Build()
 	panel:SetAllPoints()
 	panel:SetFrameLevel(body:GetFrameLevel() + 40)
 	panel:EnableMouse(true) -- so clicks do not reach the tab underneath
-	Kit.Fill(panel, C.window)
-	Kit.Border(panel, C.line)
+	Kit.Fill(panel, C.settings)
+	Kit.Border(panel, C.settingsBorder)
 	panel:Hide()
 
 	local title = Kit.Text(panel, "large", C.accent)
@@ -217,26 +227,37 @@ local function Build()
 	footprint:SetPoint("BOTTOMLEFT", 24, 12)
 	footprint:SetPoint("BOTTOMRIGHT", -24, 12)
 
-	local top = 48
+	-- The settings scroll between the title and the line at the foot.
+	scroll = Kit.Scroll(panel, { bar = C.settingsBorder })
+	scroll:SetPoint("TOPLEFT", 0, -44)
+	scroll:SetPoint("BOTTOMRIGHT", -6, 34)
+	local content = scroll.content
+	local function Place(frame, top, height)
+		placed[#placed + 1] = { frame = frame, foot = top + height }
+		return top + height
+	end
+
+	local top = 4
 	for _, section in ipairs(ns.SettingSections) do
 		if section.label then
-			headings[#headings + 1] = BuildHeading(panel, section, top)
-			top = top + HEADING_HEIGHT
+			local heading = BuildHeading(content, section, top)
+			headings[#headings + 1] = heading
+			top = Place(heading, top, HEADING_HEIGHT)
 		end
 		for _, setting in ipairs(ns.Settings) do
 			if setting.section == section.id then
-				local row = BuildRow(panel, setting, top)
+				local row = BuildRow(content, setting, top)
 				row.section = section
 				rows[#rows + 1] = row
-				top = top + ROW_HEIGHT
+				top = Place(row, top, ROW_HEIGHT)
 			end
 		end
 		for _, setting in ipairs(ns.NumberSettings) do
 			if setting.section == section.id then
-				local row = BuildNumberRow(panel, setting, top)
+				local row = BuildNumberRow(content, setting, top)
 				row.section = section
 				numberRows[#numberRows + 1] = row
-				top = top + NUMBER_ROW_HEIGHT[setting.control]
+				top = Place(row, top, NUMBER_ROW_HEIGHT[setting.control])
 			end
 		end
 	end

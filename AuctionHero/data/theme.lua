@@ -62,6 +62,9 @@ ns.Theme = {
 
 	color = {
 		window = Hex("#120e0a"),
+		settings = Hex("#0d1626"), -- the Options panel, set apart from the tabs
+		settingsBorder = Hex("#3d6496"),
+		settingsRow = Hex("#16243a"), -- a row under the pointer on the Options panel
 		panel = Hex("#1c1611"),
 		panel2 = Hex("#2a2018"),
 		line = Hex("#4a3a26"),

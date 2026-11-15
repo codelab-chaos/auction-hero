@@ -582,19 +582,48 @@ end
 -- ========= Scrolling =======================================================
 -- A plain scrolling area for a column whose content can outgrow it. Build
 -- into .content, then call :SetContentHeight(height).
-function Kit.Scroll(parent)
+-- options.bar: a thin bar down the right edge showing where the view is, in
+-- this color, drawn only when there is more than fits.
+function Kit.Scroll(parent, options)
 	local scroll = CreateFrame("ScrollFrame", nil, parent)
 	scroll.content = CreateFrame("Frame", nil, scroll)
 	scroll.content:SetSize(1, 1)
 	scroll:SetScrollChild(scroll.content)
 	scroll:EnableMouseWheel(true)
+	-- Where the view is, as a thumb on the right: its length is the share of
+	-- the content in view, its place how far down the view is.
+	local function PlaceBar()
+		local bar = scroll.bar
+		if not bar then
+			return
+		end
+		local view, total = scroll:GetHeight() or 0, scroll.contentHeight or 0
+		if total <= view or view <= 0 then
+			return bar:Hide()
+		end
+		local length = math.max(16, math.floor(view * view / total))
+		local offset = math.floor((view - length) * scroll:GetVerticalScroll() / (total - view) + 0.5)
+		bar:SetHeight(length)
+		bar:ClearAllPoints()
+		bar:SetPoint("TOPRIGHT", scroll, "TOPRIGHT", 0, -offset)
+		bar:Show()
+	end
+	if options and options.bar then
+		scroll.bar = scroll:CreateTexture(nil, "OVERLAY")
+		scroll.bar:SetColorTexture(unpack(options.bar))
+		scroll.bar:SetWidth(3)
+		scroll.bar:Hide()
+	end
+
 	scroll:SetScript("OnMouseWheel", function(self, delta)
 		local range = math.max(0, (self.contentHeight or 0) - self:GetHeight())
 		local next = math.min(range, math.max(0, self:GetVerticalScroll() - delta * 40))
 		self:SetVerticalScroll(next)
+		PlaceBar()
 	end)
 	scroll:SetScript("OnSizeChanged", function(self, width)
 		self.content:SetWidth(width)
+		PlaceBar()
 	end)
 
 	function scroll:SetContentHeight(height)
@@ -604,6 +633,7 @@ function Kit.Scroll(parent)
 		if self:GetVerticalScroll() > range then
 			self:SetVerticalScroll(range)
 		end
+		PlaceBar()
 	end
 	return scroll
 end

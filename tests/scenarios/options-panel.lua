@@ -40,6 +40,14 @@ local options = ButtonNamed("Options")
 options.scripts.OnClick(options)
 Tick(2)
 check("a player sees the everyday switches only", ids(), "itemTooltips,openWithAuctionHouse,railLarge")
+-- The settings sit in a scroll, as tall as the rows showing, with a bar
+-- saying where the view is when they do not all fit.
+local scroll = Frames(function(frame)
+	return frame.content ~= nil and frame.contentHeight ~= nil and frame.bar ~= nil
+end)[1]
+checkTrue("the settings scroll", scroll ~= nil)
+checkTrue("as tall as the rows", scroll.contentHeight > 4 * 40)
+checkTrue("with a bar when they do not all fit", scroll.bar.shown)
 check("and no Debug section", debugHeading(), 0)
 checkTrue("the foot of the panel says how much data is kept", #Frames(function(frame)
 	return type(frame.text) == "string" and frame.text:find("^Data kept: .* The last scan %(300 auctions%) and price history for ") ~= nil
