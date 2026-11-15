@@ -49,6 +49,7 @@ trade\deadlines.lua
 trade\posting.lua
 trade\sell-search.lua
 trade\owned.lua
+trade\cancelling.lua
 trade\item-key.lua
 trade\buying.lua
 trade\live-check.lua

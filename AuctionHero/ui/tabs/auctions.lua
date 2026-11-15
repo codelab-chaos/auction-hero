@@ -6,7 +6,7 @@ local Theme = ns.Theme
 local C = Theme.color
 
 local state = { sort = { id = "time", descending = false } }
-local list, summary
+local list, summary, cancelButton, note
 
 local SORT_VALUES = {
 	name = function(auction)
@@ -29,6 +29,35 @@ local SORT_VALUES = {
 	end,
 }
 
+-- The auction picked in the list, while it is still one of ours.
+local function Picked()
+	for _, auction in ipairs(ns.Owned.auctions) do
+		if auction.auctionID == state.picked then
+			return auction
+		end
+	end
+end
+
+-- The cancel button follows the cancel as it goes: pick, confirm, cancelling.
+local function PaintCancel()
+	local cancel = ns.Cancelling.state
+	local picked = Picked()
+	local mine = picked and cancel.auctionID == picked.auctionID
+	if mine and cancel.phase == "confirm" then
+		cancelButton:SetLabel(cancel.cost and cancel.cost > 0 and L.AUCTIONS_CANCEL_CONFIRM_COST:format(ns.PlainMoney(cancel.cost)) or L.AUCTIONS_CANCEL_CONFIRM)
+		cancelButton:SetDisabled(false)
+	elseif cancel.phase == "cancelling" or cancel.phase == "checking" then
+		cancelButton:SetLabel(L.CANCEL_SENDING)
+		cancelButton:SetDisabled(true)
+	else
+		cancelButton:SetLabel(L.AUCTIONS_CANCEL)
+		cancelButton:SetDisabled(not picked or picked.sold or not ns.auctionHouseOpen)
+	end
+	local say = cancel.phase ~= "idle" and cancel.message or ""
+	note:SetText(say)
+	note:SetTextColor(unpack(cancel.phase == "failed" and C.bad or cancel.phase == "done" and C.good or C.muted))
+end
+
 local function Refresh()
 	local rows = {}
 	local active, sold, value = 0, 0, 0
@@ -50,6 +79,7 @@ local function Refresh()
 	end
 	list:SetRows(rows, true)
 	summary:SetText(L.AUCTIONS_SUMMARY:format(ns.Comma(active), ns.Comma(sold), ns.Money(value)))
+	PaintCancel()
 end
 
 local function Create(parent)
@@ -63,6 +93,19 @@ local function Create(parent)
 		ns.Owned:Request()
 	end })
 	refresh:SetPoint("RIGHT", -6, 0)
+	cancelButton = Kit.Button(bar, { text = L.AUCTIONS_CANCEL, padding = 16, tip = { L.AUCTIONS_CANCEL, L.AUCTIONS_CANCEL_TIP }, onClick = function()
+		local picked = Picked()
+		if ns.Cancelling.state.phase == "confirm" and picked and ns.Cancelling.state.auctionID == picked.auctionID then
+			ns.Cancelling:Confirm()
+		else
+			ns.Cancelling:Start(picked)
+		end
+	end })
+	cancelButton:SetPoint("RIGHT", refresh, "LEFT", -6, 0)
+	note = Kit.Text(bar, "small", C.muted)
+	note:SetPoint("LEFT", summary, "RIGHT", 16, 0)
+	note:SetPoint("RIGHT", cancelButton, "LEFT", -12, 0)
+	note:SetJustifyH("RIGHT")
 
 	list = Kit.List(parent, {
 		id = "auctions",
@@ -107,6 +150,18 @@ local function Create(parent)
 			},
 		},
 		empty = L.AUCTIONS_NONE,
+		-- Picking a row chooses the auction to cancel; picking another backs
+		-- out of a cancel waiting for its confirm.
+		onClick = function(auction)
+			if state.picked ~= auction.auctionID then
+				ns.Cancelling:Back()
+			end
+			state.picked = auction.auctionID
+			Refresh()
+		end,
+		isSelected = function(auction)
+			return auction.auctionID == state.picked
+		end,
 		link = function(auction)
 			return auction.link
 		end,
@@ -128,6 +183,12 @@ local function Create(parent)
 end
 
 ns.Window:RegisterTab({ id = "auctions", label = L.TAB_AUCTIONS, order = 4, Create = Create })
+
+ns.Bus:On("CANCEL_CHANGED", function()
+	if list and ns.charDb.tab == "auctions" then
+		ns.Window:RefreshActive()
+	end
+end)
 
 ns.Bus:On("OWNED_CHANGED", function()
 	if list and ns.charDb.tab == "auctions" then

@@ -185,6 +185,7 @@ ns.AnswerSeconds = {
 	buyErrorSettle = 3, -- after the game reports a problem, for the gold to move
 	liveCheck = 10,
 	itemKey = 10,
+	cancel = 10, -- then the list of owned auctions is asked for again to settle it
 }
 
 -- ========= Live checks ======================================================

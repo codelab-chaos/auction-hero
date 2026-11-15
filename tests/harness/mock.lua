@@ -280,11 +280,23 @@ end
 function C_AuctionHouse.ConfirmPostItem() end
 Enum.AuctionStatus = { Active = 0, Sold = 1 }
 function C_AuctionHouse.QueryOwnedAuctions(sorts) assert(type(sorts) == "table") C_Timer.After(0, function() FireEvent("OWNED_AUCTIONS_UPDATED") end) end
-function C_AuctionHouse.GetOwnedAuctions()
-	return {
-		{ auctionID = 1, itemKey = { itemID = 2006 }, itemLink = "|cff1eff00|Hitem:2006|h[Tunic of the Bear]|h|r", status = 0, quantity = 1, timeLeftSeconds = 86000, buyoutAmount = 990 },
-		{ auctionID = 2, itemKey = { itemID = 2003 }, status = 1, quantity = 20, buyoutAmount = 4000, bidAmount = 0 },
-	}
+-- The player's auctions. A cancel takes one away and says so, unless
+-- MOCK.cancelSilent (no answer) or MOCK.cancelKept (no answer, still up).
+OWNED = {
+	{ auctionID = 1, itemKey = { itemID = 2006 }, itemLink = "|cff1eff00|Hitem:2006|h[Tunic of the Bear]|h|r", status = 0, quantity = 1, timeLeftSeconds = 86000, buyoutAmount = 990 },
+	{ auctionID = 2, itemKey = { itemID = 2003 }, status = 1, quantity = 20, buyoutAmount = 4000, bidAmount = 0 },
+}
+function C_AuctionHouse.GetOwnedAuctions() return OWNED end
+CANCELS = {}
+function C_AuctionHouse.GetCancelCost() return MOCK.cancelCost or 0 end
+function C_AuctionHouse.CanCancelAuction(id) return true end
+function C_AuctionHouse.CancelAuction(id)
+	CANCELS[#CANCELS + 1] = id
+	if MOCK.cancelKept then return end
+	for index, auction in ipairs(OWNED) do
+		if auction.auctionID == id then table.remove(OWNED, index) break end
+	end
+	if not MOCK.cancelSilent then C_Timer.After(0, function() FireEvent("AUCTION_CANCELED", id) end) end
 end
 function GetCursorPosition() return CURSOR_X or 300, 300 end
 function IsMouseButtonDown() return MOUSE_DOWN == true end

@@ -32,7 +32,7 @@ The market the tabs read is the same whichever way the scan is kept, auction for
 
 ## Posting
 
-Post on the Sell tab puts the chosen item up for auction, one press per post. Picking an item asks the game for its live listings first, the same request the game's own sell form makes. The Auctions tab lists what you have up.
+Post on the Sell tab puts the chosen item up for auction, one press per post. Picking an item asks the game for its live listings first, the same request the game's own sell form makes. The Auctions tab lists what you have up. Pick one and press "Cancel auction" to see what cancelling costs, then press again to cancel it, the same two steps as the game's own window; the item comes back by mail.
 
 The server does not take a single item (gear and the like) for less than 1 silver. It does not refuse such a post, it never answers, and the auction house stops responding until you log out. The game's own form does the same. The addon will not send a price under that floor (`ns.MinItemPrice` in `data/trading.lua`). Goods sold by the unit have no floor.
 
