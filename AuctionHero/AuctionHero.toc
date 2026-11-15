@@ -29,6 +29,7 @@ data\facets.lua
 data\gear.lua
 data\scan-shield.lua
 feed\links.lua
+feed\item-names.lua
 feed\replicate.lua
 feed\browse.lua
 feed\downloader.lua

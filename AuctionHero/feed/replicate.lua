@@ -254,10 +254,20 @@ ns.Fetchers.replicate = function(source, ctx)
 		pending = still
 	end
 
+	-- Rows still without details keep their item id. Name the ones whose item
+	-- has only one name, so they are not lost from the market.
 	local incomplete = 0
+	local nameAt, itemIdAt = schema.index.name, schema.index.itemID
 	for position = 1, total do
-		if not IsComplete(rows[position], schema) then
+		local row = rows[position]
+		if not IsComplete(row, schema) then
 			incomplete = incomplete + 1
+			if row[nameAt] == nil or row[nameAt] == "" then
+				row[nameAt] = ns.ItemNames.Fallback(row[itemIdAt])
+			end
+		end
+		if position % 500 == 0 then
+			ns.Breathe()
 		end
 	end
 	info.incomplete = incomplete

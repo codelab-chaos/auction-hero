@@ -96,13 +96,17 @@ end
 -- Adds one row to the items being built. A row may stand for several
 -- identical auctions.
 local function AddRow(items, byKey, row, at, get, catalog)
-	local name = get(row, at.name)
-	-- A row whose details never arrived has no name and cannot be told
-	-- apart from its item's other variants, so it is left out.
-	if not name or name == "" then
-		return
-	end
 	local itemID = get(row, at.itemID)
+	local name = get(row, at.name)
+	if not name or name == "" then
+		-- Its details never arrived. An item with one name can still be
+		-- named from its id; gear could be any of its variants, so it is
+		-- left out.
+		name = ns.ItemNames.Fallback(itemID)
+		if not name then
+			return
+		end
+	end
 	local key = itemID .. ":" .. name
 	local item = byKey[key]
 	if not item then

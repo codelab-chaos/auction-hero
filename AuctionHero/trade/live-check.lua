@@ -52,20 +52,25 @@ local function Row(snapshot, template, details)
 	return ns.MakeRow(snapshot, template, details)
 end
 
--- The scan's rows for this item, by name, to copy from.
+-- The scan's rows for this item, by name, to copy from. A row whose details
+-- never arrived has no name; copying it would make every live row nameless,
+-- and the market leaves nameless rows out, so the item would vanish. A named
+-- row is preferred, the one wanted first.
 local function Templates(snapshot)
 	local get = ns.RowReader(snapshot)
-	local byName, any = {}, nil
+	local byName, named, nameless = {}, nil, nil
 	for _, row in ipairs(snapshot.rows) do
 		if get(row, "itemID") == wanted.itemID then
-			any = any or row
 			local name = get(row, "name")
 			if name and name ~= "" then
 				byName[name] = byName[name] or row
+				named = named or row
+			else
+				nameless = nameless or row
 			end
 		end
 	end
-	return byName, any
+	return byName, byName[wanted.name] or named or nameless
 end
 
 -- The live auctions as scan rows, or nil when they could not be read. For
@@ -82,7 +87,8 @@ local function ReadRows(snapshot)
 		for index = 1, ok and count or 0 do
 			local found, info = pcall(C_AuctionHouse.GetCommoditySearchResultInfo, wanted.itemID, index)
 			if found and info and info.unitPrice and (info.quantity or 0) > 0 then
-				rows[#rows + 1] = Row(snapshot, any, { count = info.quantity, buyoutPrice = info.unitPrice * info.quantity, minBid = 0, bidAmount = 0, timeLeft = 4 })
+				-- Goods have one name per id: the one the player chose.
+				rows[#rows + 1] = Row(snapshot, any, { name = wanted.name, count = info.quantity, buyoutPrice = info.unitPrice * info.quantity, minBid = 0, bidAmount = 0, timeLeft = 4 })
 			end
 		end
 		return rows
