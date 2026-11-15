@@ -18,21 +18,27 @@ local LiveCheck = { state = { phase = "idle" } }
 ns.LiveCheck = LiveCheck
 
 local SOURCE = "replicate" -- the scan that is patched
-local ANSWER_SECONDS = 10
 
 local wanted -- { itemID, itemKey, commodity, equipment } for the check in hand
-local attempt = 0 -- counts requests, so a late timer cannot touch a newer one
+local deadlines -- the wait on the game once asked (see trade\deadlines.lua)
 
 local function Publish(phase)
 	LiveCheck.state = { phase = phase, itemID = wanted and wanted.itemID }
+	deadlines:Enter(phase)
 	Bus:Fire("LIVE_CHECK_CHANGED", LiveCheck.state)
 end
 
 local function Finish()
-	attempt = attempt + 1
 	wanted = nil
 	Publish("idle")
 end
+
+-- Once asked, the game has a while to answer; then the check is dropped and
+-- the scan's rows stand.
+deadlines = ns.Deadlines({ sent = ns.AnswerSeconds.liveCheck }, function()
+	ns.EventLog:Note("live check unanswered", wanted and wanted.itemID)
+	Finish()
+end)
 
 -- Whether an item's listings are old enough to be worth asking about.
 function LiveCheck:IsStale(item)
@@ -211,13 +217,6 @@ local function Send()
 		return Finish()
 	end
 	Publish("sent")
-	local mine = attempt
-	C_Timer.After(ANSWER_SECONDS, function()
-		if mine == attempt and LiveCheck.state.phase == "sent" then
-			ns.EventLog:Note("live check unanswered", wanted and wanted.itemID)
-			Finish()
-		end
-	end)
 end
 
 -- Asks about an item of the market, if what is known about it is stale, or
@@ -230,15 +229,14 @@ function LiveCheck:Request(item, force)
 	if wanted and wanted.itemID == item.itemID and wanted.name == item.name and self.state.phase ~= "idle" then
 		return true
 	end
-	attempt = attempt + 1
-	local mine = attempt
 	local commodity = ns.Orders.IsCommodity(item)
 	wanted = { itemID = item.itemID, name = item.name, commodity = commodity }
 	Publish("waiting")
+	local mine = deadlines:Turn()
 
 	-- Asks once the item's key is known and the player has settled on the row.
 	local function Ready(itemKey)
-		if mine ~= attempt or not wanted then
+		if mine ~= deadlines:Turn() or not wanted then
 			return
 		end
 		wanted.itemKey = itemKey
@@ -246,8 +244,8 @@ function LiveCheck:Request(item, force)
 		Send()
 	end
 
-	C_Timer.After(ns.LiveCheckRule.settleSeconds, function()
-		if mine ~= attempt or not wanted then
+	deadlines:Later(ns.LiveCheckRule.settleSeconds, function()
+		if not wanted then
 			return
 		end
 		if commodity then
@@ -261,7 +259,7 @@ function LiveCheck:Request(item, force)
 		end
 		-- A single item is known by a fuller key, which has to be asked for.
 		ns.ItemKey:Resolve(item.itemID, item.name, function(itemKey, problem, found)
-			if mine ~= attempt or not wanted then
+			if mine ~= deadlines:Turn() or not wanted then
 				return
 			end
 			if itemKey then
@@ -302,9 +300,8 @@ frame:SetScript("OnEvent", function(_, event, subject)
 		return
 	end
 	-- Read the results a moment later, once they have settled.
-	local mine = attempt
-	C_Timer.After(ns.SearchSettleSeconds, function()
-		if mine == attempt and wanted and LiveCheck.state.phase == "sent" then
+	deadlines:Later(ns.SearchSettleSeconds, function()
+		if wanted and LiveCheck.state.phase == "sent" then
 			Answered()
 		end
 	end)

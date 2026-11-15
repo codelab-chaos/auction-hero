@@ -45,6 +45,7 @@ market\facets.lua
 market\resell.lua
 inventory\bags.lua
 inventory\gear.lua
+trade\deadlines.lua
 trade\posting.lua
 trade\sell-search.lua
 trade\owned.lua

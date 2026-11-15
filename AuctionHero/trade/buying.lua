@@ -28,13 +28,7 @@ local L = ns.L
 local Buying = { state = { phase = "idle" } }
 ns.Buying = Buying
 
--- How long to wait for the server to answer before giving up on it.
-local ANSWER_SECONDS = 10
--- A single item takes two questions, its key and then its auctions, so longer.
-local ANSWER_SECONDS_SINGLE = 15
--- After the game reports a problem with a purchase, how long to wait for the
--- gold to move before deciding it did not go through.
-local ERROR_SETTLE_SECONDS = 3
+-- How long to wait on the server is data: ns.AnswerSeconds (data\trading.lua).
 -- How many pages of live auctions to read through looking for the item.
 local SEARCH_PAGES = 5
 
@@ -42,7 +36,7 @@ local SEARCH_PAGES = 5
 --   { key, itemID, quantity, way }                               for goods
 --   { key, itemID, name, way, itemKey, pages, auctionID, gold }  for a single item
 local order
-local attempt = 0 -- counts requests, so a late timer cannot touch a newer one
+local deadlines -- the waits on the server while quoting and buying (see trade\deadlines.lua)
 
 local function Publish(phase, message, extra)
 	local state = { phase = phase, message = message, key = order and order.key, quantity = order and order.quantity }
@@ -50,6 +44,7 @@ local function Publish(phase, message, extra)
 		state[name] = value
 	end
 	Buying.state = state
+	deadlines:Enter(phase)
 	Bus:Fire("BUYING_CHANGED", state)
 end
 
@@ -62,7 +57,6 @@ local function Fail(message)
 end
 
 local function Done()
-	attempt = attempt + 1
 	Publish("done", L.BUY_DONE, { unit = Buying.state.unit, total = Buying.state.total, auctionID = Buying.state.auctionID })
 	order = nil
 end
@@ -115,7 +109,6 @@ goods.events = {
 	COMMODITY_PRICE_UPDATED = function(unit, total)
 		local phase = Buying.state.phase
 		if phase == "quoting" then
-			attempt = attempt + 1
 			Publish("confirm", L.BUY_CONFIRM_PRICE, { unit = unit, total = total })
 		elseif phase == "confirm" and total ~= Buying.state.total then
 			local rise = total - (Buying.state.total or 0)
@@ -141,7 +134,7 @@ goods.events = {
 }
 
 -- ========= Single items =====================================================
-local single = { answerSeconds = ANSWER_SECONDS_SINGLE }
+local single = { answerSeconds = ns.AnswerSeconds.buySingle }
 
 -- The cheapest live auction of exactly this item, with a buyout, that is not
 -- the player's own. An item id covers every variant of a piece of gear ("of
@@ -286,7 +279,6 @@ local function Answered()
 	first = type(first) == "table" and first or {}
 	ns.EventLog:Note("buy answered", order.itemID, counted and count, whole, "wanted", order.name, order.price, "first", first.auctionID, first.itemLink, first.buyoutAmount, first.quantity, first.itemKey)
 	if best then
-		attempt = attempt + 1
 		order.auctionID = best.auctionID
 		order.quantity = best.quantity
 		ns.EventLog:Note("buy found", order.itemID, best.auctionID, best.buyout, best.quantity)
@@ -324,9 +316,8 @@ local function Arrived(itemKey)
 	if not order.itemKey or (type(itemKey) == "table" and itemKey.itemID and itemKey.itemID ~= order.itemID) then
 		return -- not searched yet, or an answer to someone else's search
 	end
-	local mine = attempt
-	C_Timer.After(ns.SearchSettleSeconds, function()
-		if mine == attempt and order and order.way == single then
+	deadlines:Later(ns.SearchSettleSeconds, function()
+		if order and order.way == single then
 			Answered()
 		end
 	end)
@@ -359,9 +350,8 @@ single.events = {
 		end
 		order.errorCode = code
 		ns.EventLog:Note("buy error reported", order.auctionID, code, "gold", order.gold, GetMoney())
-		local mine = attempt
-		C_Timer.After(ERROR_SETTLE_SECONDS, function()
-			if mine == attempt and Buying.state.phase == "buying" and order then
+		deadlines:Later(ns.AnswerSeconds.buyErrorSettle, function()
+			if Buying.state.phase == "buying" and order then
 				single.TimedOut("buying")
 			end
 		end)
@@ -369,15 +359,16 @@ single.events = {
 }
 
 -- ========= The two presses ==================================================
-local function Watch(phase)
-	attempt = attempt + 1
-	local mine = attempt
-	C_Timer.After(order and order.way.answerSeconds or ANSWER_SECONDS, function()
-		if mine == attempt and Buying.state.phase == phase and order then
-			order.way.TimedOut(phase)
-		end
-	end)
+-- Asking for a price and buying both wait on the server. Entering either
+-- phase starts the wait; any other phase ends it.
+local function AnswerSeconds()
+	return order and order.way.answerSeconds or ns.AnswerSeconds.buy
 end
+deadlines = ns.Deadlines({ quoting = AnswerSeconds, buying = AnswerSeconds }, function(phase)
+	if order then
+		order.way.TimedOut(phase)
+	end
+end)
 
 -- The first press: asks the server for the live price.
 -- request: { key, itemID, quantity } for goods, or
@@ -402,11 +393,9 @@ function Buying:Start(request)
 	end
 	if ready then
 		-- The live price is already known. Straight to the confirm.
-		attempt = attempt + 1
 		return Publish("confirm", L.BUY_CONFIRM_PRICE, ready)
 	end
 	Publish("quoting", L.BUY_QUOTING)
-	Watch("quoting")
 end
 
 -- The second press: spends the gold at the price shown.
@@ -424,7 +413,6 @@ function Buying:Confirm()
 		return Fail(tostring(problem))
 	end
 	Publish("buying", L.BUY_BUYING, { unit = state.unit, total = state.total, auctionID = state.auctionID })
-	Watch("buying")
 end
 
 -- Backs out of a price that has not been confirmed. Nothing has been spent.
@@ -435,7 +423,6 @@ function Buying:Cancel()
 	end
 	if phase ~= "buying" and phase ~= "idle" then
 		order = nil
-		attempt = attempt + 1
 		Publish("idle")
 	end
 end
@@ -473,7 +460,6 @@ end)
 Bus:On("AH_CLOSED", function()
 	if Buying.state.phase ~= "idle" then
 		order = nil
-		attempt = attempt + 1
 		Publish("idle")
 	end
 end)

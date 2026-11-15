@@ -174,6 +174,17 @@ ns.HistoryRule = {
 -- read, in seconds, so they are all in.
 ns.SearchSettleSeconds = 0.1
 
+-- How long each flow waits on the game before deciding by other evidence or
+-- giving up, in seconds (see trade\deadlines.lua).
+ns.AnswerSeconds = {
+	post = 8, -- then the bags decide: the item gone means it was posted
+	buy = 10, -- a quote or a purchase of goods
+	buySingle = 15, -- a single item takes two questions, its key and its auctions
+	buyErrorSettle = 3, -- after the game reports a problem, for the gold to move
+	liveCheck = 10,
+	itemKey = 10,
+}
+
 -- ========= Live checks ======================================================
 -- A scan ages. Choosing an item to buy asks the auction house for that one
 -- item's listings as they are now, and patches them into the scan.

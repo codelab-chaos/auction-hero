@@ -17,21 +17,28 @@ local Bus = ns.Bus
 local ItemKey = {}
 ns.ItemKey = ItemKey
 
-local ANSWER_SECONDS = 10
 local PAGES = 5 -- pages of browse results to look through
 
 local known = {} -- "itemID:name" -> item key
 local asking -- { itemID, name, done, pages, sent }
-local attempt = 0 -- counts requests, so a late timer cannot touch a newer one
+local deadlines -- the wait on the game while asking (see trade\deadlines.lua)
 
 local function Finish(itemKey, problem, found)
 	local done = asking and asking.done
 	asking = nil
-	attempt = attempt + 1
+	deadlines:Drop()
 	if done then
 		done(itemKey, problem, found)
 	end
 end
+
+-- The game has a while to answer; then the request ends unanswered.
+deadlines = ns.Deadlines({ asking = ns.AnswerSeconds.itemKey }, function()
+	if asking then
+		ns.EventLog:Note("item key unanswered", asking.itemID, asking.name)
+		Finish(nil, "unanswered")
+	end
+end)
 
 -- Looks through the browse results for the item. Returns its key, or nil and
 -- whether some results could not be named yet.
@@ -118,15 +125,8 @@ function ItemKey:Resolve(itemID, name, done)
 	if not ns.auctionHouseOpen then
 		return done(nil, "refused")
 	end
-	attempt = attempt + 1
 	asking = { itemID = itemID, name = name, done = done, pages = 1 }
-	local mine = attempt
-	C_Timer.After(ANSWER_SECONDS, function()
-		if mine == attempt and asking then
-			ns.EventLog:Note("item key unanswered", itemID, name)
-			Finish(nil, "unanswered")
-		end
-	end)
+	deadlines:Enter("asking")
 	Send()
 end
 
@@ -164,5 +164,5 @@ end)
 
 Bus:On("AH_CLOSED", function()
 	asking = nil
-	attempt = attempt + 1
+	deadlines:Drop()
 end)

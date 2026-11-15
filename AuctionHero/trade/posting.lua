@@ -17,13 +17,11 @@ ns.Posting = Posting
 
 local pending -- the arguments of a post waiting for the player's confirmation
 local sent -- the last post sent: { confirm, args, key, itemID, had }
-local attempt = 0 -- counts posts, so a late timer cannot touch a newer one
-
--- How long to wait for the game to answer a post before deciding by the bags.
-local ANSWER_SECONDS = 8
+local deadlines -- the wait on the game while posting (see trade\deadlines.lua)
 
 local function Publish(state)
 	Posting.state = state
+	deadlines:Enter(state.phase)
 	Bus:Fire("POSTING_CHANGED", state)
 end
 
@@ -100,21 +98,15 @@ local function Done()
 end
 
 -- The game does not always say a post went through. If it stays silent,
--- the bags settle it: the item leaving them means it was posted. Started for
--- every request sent, the first press and the confirm alike.
-local function AwaitAnswer()
-	attempt = attempt + 1
-	local mine = attempt
-	C_Timer.After(ANSWER_SECONDS, function()
-		if mine == attempt and Posting.state.phase == "posting" then
-			if LeftTheBags() then
-				Done()
-			else
-				Fail(L.POST_NO_ANSWER)
-			end
-		end
-	end)
-end
+-- the bags settle it: the item leaving them means it was posted. Every entry
+-- into "posting" (the first press, the confirm, each auction made) waits anew.
+deadlines = ns.Deadlines({ posting = ns.AnswerSeconds.post }, function()
+	if LeftTheBags() then
+		Done()
+	else
+		Fail(L.POST_NO_ANSWER)
+	end
+end)
 
 local function AskToConfirm()
 	if not sent then
@@ -236,7 +228,6 @@ function Posting:Post(request)
 	if needsConfirmation then
 		return AskToConfirm()
 	end
-	AwaitAnswer()
 end
 
 -- The second press, when the game asked for one.
@@ -251,9 +242,8 @@ function Posting:Confirm()
 	Publish(state)
 	local ok, err = pcall(waiting.confirm, unpack(waiting.args, 1, 5))
 	if not ok then
-		return Fail(tostring(err))
+		Fail(tostring(err))
 	end
-	AwaitAnswer()
 end
 
 -- Backs out of a post waiting for confirmation.
