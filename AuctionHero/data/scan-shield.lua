@@ -26,12 +26,13 @@ ns.ScanShield = {
 	-- falls the card's height in a time between fallSeconds' two values,
 	-- sways a little, fades in at the top and out before the bottom, then
 	-- starts again somewhere else. Sizes and coins are picked per fall; a coin
-	-- listed more often falls more often.
+	-- listed more often falls more often. Gold only, at full brightness.
 	coinRain = {
 		count = 12,
 		fallSeconds = { 3.2, 5 },
 		size = { 8, 13 },
-		alpha = 0.55, -- at its brightest: light, so the text stays easy to read
+		alpha = 1, -- at its brightest
+		glow = true, -- drawn added onto the card, so the gold shines
 		fadeIn = 0.12, -- share of the fall spent fading in
 		fadeOut = 0.3, -- and fading out
 		sway = 5, -- how far a drop drifts left and right
@@ -39,11 +40,6 @@ ns.ScanShield = {
 		margin = 10, -- kept clear at the card's edges
 		icons = {
 			"Interface\\MoneyFrame\\UI-GoldIcon",
-			"Interface\\MoneyFrame\\UI-GoldIcon",
-			"Interface\\MoneyFrame\\UI-GoldIcon",
-			"Interface\\MoneyFrame\\UI-SilverIcon",
-			"Interface\\MoneyFrame\\UI-SilverIcon",
-			"Interface\\MoneyFrame\\UI-CopperIcon",
 		},
 	},
 	stageIcons = {

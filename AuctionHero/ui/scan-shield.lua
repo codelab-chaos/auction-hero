@@ -201,6 +201,9 @@ local function Build()
 	parts.drops = {}
 	for index = 1, rain.count do
 		local drop = card:CreateTexture(nil, "BORDER")
+		if rain.glow then
+			drop:SetBlendMode("ADD")
+		end
 		drop.seconds = Between(rain.fallSeconds)
 		drop.offset = (index - 1) / rain.count + math.random() * 0.5
 		drop:SetAlpha(0)
