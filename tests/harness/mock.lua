@@ -239,10 +239,13 @@ local BAG = {
 	{ id = 2001, name = "Copper Ore", count = 7 }, { id = 2006, name = "Tunic of the Bear", count = 1 }, { id = 9999, name = "Thing Nobody Sells", count = 1 },
 	{ id = 2002, name = "Soulbound Thing", count = 1, bound = true },
 }
+-- Bags past the backpack, by bag index: MOCK_BAGS[5] is a reagent bag.
+MOCK_BAGS = {}
+local function BagList(bag) if bag == 0 then return BAG end return MOCK_BAGS[bag] or {} end
 C_Container = {
-	GetContainerNumSlots = function(bag) return bag == 0 and #BAG or 0 end,
+	GetContainerNumSlots = function(bag) return #BagList(bag) end,
 	GetContainerItemInfo = function(bag, slot)
-		local it = BAG[slot]; if not it then return nil end
+		local it = BagList(bag)[slot]; if not it then return nil end
 		return { iconFileID = 134000 + slot, stackCount = it.count, quality = 1, itemID = it.id, isBound = it.bound or false,
 			hyperlink = ("|cff1eff00|Hitem:%d::::::::25|h[%s]|h|r"):format(it.id, it.name) }
 	end,
