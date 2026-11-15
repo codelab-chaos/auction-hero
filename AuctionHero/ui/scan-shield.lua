@@ -38,7 +38,7 @@ local function Share(now)
 	if run.finishedAt then
 		return 1
 	end
-	local stage = Rule.stages[stageIndex[run.stage]]
+	local stage = run.mode == "reading" and Rule.reading or Rule.stages[stageIndex[run.stage]]
 	local share = stage.from + (stage.to - stage.from) * math.max(0, math.min(1, StageShare(now)))
 	run.shown = math.max(run.shown or 0, share) -- the bar never goes backwards
 	return run.shown
@@ -123,7 +123,7 @@ local function Paint()
 	end
 	local now = GetTime()
 	local finished = run.finishedAt ~= nil
-	parts.title:SetText(finished and L.SHIELD_DONE_TITLE or L.SHIELD_TITLE)
+	parts.title:SetText(finished and L.SHIELD_DONE_TITLE or run.mode == "reading" and L.SHIELD_READING_TITLE or L.SHIELD_TITLE)
 	parts.title:SetTextColor(unpack(finished and C.good or C.accent))
 
 	local current = stageIndex[run.stage] or 1
@@ -313,6 +313,30 @@ local function Raise(state)
 	shield:Show()
 end
 
+-- The last scan being read into a market, after a reload or login, with no
+-- scan running: the same card, so the tabs never show half-read prices.
+local function RaiseReading()
+	if run or ns.Downloader:IsRunning() then
+		return
+	end
+	if not shield and not Build() then
+		return -- the window is not built yet; READY tries again
+	end
+	local snapshot = ns.Store:GetSnapshot()
+	local now = GetTime()
+	run = {
+		mode = "reading",
+		stage = Rule.reading.stage,
+		startedAt = now,
+		stageAt = now,
+		count = snapshot and snapshot.meta and snapshot.meta.count,
+	}
+	parts.quip:SetText(NextQuip())
+	ShowRain(true)
+	shield:Show()
+	Paint()
+end
+
 local function Lift()
 	run = nil
 	if shield then
@@ -375,6 +399,10 @@ Bus:On("DOWNLOAD_STATE", function(state)
 	if not handle then
 		return
 	end
+	-- A scan started while the last one was being read takes the card over.
+	if run and run.mode == "reading" and state.phase ~= "done" then
+		run = nil
+	end
 	if not run then
 		if state.phase == "done" then
 			return
@@ -390,8 +418,19 @@ end)
 
 Bus:On("ANALYSIS_STATE", function(running)
 	analyzing = running
-	if not running and run and run.stage == "pricing" and not run.finishedAt then
+	if running then
+		RaiseReading()
+	elseif run and run.mode == "reading" then
+		Lift() -- read: nothing to report, the tabs have their prices
+	elseif run and run.stage == "pricing" and not run.finishedAt then
 		Finish()
+	end
+end)
+
+-- At login the scan starts being read before the window is built.
+Bus:On("READY", function()
+	if ns.AnalysisStatus and ns.AnalysisStatus.phase == "loading" then
+		RaiseReading()
 	end
 end)
 

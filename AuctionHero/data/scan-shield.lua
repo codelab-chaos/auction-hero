@@ -50,6 +50,9 @@ ns.ScanShield = {
 		done = "Interface\\RaidFrame\\ReadyCheck-Ready",
 		current = "Interface\\RaidFrame\\ReadyCheck-Waiting",
 	},
+	-- Reading the last scan after a reload or login: the same card, its first
+	-- stages already done, and the bar running the whole width for pricing.
+	reading = { stage = "pricing", from = 0, to = 1 },
 	card = { width = 400, height = 268 },
 	dim = 0.86, -- how dark the cover over the tabs is
 }

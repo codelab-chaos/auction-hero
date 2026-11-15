@@ -640,6 +640,7 @@ L.BUY_PROBLEM = "The auction house reported a problem (code %s). Your gold was %
 -- The scan shield: covers the tabs while a scan runs
 L.SHIELD_TITLE = "Scanning the auction house"
 L.SHIELD_DONE_TITLE = "Scan complete"
+L.SHIELD_READING_TITLE = "Reading your last scan"
 L.SHIELD_CANCELLING = "Cancelling..."
 L.SHIELD_CLOSE = "Close"
 L.SHIELD_STAGE_ASK = "Ask the server for every auction"

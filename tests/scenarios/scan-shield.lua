@@ -60,3 +60,19 @@ end
 Tick(2)
 check("cancel lifts the shield", up(), false)
 check("and keeps the last scan", ns.Store:GetSourceSnapshot("replicate").meta.time, before)
+
+-- Reading the last scan into a market (after a reload or login) shows the
+-- same card, titled for reading, and lifts it once the prices are in.
+Tick(100)
+check("nothing showing before", (ns.ScanShieldState()), nil)
+ns.Bus:Fire("SNAPSHOT_CHANGED")
+check("reading the scan raises the card", (ns.ScanShieldState()), "pricing")
+checkTrue("titled for reading", #Frames(function(frame)
+	return frame.text == ns.L.SHIELD_READING_TITLE
+end) > 0)
+for _ = 1, 100 do
+	if ns.Jobs:IsIdle() then break end
+	Tick(5)
+end
+Tick(2)
+check("and lifts it once read", (ns.ScanShieldState()), nil)
