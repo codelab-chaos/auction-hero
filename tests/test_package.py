@@ -16,13 +16,14 @@ class PackagingTests(unittest.TestCase):
     def test_installable_archive_and_checksum(self):
         original = (ROOT / "AuctionHero/AuctionHero.toc").read_bytes()
         with tempfile.TemporaryDirectory() as output:
-            archive = package.build("v0.2.0-alpha.1", output)
+            archive = package.build("v0.2.0", output)
+            self.assertEqual(archive.name, "AuctionHero-0.2.0.zip")
             with zipfile.ZipFile(archive) as release:
                 self.assertIsNone(release.testzip())
                 names = release.namelist()
                 self.assertTrue(all(name.startswith("AuctionHero/") for name in names))
                 toc = release.read("AuctionHero/AuctionHero.toc").decode()
-                self.assertIn("## Version: 0.2.0-alpha.1\n", toc)
+                self.assertIn("## Version: 0.2.0\n", toc)
                 self.assertEqual(release.read("AuctionHero/LICENSE"), (ROOT / "LICENSE").read_bytes())
                 for line in package.toc_files(toc):
                     self.assertIn("AuctionHero/" + line, names)
@@ -33,10 +34,10 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual((ROOT / "AuctionHero/AuctionHero.toc").read_bytes(), original)
 
     def test_versions(self):
-        for value in ("0.1.0", "v1.2.3", "2.0.0-alpha.1", "1.0.0-rc.2"):
+        for value in ("0.1.0", "v0.1.0", "v1.2.3", "2.0.0"):
             with self.subTest(value=value):
                 self.assertEqual(package.normalize_version(value), value.removeprefix("v"))
-        for value in ("latest", "1.0", "01.0.0", "v1.0.0-01", "1.0.0/../../file", "1.0.0\ninvalid"):
+        for value in ("latest", "1.0", "01.0.0", "0.1.0-alpha.1", "v0.1.0-beta.1", "1.0.0-rc.2", "v1.0.0-01", "1.0.0/../../file", "1.0.0\ninvalid"):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 package.normalize_version(value)
 

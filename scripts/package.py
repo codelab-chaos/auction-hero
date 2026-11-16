@@ -3,7 +3,7 @@
 
 The ZIP holds the addon's tracked files only, with the version stamped into
 the packaged TOC and the license added, plus a SHA-256 checksum beside it.
-Same convention as Quest Party's scripts/package.py.
+Versions are plain major.minor.patch; release status is separate metadata.
 """
 
 import argparse
@@ -25,12 +25,8 @@ def toc_files(toc):
 def normalize_version(value):
     version = value.removeprefix("v")
     number = r"(?:0|[1-9][0-9]*)"
-    if not re.fullmatch(rf"{number}\.{number}\.{number}(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?", version):
-        raise ValueError("Use a version such as 0.1.0 or 0.2.0-alpha.1 (optional v prefix).")
-    if "-" in version:
-        for part in version.split("-", 1)[1].split("."):
-            if part.isdigit() and len(part) > 1 and part.startswith("0"):
-                raise ValueError("Numeric prerelease identifiers cannot have leading zeroes.")
+    if not re.fullmatch(rf"{number}\.{number}\.{number}", version):
+        raise ValueError("Use a plain version such as 0.1.0 (optional v prefix); alpha/beta status belongs on the GitHub release.")
     return version
 
 

@@ -1,5 +1,17 @@
 # Auction Hero development
 
+## Versions and release status
+
+Use plain `major.minor.patch` versions, such as `0.1.0`, in tags, ZIP names
+and TOC metadata. Do not add alpha, beta or rc suffixes. The `0.x` series
+communicates early development; GitHub's prerelease flag carries release status.
+
+A public release means ready for general use and can still be `0.x`; it does
+not mean the project is finished or requires `1.0.0`. Promote a tested beta by
+editing the existing GitHub release's status, keeping its version, tag and ZIP.
+Tag pushes publish prereleases by default; manual releases have an explicit
+`public_release` choice. See README.md for publication and promotion commands.
+
 ## Deploy after every change (the game does not read this repo)
 
 WoW loads Auction Hero from a copy in the game's AddOns folder, not from

@@ -6,9 +6,13 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version, e.g. 0.1.0 or 0.2.0-rc.1'
+        description: 'Plain version, e.g. 0.1.0 (no alpha/beta suffix)'
         required: true
         type: string
+      public_release:
+        description: 'Publish for general use (otherwise mark as prerelease)'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -92,10 +96,11 @@ jobs:
           RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
           RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
           RELEASE_COMMIT: ${{ github.sha }}
+          PUBLIC_RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.public_release }}
         run: |
-          flags=(--latest)
-          if [[ "$RELEASE_VERSION" == *-* ]]; then
-            flags=(--prerelease --latest=false)
+          flags=(--prerelease --latest=false)
+          if [[ "$PUBLIC_RELEASE" == true ]]; then
+            flags=(--latest)
           fi
           if [[ "$GITHUB_EVENT_NAME" == push ]]; then
             flags+=(--verify-tag)
