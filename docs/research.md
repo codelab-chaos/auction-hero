@@ -6,7 +6,7 @@ Researched 2026-11-12. Covers the in-game auction object model and API, what is 
 
 | Source | What it is | Trust |
 | --- | --- | --- |
-| `/home/chadneff/git/hub/wow-ui-source`, branch `origin/forever` | Blizzard's own UI code and generated API docs, client 1.60.1 build 70888 | Primary. Everything in "Object model" and "API" below comes from here |
+| A local clone of [Gethe/wow-ui-source](https://github.com/Gethe/wow-ui-source), branch `origin/forever` | Blizzard's own UI code and generated API docs, client 1.60.1 build 70888 | Primary. Everything in "Object model" and "API" below comes from here |
 | `../quest-party/QuestParty/QuestParty.toc` | Our own working Forever addon | Primary for TOC settings |
 | Community repos, guides, CurseForge pages | Other addon authors' notes | Self-reported. None had an in-game test behind the claims we care about |
 | Blizzard forum post on the web API | One developer probing endpoints | Unofficial, "nothing is official and documented yet" |
@@ -14,7 +14,7 @@ Researched 2026-11-12. Covers the in-game auction object model and API, what is 
 Note: the local `wow-ui-source` checkout sits on `live` (retail 12.1.5). Read the Forever files without switching branches:
 
 ```sh
-cd /home/chadneff/git/hub/wow-ui-source
+cd path/to/wow-ui-source
 git show origin/forever:Interface/AddOns/Blizzard_APIDocumentationGenerated/AuctionHouseDocumentation.lua
 git ls-tree -r --name-only origin/forever Interface/AddOns/Blizzard_AuctionHouseUI
 ```
@@ -166,7 +166,7 @@ Things to know:
 
 **There is no price history API.** The client only knows what is listed right now. Every auction addon builds history itself by recording what it sees into SavedVariables.
 
-This is the core design decision for AuctioNitro:
+This is the core design decision for Auction Hero:
 
 - What we snapshot (browse min prices, full search results, or full scans).
 - How often, given the search limit and the scan cooldown.
@@ -275,7 +275,7 @@ Suggested next step: a tiny probe addon that answers these and dumps one scan to
 
 ## The addon and deployment
 
-The addon lives in `AuctioNitro/` and deploys the same way `../quest-party` does:
+The addon lives in `AuctionHero/` and deploys the same way `../quest-party` does:
 
 ```sh
 scripts/deploy.sh            # copy the addon into the game
@@ -288,14 +288,14 @@ scripts/deploy.sh --dry-run  # show what would change, copy nothing
 
 What the first version does (a probe, not yet a trading tool):
 
-- **Download:** "Full scan" (`ReplicateItems`, one row per auction) or "Browse sweep" (paged empty browse, one row per item). Buttons are in the window, which opens with the auction house. `/an` toggles it.
+- **Download:** "Full scan" (`ReplicateItems`, one row per auction) or "Browse sweep" (paged empty browse, one row per item). Buttons are in the window, which opens with the auction house. `/ah` toggles it.
 - **Summary:** snapshot facts and market totals, with breakdowns by quality, time left, stack size and seller.
 - **Model:** every field of the raw rows with the Lua types seen, how often it is filled, and its values or range.
 - **Items:** per-item listings, units, sellers, lowest, median and highest unit price, and how far the lowest sits under the median. Click a row to see its raw rows.
 - **Rows:** the raw rows. The tooltip lists every field as it arrived.
 - **Log:** the auction house events the client fired, with their payloads.
 
-The snapshot is saved in `AuctioNitroDB` (`WTF/Account/<account>/SavedVariables/AuctioNitro.lua`), so it can also be read from outside the game after a `/reload` or logout.
+The snapshot is saved in `AuctionHeroDB` (`WTF/Account/<account>/SavedVariables/AuctionHero.lua`), so it can also be read from outside the game after a `/reload` or logout.
 
 Where things are, one responsibility per file:
 

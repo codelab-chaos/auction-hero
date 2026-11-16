@@ -1,4 +1,4 @@
-# AuctioNitro
+# Auction Hero
 
 This is an experiment with auction house data and a better UI and/or way to track prices and post auctions. 
 

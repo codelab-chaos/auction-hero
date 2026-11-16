@@ -1,0 +1,77 @@
+## Interface: 16001
+## Title: Auction Hero
+## Notes: Browse, price and trade auctions with scan history and a compact Buy, Sell and Resell interface.
+## Author: Wizwonk
+## Version: 0.1.0
+## AllowLoadGameType: forever
+## ExcludeLoadGameType: standard, classic
+## Category: Auction House
+## IconTexture: Interface\Icons\INV_Misc_Coin_02
+## SavedVariables: AuctionHeroDB
+## SavedVariablesPerCharacter: AuctionHeroCharDB
+## AddonCompartmentFunc: AuctionHero_OnAddonCompartmentClick
+
+core.lua
+jobs.lua
+locales\en-us.lua
+data\settings.lua
+data\schemas.lua
+data\sources.lua
+data\events.lua
+data\summary.lua
+data\views.lua
+data\theme.lua
+data\trading.lua
+data\activity.lua
+data\ledger.lua
+data\tooltip.lua
+data\facets.lua
+data\gear.lua
+data\scan-shield.lua
+feed\links.lua
+feed\item-names.lua
+feed\replicate.lua
+feed\browse.lua
+feed\downloader.lua
+feed\event-log.lua
+store.lua
+activity.lua
+market\market.lua
+market\history.lua
+market\footprint.lua
+market\signals.lua
+market\orders.lua
+market\facets.lua
+market\resell.lua
+inventory\bags.lua
+inventory\gear.lua
+trade\deadlines.lua
+trade\posting.lua
+trade\sell-search.lua
+trade\owned.lua
+trade\cancelling.lua
+trade\item-key.lua
+trade\buying.lua
+trade\live-check.lua
+ledger\ledger.lua
+ledger\trades.lua
+ledger\mail.lua
+analyze\profile.lua
+analyze\derive.lua
+analyze\analyzer.lua
+ui\view-model.lua
+ui\kit.lua
+ui\chart.lua
+ui\window.lua
+ui\scan-shield.lua
+ui\tabs\buy.lua
+ui\tabs\sell.lua
+ui\tabs\auctions.lua
+ui\tabs\resell.lua
+ui\tabs\ledger.lua
+ui\tabs\history.lua
+ui\tabs\debug.lua
+ui\options.lua
+ui\item-tooltip.lua
+ui\auction-house-button.lua
+commands.lua
