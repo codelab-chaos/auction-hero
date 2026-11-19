@@ -6,8 +6,7 @@ the addon.
 | File | Goes to |
 | --- | --- |
 | `description.md` | Description tab. Set the editor to **Markdown** and paste it in. |
-| `media.json` | Media tab. One entry per image: upload `media/<file>`, then copy `label` into the title and `description` into the description. |
-| `media/` | The images for the Media tab (screenshots of the addon in game). |
+| `media.json` | Media tab. One entry per image: upload `docs/img-barn/<file>`, then copy `label` into the title and `description` into the description. |
 
-Keep `description.md` in step with the README's "What it does" and "Status"
+Keep `description.md` in step with the README (same sections, same `cat-*` images)
 when features land. No em-dashes.

@@ -10,7 +10,7 @@ A public release means ready for general use and can still be `0.x`; it does
 not mean the project is finished or requires `1.0.0`. Promote a tested beta by
 editing the existing GitHub release's status, keeping its version, tag and ZIP.
 Tag pushes publish prereleases by default; manual releases have an explicit
-`public_release` choice. See README.md for publication and promotion commands.
+`public_release` choice. See docs/releasing.md for publication and promotion commands.
 
 ## Deploy after every change (the game does not read this repo)
 
