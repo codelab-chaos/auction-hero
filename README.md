@@ -75,25 +75,6 @@ Install from CurseForge, or copy the `AuctionHero` folder from a
 [release](https://github.com/codelab-chaos/auction-hero/releases) ZIP into
 `World of Warcraft/_forever_/Interface/AddOns`, then start the game.
 
-## Development
-
-```sh
-cd tests && npm install && npm test   # addon tests, against a mocked game client
-scripts/deploy.sh                     # copy the addon into your game
-python3 scripts/package.py            # build a ZIP into dist/
-```
-
-| Folder | What it is |
-| --- | --- |
-| `AuctionHero/` | The addon |
-| `tests/` | Tests, run against a mocked game client |
-| `docs/` | How the window is put together ([addon-ui.md](docs/addon-ui.md)), research notes, [builds and releases](docs/releasing.md) |
-| `curse-forge/` | The CurseForge description and Media tab entries |
-
-ahero-lab, a local web workbench for studying scans and designing the window,
-lives in its own repository beside this one (`../ahero-lab`). The addon does
-not depend on it.
-
 ## License
 
 MIT. See [LICENSE](LICENSE).
