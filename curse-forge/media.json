@@ -14,7 +14,7 @@
     {
       "file": "sell.png",
       "label": "Sell",
-      "description": "Your bags as a grid, price rules, price confidence and the competition you would be listed against."
+      "description": "See at a glance how competitive your price is: your auction slotted into the ladder of current listings, with price rules and how sure the going rate is."
     },
     {
       "file": "resell.png",
