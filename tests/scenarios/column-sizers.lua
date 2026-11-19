@@ -62,4 +62,4 @@ local dollar = Frames(function(frame)
 	return frame.label and frame.label.text == "$"
 end)
 check("the deals column is headed with a dollar sign", #dollar, 1)
-check("and keeps its own width, whatever was dragged before", dollar[1].w, 52)
+check("and stays compact despite an old dragged width", dollar[1].w, 32)

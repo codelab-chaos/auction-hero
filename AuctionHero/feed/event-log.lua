@@ -106,10 +106,46 @@ frame:SetScript("OnEvent", function(_, event, ...)
 	Record(event, ...)
 end)
 
+-- Who made a call: this addon, a game window (named by its folder, such as
+-- Blizzard_AuctionHouseUI) or another addon. The first frame of the stack
+-- outside this file and the game's C code is the caller.
+local function Caller()
+	local stack = debugstack and debugstack(2, 12, 0) or ""
+	for line in stack:gmatch("[^\n]+") do
+		if not line:find("event%-log%.lua") and not line:find("^%[C%]") then
+			local addon = line:match("AddOns[/\\]([^/\\]+)")
+			if addon then
+				return addon
+			end
+		end
+	end
+	return "game"
+end
+
+-- Every request in ns.LoggedCalls is noted as it is made, with who made it.
+local function WatchCalls()
+	for owner, names in pairs(ns.LoggedCalls or {}) do
+		local into = owner == "_G" and _G or _G[owner]
+		for _, name in ipairs(type(into) == "table" and names or {}) do
+			if type(into[name]) == "function" then
+				hooksecurefunc(into, name, function(...)
+					Record("call " .. name, Caller(), ...)
+				end)
+			end
+		end
+	end
+	if ns.LogPopups and StaticPopup_Show then
+		hooksecurefunc("StaticPopup_Show", function(which, text)
+			Record("popup", which, text)
+		end)
+	end
+end
+
 Bus:On("INIT", function()
 	ns.db.log = ns.db.log or {}
 	for _, event in ipairs(ns.LoggedEvents) do
 		-- Registering an event the client does not have raises an error.
 		pcall(frame.RegisterEvent, frame, event)
 	end
+	WatchCalls()
 end)

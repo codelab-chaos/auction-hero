@@ -122,3 +122,8 @@ ns.GearLevelRule = { below = 1, above = 1, max = 10 }
 
 -- "Picks" weighs gain against gold.
 ns.GearCopperPerGold = 10000
+
+-- Bags gain slots, not stat points, so the two cannot be ranked together.
+-- Sorted by gain, bags follow the gear as a group of their own: their sort
+-- value is their extra slots less this, far under any stat gain.
+ns.BagGainSortOffset = 100000

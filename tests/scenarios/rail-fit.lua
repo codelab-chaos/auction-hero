@@ -112,3 +112,20 @@ end
 local sorted = { unpack(labels) }
 table.sort(sorted)
 check("accessories are alphabetical", table.concat(labels, ","), table.concat(sorted, ","))
+
+-- Necklaces and rings have their own tiles in the rail, out of the side list.
+local railBoxes = {}
+for _, section in ipairs(ns.BuyRail) do
+	for _, entry in ipairs(section) do
+		if entry.box then railBoxes[entry.box] = entry.of end
+	end
+end
+check("necklaces are in the rail", railBoxes[ns.L.BOX_NECK], "accessories")
+check("and rings", railBoxes[ns.L.BOX_FINGER], "accessories")
+for _, category in ipairs(ns.ItemCategories) do
+	for _, box in ipairs(category.boxes or {}) do
+		if box.label == ns.L.BOX_NECK or box.label == ns.L.BOX_FINGER then
+			check(box.label .. " leaves the side list for the rail", box.inRail, true)
+		end
+	end
+end

@@ -14,7 +14,7 @@ local function rows()
 end
 local function click(frame)
 	frame.scripts.OnMouseUp(frame)
-	Tick(10)
+	Tick(20)
 end
 local function itemRow(key)
 	for _, frame in ipairs(rows()) do
@@ -53,26 +53,70 @@ check("and together they are everything for sale", listed, tunic.units)
 -- Clicking a price picks that price, not the cheapest.
 click(shown[2])
 local wantedUnit = points[2].unit
-local buy = ButtonNamed("Buy at " .. strip(ns.PlainMoney(wantedUnit)))
+local buy = ButtonNamed("Buy 1 at " .. strip(ns.PlainMoney(wantedUnit)))
 checkTrue("the button names the price clicked", buy ~= nil)
 
 -- And that is the price bought: the live auction at it, not a cheaper one.
 MOCK.liveNames = { "Tunic of the Bear", "Tunic of the Bear" }
 MOCK.livePrice = wantedUnit / 2 -- live auctions at half the price and at the price
 buy.scripts.OnClick(buy)
-Tick(10)
+Tick(20)
 check("the live auction at that price is offered", ns.Buying.state.total, wantedUnit)
 check("not the cheaper one", ns.Buying.state.auctionID, 702)
+checkTrue("at an unchanged price the button keeps its words", ButtonNamed("Buy 1 at " .. strip(ns.PlainMoney(wantedUnit))) ~= nil)
+checkTrue("and says nothing of confirming", ButtonNamed("Confirm: buy for " .. strip(ns.PlainMoney(wantedUnit))) == nil)
+checkMatch("its note says the price is unchanged", ns.L.BUY_CHECKED_SAME, "unchanged")
 ns.Buying:Cancel()
+
+-- An item that cannot stack is one per auction, whatever count the live
+-- search reports, so its price is never split into cheap units.
+MOCK.liveCount = 68
+buy = ButtonNamed("Buy 1 at " .. strip(ns.PlainMoney(wantedUnit)))
+buy.scripts.OnClick(buy)
+Tick(20)
+check("a junk count is held to one", ns.Buying.state.quantity, 1)
+check("and the price is the auction's", ns.Buying.state.total, wantedUnit)
+ns.Buying:Cancel()
+MOCK.liveCount = nil
 
 -- If nothing is at that price any more, it says so and names the cheapest.
 MOCK.livePrice = wantedUnit * 3
-buy = ButtonNamed("Buy at " .. strip(ns.PlainMoney(wantedUnit)))
+buy = ButtonNamed("Buy 1 at " .. strip(ns.PlainMoney(wantedUnit)))
 buy.scripts.OnClick(buy)
-Tick(10)
+Tick(20)
 check("a price that is gone is not swapped for another", ns.Buying.state.phase, "failed")
 checkMatch("and the player is told", ns.Buying.state.message, "^None at .* any more%. The cheapest now is ")
 MOCK.livePrice = nil
+
+-- A stacked single item names how many units the auction holds and the price
+-- of each, so a stack is never read as one item at that price.
+click(itemRow(tunic.key))
+local cloth = market.byKey["2002:Linen Cloth"]
+cloth.checkedAt = GetServerTime() -- checked a moment ago: choosing it asks nothing
+click(itemRow(cloth.key))
+local stacked = Frames(function(frame)
+	local n = frame.label and frame.scripts.OnClick and tostring(frame.label.text):match("^Buy (%d+) at ")
+	return n and tonumber(n) > 1
+end)[1]
+checkTrue("a stack names its units and the price of each", stacked ~= nil)
+
+-- A stack is all or nothing, and the confirm says it is a stack.
+local clothPrices = priceRows(cloth.key)
+local clothUnit = clothPrices[1].data.point.unit
+click(clothPrices[1])
+MOCK.livePrice, MOCK.liveQuantity = clothUnit, 94
+MOCK.liveNames = { "Linen Cloth" }
+stacked = Frames(function(frame)
+	return frame.label and frame.scripts.OnClick and tostring(frame.label.text):match("^Buy %d+ at ")
+end)[1]
+stacked.scripts.OnClick(stacked)
+Tick(20)
+check("the whole stack is offered", ns.Buying.state.quantity, 94)
+checkTrue("the confirm names it a stack", ButtonNamed("Confirm: stack of 94 for " .. strip(ns.PlainMoney(clothUnit * 94))) ~= nil)
+ns.Buying:Cancel()
+MOCK.livePrice, MOCK.liveQuantity, MOCK.liveNames = nil, nil, nil
+click(itemRow(cloth.key))
+click(itemRow(tunic.key))
 
 -- Clicking the item again closes it.
 click(itemRow(tunic.key))
@@ -86,3 +130,22 @@ checkTrue("goods list their prices too", #orePrices >= 2)
 click(orePrices[2])
 local upTo = ns.Market.PricePoints(ore)[1].units + ns.Market.PricePoints(ore)[2].units
 checkTrue("picking the second price asks for everything up to it", ButtonNamed("Buy " .. ns.Comma(upTo)) ~= nil)
+
+-- A purchase that finds nothing listed by the item's name takes it off the
+-- list, with nothing spent and nothing more asked.
+local sword
+for key, item in pairs(market.byKey) do
+	if item.itemID == 2007 then sword = item end
+end
+click(itemRow(sword.key))
+MOCK.browseGone = true
+ns.ItemKey:Forget(sword.itemID, sword.name)
+local swordBuy = Frames(function(frame)
+	return frame.label and frame.scripts.OnClick and tostring(frame.label.text):match("^Buy %d+ at ")
+end)[1]
+swordBuy.scripts.OnClick(swordBuy)
+Tick(20)
+check("the purchase finds it gone", ns.Buying.state.gone, true)
+check("and it comes off the list", itemRow(sword.key), nil)
+check("and out of the market", market.byKey[sword.key], nil)
+MOCK.browseGone = false

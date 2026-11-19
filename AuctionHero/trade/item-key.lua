@@ -12,7 +12,6 @@
 --
 -- It only reads. Nothing is bought here.
 local _, ns = ...
-local Bus = ns.Bus
 
 local ItemKey = {}
 ns.ItemKey = ItemKey
@@ -20,38 +19,20 @@ ns.ItemKey = ItemKey
 local PAGES = 5 -- pages of browse results to look through
 
 local known = {} -- "itemID:name" -> item key
-local asking -- { itemID, name, done, pages, sent }
-local deadlines -- the wait on the game while asking (see trade\deadlines.lua)
-
-local function Finish(itemKey, problem, found)
-	local done = asking and asking.done
-	asking = nil
-	deadlines:Drop()
-	if done then
-		done(itemKey, problem, found)
-	end
-end
-
--- The game has a while to answer; then the request ends unanswered.
-deadlines = ns.Deadlines({ asking = ns.AnswerSeconds.itemKey }, function()
-	if asking then
-		ns.EventLog:Note("item key unanswered", asking.itemID, asking.name)
-		Finish(nil, "unanswered")
-	end
-end)
+local asking = {} -- "itemID:name" -> { itemID, name, waiters, pages }, while being asked
 
 -- Looks through the browse results for the item. Returns its key, or nil and
 -- whether some results could not be named yet.
-local function Find()
+local function Find(wanted)
 	local unnamed = false
 	local ok, results = pcall(C_AuctionHouse.GetBrowseResults)
 	for _, result in ipairs(ok and results or {}) do
 		local itemKey = result.itemKey
-		if itemKey and itemKey.itemID == asking.itemID then
-			local known, info = pcall(C_AuctionHouse.GetItemKeyInfo, itemKey)
-			if not known or not info or not info.itemName then
+		if itemKey and itemKey.itemID == wanted.itemID then
+			local named, info = pcall(C_AuctionHouse.GetItemKeyInfo, itemKey)
+			if not named or not info or not info.itemName then
 				unnamed = true -- the game is still loading this one
-			elseif info.itemName == asking.name then
+			elseif info.itemName == wanted.name then
 				return itemKey
 			end
 		end
@@ -59,28 +40,9 @@ local function Find()
 	return nil, unnamed
 end
 
-local function Look()
-	if not asking or not asking.sent then
-		return
-	end
-	local itemKey, unnamed = Find()
-	if itemKey then
-		known[asking.itemID .. ":" .. asking.name] = itemKey
-		ns.EventLog:Note("item key found", asking.itemID, asking.name, itemKey.itemLevel, itemKey.itemSuffix)
-		return Finish(itemKey)
-	end
-	if unnamed then
-		return -- ITEM_KEY_ITEM_INFO_RECEIVED will bring us back
-	end
-	local full = select(2, pcall(C_AuctionHouse.HasFullBrowseResults))
-	if full == false and asking.pages < PAGES then
-		asking.pages = asking.pages + 1
-		if pcall(C_AuctionHouse.RequestMoreBrowseResults) then
-			return
-		end
-	end
-	-- Nothing by this name with this id among the results. Say what was there
-	-- instead, so "not found" can be told from "looked for it the wrong way".
+-- What the browse returned, for the log and the player, when the item was not
+-- among it: "not found" can then be told from "looked for it the wrong way".
+local function Seen()
 	local ok, results = pcall(C_AuctionHouse.GetBrowseResults)
 	results = ok and results or {}
 	local seen = {}
@@ -89,80 +51,85 @@ local function Look()
 		local named, info = pcall(C_AuctionHouse.GetItemKeyInfo, itemKey)
 		seen[#seen + 1] = ("%s \"%s\" level %s variant %s"):format(tostring(itemKey.itemID), tostring(named and info and info.itemName), tostring(itemKey.itemLevel), tostring(itemKey.itemSuffix))
 	end
-	local found = ("%d results%s"):format(#results, #seen > 0 and (": " .. table.concat(seen, "; ")) or "")
-	ns.EventLog:Note("item key not found", asking.itemID, asking.name, found)
-	Finish(nil, "gone", found)
+	return ("%d results%s"):format(#results, #seen > 0 and (": " .. table.concat(seen, "; ")) or ""), #results
 end
 
-local function Send()
-	if not C_AuctionHouse.IsThrottledMessageSystemReady() then
-		return -- sent when the game says it is ready
+-- Reads the browse results once they are quiet. Returns { itemKey } or
+-- { problem, found }, "wait" while names load, or "more" for the next page.
+local function Read(wanted, request, last)
+	local itemKey, unnamed = Find(wanted)
+	if itemKey then
+		return { itemKey = itemKey }
 	end
-	local ok, problem = pcall(C_AuctionHouse.SendBrowseQuery, {
-		searchString = asking.name,
-		sorts = {
-			{ sortOrder = Enum.AuctionHouseSortOrder.Name, reverseSort = false },
-			{ sortOrder = Enum.AuctionHouseSortOrder.Price, reverseSort = false },
-		},
-		filters = {},
-	})
-	ns.EventLog:Note("item key asked", asking.itemID, asking.name, ok, problem)
-	if not ok then
-		return Finish(nil, "refused")
+	if unnamed and not last then
+		return "wait" -- ITEM_KEY_ITEM_INFO_RECEIVED brings us back
 	end
-	asking.sent = true
+	local full = select(2, pcall(C_AuctionHouse.HasFullBrowseResults))
+	if full == false and wanted.pages < PAGES and not last then
+		wanted.pages = wanted.pages + 1
+		return request:More(C_AuctionHouse.RequestMoreBrowseResults)
+	end
+	local found, count = Seen()
+	-- No result at all is the auction house saying it has none by that name.
+	return { problem = count == 0 and "none" or "gone", found = found }
 end
 
 -- Finds the key for an item of this id and name, then calls done(itemKey),
--- or done(nil, problem, found) where problem is "gone" (no result has this id
--- and name), "unanswered" or "refused", and found says what the browse did
--- return. A newer request drops an older one unanswered.
+-- or done(nil, problem, found) where problem is "none" (nothing at all is
+-- listed by that name), "gone" (results came back, none with this id and
+-- name), "unanswered" or "refused", and found says what the browse did
+-- return. Asking again for an item already being asked about waits on the
+-- same answer.
 function ItemKey:Resolve(itemID, name, done)
-	local itemKey = known[itemID .. ":" .. name]
-	if itemKey then
-		return done(itemKey)
+	local id = itemID .. ":" .. name
+	if known[id] then
+		return done(known[id])
 	end
-	if not ns.auctionHouseOpen then
-		return done(nil, "refused")
+	if asking[id] then
+		table.insert(asking[id].waiters, done)
+		return
 	end
-	asking = { itemID = itemID, name = name, done = done, pages = 1 }
-	deadlines:Enter("asking")
-	Send()
+	local wanted = { itemID = itemID, name = name, waiters = { done }, pages = 1 }
+	asking[id] = wanted
+	ns.Requests:Ask({
+		kind = "browse",
+		label = "item key",
+		itemID = itemID,
+		send = function()
+			return C_AuctionHouse.SendBrowseQuery({
+				searchString = name,
+				sorts = {
+					{ sortOrder = Enum.AuctionHouseSortOrder.Name, reverseSort = false },
+					{ sortOrder = Enum.AuctionHouseSortOrder.Price, reverseSort = false },
+				},
+				filters = {},
+			})
+		end,
+		read = function(request, last)
+			return Read(wanted, request, last)
+		end,
+		done = function(outcome, result)
+			asking[id] = nil
+			local itemKey, problem, found
+			if outcome == "answered" and result then
+				itemKey, problem, found = result.itemKey, result.problem, result.found
+			else
+				problem = outcome == "unanswered" and "unanswered" or "refused"
+			end
+			if itemKey then
+				known[id] = itemKey
+				ns.EventLog:Note("item key found", itemID, name, itemKey.itemLevel, itemKey.itemSuffix)
+			else
+				ns.EventLog:Note("item key not found", itemID, name, problem, found)
+			end
+			for _, waiter in ipairs(wanted.waiters) do
+				waiter(itemKey, problem, found)
+			end
+		end,
+	})
 end
 
 -- Forgets a key, when a search by it finds nothing the game's window would.
 function ItemKey:Forget(itemID, name)
 	known[itemID .. ":" .. name] = nil
 end
-
-local frame = CreateFrame("Frame")
-for _, event in ipairs({
-	"AUCTION_HOUSE_BROWSE_RESULTS_UPDATED",
-	"AUCTION_HOUSE_BROWSE_RESULTS_ADDED",
-	"AUCTION_HOUSE_BROWSE_FAILURE",
-	"ITEM_KEY_ITEM_INFO_RECEIVED",
-	"AUCTION_HOUSE_THROTTLED_SYSTEM_READY",
-}) do
-	pcall(frame.RegisterEvent, frame, event)
-end
-frame:SetScript("OnEvent", function(_, event)
-	if not asking then
-		return
-	end
-	if event == "AUCTION_HOUSE_THROTTLED_SYSTEM_READY" then
-		if not asking.sent then
-			Send()
-		end
-	elseif event == "AUCTION_HOUSE_BROWSE_FAILURE" then
-		if asking.sent then
-			Finish(nil, "refused")
-		end
-	else
-		Look()
-	end
-end)
-
-Bus:On("AH_CLOSED", function()
-	asking = nil
-	deadlines:Drop()
-end)

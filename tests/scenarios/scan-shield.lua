@@ -25,6 +25,7 @@ check("the shield goes up when the scan starts", up(), true)
 checkTrue("and says what it is doing", shows("^Scanning the auction house$"))
 checkTrue("with each stage listed", shows("^Read the auctions$") and shows("^Fill in item details$"))
 checkTrue("and a way out", ButtonNamed("Cancel") ~= nil)
+checkTrue("the window's header leaves the progress to the shield", not shows("^Full scan:"))
 -- The stages go by too fast in a test to catch between ticks, so each is
 -- noted as the downloader reports it (after the shield has taken it in).
 local seen = {}

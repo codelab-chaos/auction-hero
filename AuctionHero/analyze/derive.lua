@@ -54,10 +54,7 @@ local function ListingReader(source, get)
 	local listing = {}
 
 	return function(row)
-		local quantity = get(row, at.quantity) or 1
-		if quantity < 1 then
-			quantity = 1
-		end
+		local quantity = ns.AuctionUnits(get(row, at.itemID), get(row, at.quantity))
 		local link = at.link and get(row, at.link)
 		local parsed = parse(link)
 		local buyout = get(row, at.buyout) or 0

@@ -51,7 +51,38 @@ ns.LoggedEvents = {
 	"AUCTION_MULTISELL_FAILURE",
 	"AUCTION_HOUSE_SCRIPT_DEPRECATED",
 	"AUCTION_HOUSE_FAVORITES_UPDATED",
+	-- The mailbox: what the game says while mail is read and taken.
+	"MAIL_SHOW",
+	"MAIL_CLOSED",
+	"MAIL_INBOX_UPDATE",
+	"MAIL_FAILED",
+	"MAIL_SUCCESS",
+	"CLOSE_INBOX_ITEM",
+	-- Some errors reach the player only as a line in chat.
+	"CHAT_MSG_SYSTEM",
 }
+
+-- Requests to the server the log records, whoever makes them: this addon,
+-- the game's own windows or another addon. Each line says which, so two
+-- windows asking at once can be told apart. A name the client does not have
+-- is skipped.
+ns.LoggedCalls = {
+	C_AuctionHouse = {
+		"SendBrowseQuery", "RequestMoreBrowseResults", "SendSearchQuery", "SendSellSearchQuery",
+		"RequestMoreItemSearchResults", "RequestMoreCommoditySearchResults", "RefreshItemSearchResults",
+		"RefreshCommoditySearchResults", "PlaceBid", "StartCommoditiesPurchase", "ConfirmCommoditiesPurchase",
+		"CancelCommoditiesPurchase", "QueryOwnedAuctions", "QueryBids", "CancelAuction", "ReplicateItems",
+		"PostItem", "PostCommodity", "ConfirmPostItem", "ConfirmPostCommodity", "SearchForFavorites",
+	},
+	C_Mail = { "SetOpeningAll" },
+	_G = {
+		"CheckInbox", "GetInboxText", "TakeInboxMoney", "TakeInboxItem", "AutoLootMailItem",
+		"DeleteInboxItem", "ReturnInboxItem",
+	},
+}
+
+-- The game's pop-ups, by name, as they show.
+ns.LogPopups = true
 
 -- Events that fire once per item while data loads. Logged as a running count
 -- on one line instead of one line each.
@@ -63,6 +94,7 @@ ns.LoggedEventsCollapsed = {
 	AUCTION_HOUSE_THROTTLED_SYSTEM_READY = true,
 	-- Fires in bursts of dozens, which pushed everything else out of the log.
 	AUCTION_CANCELED = true,
+	MAIL_INBOX_UPDATE = true,
 }
 
 ns.LogLimit = 600

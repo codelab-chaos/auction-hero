@@ -28,6 +28,15 @@ function History:ScanCount()
 	return Store().scans
 end
 
+-- When each remembered scan was taken (server times), in no order.
+function History:ScanTimes()
+	local times = {}
+	for time in pairs(Store().folded) do
+		times[#times + 1] = time
+	end
+	return times
+end
+
 -- What an item usually goes for: its remembered price once enough scans have
 -- seen it, otherwise the current scan's median.
 function History:Usual(item)

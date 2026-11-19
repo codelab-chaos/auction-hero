@@ -19,12 +19,11 @@ ns.LiveCheck = LiveCheck
 
 local SOURCE = "replicate" -- the scan that is patched
 
-local wanted -- { itemID, itemKey, commodity, equipment } for the check in hand
-local deadlines -- the wait on the game once asked (see trade\deadlines.lua)
+local wanted -- { itemID, itemKey, commodity, name, request } for the check in hand
+local turn = 0 -- a newer check overtakes an older one still settling
 
 local function Publish(phase)
 	LiveCheck.state = { phase = phase, itemID = wanted and wanted.itemID }
-	deadlines:Enter(phase)
 	Bus:Fire("LIVE_CHECK_CHANGED", LiveCheck.state)
 end
 
@@ -33,18 +32,16 @@ local function Finish()
 	Publish("idle")
 end
 
--- Once asked, the game has a while to answer; then the check is dropped and
--- the scan's rows stand.
-deadlines = ns.Deadlines({ sent = ns.AnswerSeconds.liveCheck }, function()
-	ns.EventLog:Note("live check unanswered", wanted and wanted.itemID)
-	Finish()
-end)
-
 -- Whether an item's listings are old enough to be worth asking about.
 function LiveCheck:IsStale(item)
 	local snapshot = ns.Store:GetSourceSnapshot(SOURCE)
 	local seen = item.checkedAt or (snapshot and snapshot.meta.time) or 0
 	return GetServerTime() - seen >= ns.LiveCheckRule.staleMinutes * 60
+end
+
+-- Whether a check is recent enough to buy from without asking again.
+function LiveCheck:FreshForBuying(item)
+	return item.checkedAt ~= nil and GetServerTime() - item.checkedAt <= ns.LiveCheckRule.reuseSeconds
 end
 
 -- The game's time left bands run 0 to 3 in a search and 1 to 4 in a scan.
@@ -106,17 +103,18 @@ local function ReadRows(snapshot)
 		if name and name ~= wanted.name then
 			-- Another variant of the item. The search was for this one only.
 		elseif name then
+			local units = ns.AuctionUnits(wanted.itemID, info.quantity)
 			auctions[name] = auctions[name] or {}
 			table.insert(auctions[name], {
 				auctionID = info.auctionID,
 				buyout = info.buyoutAmount or 0,
-				quantity = math.max(1, info.quantity or 1),
+				quantity = units,
 				mine = info.containsOwnerItem == true,
 			})
 			rows[#rows + 1] = Row(snapshot, byName[name] or any, {
 				name = name,
 				link = info.itemLink,
-				count = math.max(1, info.quantity or 1),
+				count = units,
 				buyoutPrice = info.buyoutAmount or 0,
 				minBid = info.minBid or 0,
 				bidAmount = info.bidAmount or 0,
@@ -130,27 +128,62 @@ local function ReadRows(snapshot)
 	return rows, auctions
 end
 
-local function Answered()
+-- Puts what the auction house has now for an item into the market the tabs
+-- read and into the saved scan. No rows takes the item off the list until a
+-- scan sees it again.
+local function Patch(snapshot, market, itemID, name, rows, auctions)
+	local time = GetServerTime()
+	ns.Store:PatchItem(SOURCE, itemID, rows, time, name)
+	for _, item in ipairs(ns.Market:Patch(market, snapshot, itemID, rows, time, name)) do
+		item.liveAuctions = auctions and auctions[item.name]
+		ns.Signals:Rate(item)
+		local cheapest = ns.Market.PricePoints(item)[1]
+		if cheapest then
+			ns.History:SawLow(item.key, cheapest.unit, cheapest.units, time)
+		end
+	end
+	Bus:Fire("MARKET_PATCHED", itemID)
+end
+
+-- The auction house has none of an item by its name (a purchase looked and
+-- found nothing listed at all): it comes off the list. Nothing is asked.
+function LiveCheck:Gone(item)
+	local snapshot = ns.Store:GetSourceSnapshot(SOURCE)
+	local market = ns.Analysis and ns.Analysis.market
+	if not (item and snapshot and market and ns.Schemas[snapshot.meta.schema]) then
+		return
+	end
+	ns.EventLog:Note("live check gone", item.itemID, item.name)
+	Patch(snapshot, market, item.itemID, item.name, {}, {})
+end
+
+-- Reads the answer once it is quiet. A long list comes a page at a time, and
+-- patching in part of it would wipe out what is on the pages not yet read,
+-- so the rest is asked for first.
+local function Read(request, last)
+	if not wanted.commodity and not last then
+		local full = select(2, pcall(C_AuctionHouse.HasFullItemSearchResults, wanted.itemKey))
+		if full == false then
+			wanted.pages = (wanted.pages or 1) + 1
+			if wanted.pages <= ns.LiveCheckRule.maxPages then
+				return request:More(function()
+					return C_AuctionHouse.RequestMoreItemSearchResults(wanted.itemKey)
+				end)
+			end
+			LiveCheck.problem = { itemID = wanted.itemID, text = ns.L.STAT_CHECK_TOO_LONG }
+			ns.EventLog:Note("live check gave up", wanted.itemID, "more than", ns.LiveCheckRule.maxPages, "pages")
+			return { tooLong = true }
+		end
+	end
+	return { read = true }
+end
+
+local function Answered(gone)
 	local snapshot = ns.Store:GetSourceSnapshot(SOURCE)
 	local market = ns.Analysis and ns.Analysis.market
 	local schema = snapshot and ns.Schemas[snapshot.meta.schema]
 	if not (snapshot and market and schema) then
 		return Finish()
-	end
-	local gone = wanted.itemKey == false -- the auction house lists none of it
-	-- A long list comes a page at a time. Patching in part of it would wipe
-	-- out what is on the pages not yet read, so ask for the rest first.
-	if not wanted.commodity and not gone then
-		local full = select(2, pcall(C_AuctionHouse.HasFullItemSearchResults, wanted.itemKey))
-		if full == false then
-			wanted.pages = (wanted.pages or 1) + 1
-			if wanted.pages <= ns.LiveCheckRule.maxPages and pcall(C_AuctionHouse.RequestMoreItemSearchResults, wanted.itemKey) then
-				return -- the next page arrives as another answer
-			end
-			LiveCheck.problem = { itemID = wanted.itemID, text = ns.L.STAT_CHECK_TOO_LONG }
-			ns.EventLog:Note("live check gave up", wanted.itemID, "more than", ns.LiveCheckRule.maxPages, "pages")
-			return Finish()
-		end
 	end
 	local rows, auctions, problem
 	if gone then
@@ -173,50 +206,54 @@ local function Answered()
 		return Finish()
 	end
 
-	local time = GetServerTime()
 	-- Goods are one item per id. A single item is patched by name: the search
 	-- was for one variant, and the others are left as the scan saw them.
-	local name = not wanted.commodity and wanted.name or nil
-	ns.Store:PatchItem(SOURCE, itemID, rows, time, name)
-	for _, item in ipairs(ns.Market:Patch(market, snapshot, itemID, rows, time, name)) do
-		item.liveAuctions = auctions and auctions[item.name]
-		ns.Signals:Rate(item)
-		local cheapest = ns.Market.PricePoints(item)[1]
-		if cheapest then
-			ns.History:SawLow(item.key, cheapest.unit, cheapest.units, time)
-		end
-	end
+	Patch(snapshot, market, itemID, not wanted.commodity and wanted.name or nil, rows, auctions)
 	Publish("done")
 	wanted = nil
-	Bus:Fire("MARKET_PATCHED", itemID)
 end
 
+-- Queues the search for the item. It goes when the auction house is free:
+-- never across a purchase or another search (see trade\requests.lua).
 local function Send()
 	if not wanted or not ns.auctionHouseOpen then
 		return Finish()
 	end
-	-- Never in the way of a scan or a purchase.
-	if ns.Downloader:IsRunning() or ns.Buying.state.phase == "quoting" or ns.Buying.state.phase == "buying" then
-		ns.EventLog:Note("live check dropped", wanted.itemID, "a scan or a purchase is under way")
-		return Finish()
-	end
-	-- The game takes one request at a time. When it is busy, wait for it to
-	-- say it is ready (see the event handler) instead of giving up.
-	if not C_AuctionHouse.IsThrottledMessageSystemReady() then
-		ns.EventLog:Note("live check waiting", wanted.itemID, "the auction house is busy")
-		return
-	end
-	local sorts = wanted.commodity and {}
+	local mine = wanted
+	local sorts = mine.commodity and {}
 		or {
 			{ sortOrder = Enum.AuctionHouseSortOrder.Buyout, reverseSort = false },
 			{ sortOrder = Enum.AuctionHouseSortOrder.Bid, reverseSort = false },
 		}
-	local ok, problem = pcall(C_AuctionHouse.SendSearchQuery, wanted.itemKey, sorts, false)
-	ns.EventLog:Note("live check", wanted.itemID, wanted.commodity and "goods" or "item", wanted.itemKey.itemLevel, wanted.itemKey.itemSuffix, ok, problem)
-	if not ok then
-		return Finish()
-	end
-	Publish("sent")
+	mine.request = ns.Requests:Ask({
+		kind = mine.commodity and "commoditySearch" or "itemSearch",
+		label = "live check",
+		itemID = mine.itemID,
+		itemKey = mine.itemKey,
+		send = function()
+			return C_AuctionHouse.SendSearchQuery(mine.itemKey, sorts, false)
+		end,
+		onSend = function()
+			if wanted == mine then
+				Publish("sent")
+			end
+		end,
+		read = function(request, last)
+			return Read(request, last)
+		end,
+		done = function(outcome, result)
+			if wanted ~= mine then
+				return
+			end
+			if outcome ~= "answered" or not result or result.tooLong then
+				if outcome ~= "answered" then
+					ns.EventLog:Note("live check " .. outcome, mine.itemID)
+				end
+				return Finish()
+			end
+			Answered(false)
+		end,
+	})
 end
 
 -- Asks about an item of the market, if what is known about it is stale, or
@@ -229,23 +266,27 @@ function LiveCheck:Request(item, force)
 	if wanted and wanted.itemID == item.itemID and wanted.name == item.name and self.state.phase ~= "idle" then
 		return true
 	end
+	-- A newer item overtakes the one before: its search, if not yet sent, goes.
+	if wanted then
+		ns.Requests:Cancel(wanted.request)
+	end
 	local commodity = ns.Orders.IsCommodity(item)
 	wanted = { itemID = item.itemID, name = item.name, commodity = commodity }
 	Publish("waiting")
-	local mine = deadlines:Turn()
+	turn = turn + 1
+	local mine = turn
 
 	-- Asks once the item's key is known and the player has settled on the row.
 	local function Ready(itemKey)
-		if mine ~= deadlines:Turn() or not wanted then
+		if mine ~= turn or not wanted then
 			return
 		end
 		wanted.itemKey = itemKey
-		wanted.settled = true
 		Send()
 	end
 
-	deadlines:Later(ns.LiveCheckRule.settleSeconds, function()
-		if not wanted then
+	C_Timer.After(ns.LiveCheckRule.settleSeconds, function()
+		if mine ~= turn or not wanted then
 			return
 		end
 		if commodity then
@@ -259,15 +300,20 @@ function LiveCheck:Request(item, force)
 		end
 		-- A single item is known by a fuller key, which has to be asked for.
 		ns.ItemKey:Resolve(item.itemID, item.name, function(itemKey, problem, found)
-			if mine ~= deadlines:Turn() or not wanted then
+			if mine ~= turn or not wanted then
 				return
 			end
 			if itemKey then
 				return Ready(itemKey)
 			end
-			-- Not finding an item is not proof that it is gone: the lookup may
-			-- be at fault. Nothing is removed on that alone. The scan's rows
-			-- stand, and the panel says what the lookup found instead.
+			-- Nothing at all listed by its name: it is gone, and comes off the
+			-- list until a scan sees it again.
+			if problem == "none" then
+				return Answered(true)
+			end
+			-- Results that do not include it are not proof that it is gone: the
+			-- lookup may be at fault. Nothing is removed on that alone. The
+			-- scan's rows stand, and the panel says what the lookup found instead.
 			local text = problem == "gone" and ns.L.STAT_CHECK_NOT_FOUND:format(found or "") or ns.L.STAT_CHECK_UNREAD:format(problem or "")
 			LiveCheck.problem = { itemID = item.itemID, text = text }
 			Finish()
@@ -275,37 +321,6 @@ function LiveCheck:Request(item, force)
 	end)
 	return true
 end
-
-local frame = CreateFrame("Frame")
--- Forever answers an item search with AUCTION_HOUSE_NEW_RESULTS_RECEIVED,
--- where other clients send ITEM_SEARCH_RESULTS_UPDATED. Both are taken.
-for _, event in ipairs({ "AUCTION_HOUSE_NEW_RESULTS_RECEIVED", "ITEM_SEARCH_RESULTS_UPDATED", "COMMODITY_SEARCH_RESULTS_UPDATED", "AUCTION_HOUSE_THROTTLED_SYSTEM_READY" }) do
-	pcall(frame.RegisterEvent, frame, event)
-end
-frame:SetScript("OnEvent", function(_, event, subject)
-	if event == "AUCTION_HOUSE_THROTTLED_SYSTEM_READY" then
-		-- The game was busy when we wanted to ask. It is ready now.
-		if wanted and LiveCheck.state.phase == "waiting" and wanted.settled then
-			Send()
-		end
-		return
-	end
-	if not wanted or LiveCheck.state.phase ~= "sent" then
-		return
-	end
-	-- The game's own window and the Buy button search too. Only our answer counts.
-	local commodity = event == "COMMODITY_SEARCH_RESULTS_UPDATED"
-	local itemID = commodity and subject or (type(subject) == "table" and subject.itemID)
-	if commodity ~= wanted.commodity or (itemID and itemID ~= wanted.itemID) then
-		return
-	end
-	-- Read the results a moment later, once they have settled.
-	deadlines:Later(ns.SearchSettleSeconds, function()
-		if wanted and LiveCheck.state.phase == "sent" then
-			Answered()
-		end
-	end)
-end)
 
 Bus:On("AH_CLOSED", function()
 	if wanted then

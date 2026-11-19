@@ -27,6 +27,9 @@ It works from what it sees in game. There is no outside price feed.
 - **Graphs:** price and supply graphs for an item over 3, 7, 14 or 30 days.
 - **Item tooltips:** hover an item anywhere in the game for its going rate,
   lowest price, quantity for sale and when it was last seen.
+- **Recipe tooltips:** hover a profession recipe for its crafted output's
+  price, estimated material cost and margin before fees. Older prices are
+  marked `Est.`; missing prices stay `Unknown`.
 
 Open it with `/ah`, or it opens with the auction house. `/ah help` lists the
 commands.

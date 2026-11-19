@@ -832,13 +832,16 @@ end
 -- options:
 --   columns     { id, label, width | flex, align, sortable,
 --                 fixed = true,                   the width cannot be dragged
+--                 fit = true,                     as wide as its widest text
+--                                                 (header or row), no wider
+--                 hideEmpty = true,               hide when every row is blank
 --                 labelColor,                     the header's color
 --                 text(row) -> string,            what the cell says
 --                 color(row) -> color | nil,      its text color
 --                 icon(row) -> fileID | nil,      an icon before the text
 --                 meter(row) -> reading, pips,    draw a meter instead of text
 --                 badge(row) -> string | nil }    draw a tinted badge instead
---   rowHeight, empty (text when there are no rows)
+--   rowHeight, empty (text when there are no rows), gap (between columns, 8)
 --   onClick(row), isSelected(row), tip(row) -> lines, link(row) -> item link
 --   onSort(columnId)
 -- Returns the frame with :SetRows(rows, keepScroll) and :SetSort(id, descending).
@@ -876,26 +879,79 @@ function Kit.List(parent, options)
 	end
 	-- A fixed column keeps the width it was given: it cannot be dragged, and a
 	-- width dragged before it became fixed is ignored.
+	local fitted, hidden = {}, {} -- worked out from the rows last set
 	local function WidthOf(column)
+		if column.fit and fitted[column.id] then
+			return fitted[column.id]
+		end
 		return (not column.fixed and dragged[column.id]) or column.width or 0
+	end
+
+	-- Fit the rendered text, including money colors and the smaller badge font.
+	-- Reserve either sort marker so changing direction does not move a column.
+	local measure = Kit.Text(list, "normal", C.text)
+	measure:Hide()
+	local badgeMeasure = Kit.Text(list, "small", C.good)
+	badgeMeasure:Hide()
+	local function Fit(rows)
+		local measured, badgeMeasured = {}, {}
+		local function TextWidth(text, badge)
+			text = tostring(text or "")
+			local cache = badge and badgeMeasured or measured
+			if not cache[text] then
+				local font = badge and badgeMeasure or measure
+				font:SetText(text)
+				cache[text] = math.ceil(font:GetStringWidth() or 0)
+			end
+			return cache[text]
+		end
+		for _, column in ipairs(columns) do
+			if column.fit or column.hideEmpty then
+				local label = column.label or ""
+				local widest = TextWidth(label) + 2
+				if column.sortable ~= false then
+					widest = math.max(widest, TextWidth("v  " .. label) + 2, TextWidth("^  " .. label) + 2)
+				end
+				local hasValue = false
+				for _, row in ipairs(rows) do
+					local text = column.text and column.text(row)
+					local badge = column.badge and column.badge(row)
+					if text ~= nil and text ~= "" then
+						hasValue = true
+						widest = math.max(widest, TextWidth(text) + 2)
+					end
+					if badge ~= nil and badge ~= "" then
+						hasValue = true
+						widest = math.max(widest, TextWidth(badge, true) + 8)
+					end
+				end
+				fitted[column.id] = column.fit and widest or nil
+				hidden[column.id] = column.hideEmpty and not hasValue
+			end
+		end
 	end
 
 	-- Where each column sits, worked out from the list's width.
 	local left, width = {}, {}
 	local function Layout()
 		local available = (scrollBox:GetWidth() or 0)
-		local fixed, padding = 0, 8
+		local fixed, count, padding = 0, 0, options.gap or 8
 		for _, column in ipairs(columns) do
-			if not column.flex then
-				fixed = fixed + WidthOf(column)
+			if not hidden[column.id] then
+				count = count + 1
+				if not column.flex then
+					fixed = fixed + WidthOf(column)
+				end
 			end
 		end
-		local flex = math.max(60, available - fixed - padding * (#columns + 1))
+		local flex = math.max(60, available - fixed - padding * (count + 1))
 		local x = padding
 		for index, column in ipairs(columns) do
 			left[index] = x
-			width[index] = column.flex and flex or WidthOf(column)
-			x = x + width[index] + padding
+			width[index] = hidden[column.id] and 0 or (column.flex and flex or WidthOf(column))
+			if not hidden[column.id] then
+				x = x + width[index] + padding
+			end
 		end
 	end
 
@@ -963,8 +1019,9 @@ function Kit.List(parent, options)
 			end
 			local grip = grips[index]
 			if grip then
+				grip:SetShown(not hidden[columns[index].id] and not hidden[columns[index + 1].id])
 				grip:ClearAllPoints()
-				grip:SetPoint("LEFT", left[index] + width[index] + 4 - Theme.sizerWidth / 2, 0)
+				grip:SetPoint("LEFT", left[index] + width[index] + (options.gap or 8) / 2 - Theme.sizerWidth / 2, 0)
 			end
 		end
 		for index, column in ipairs(columns) do
@@ -981,15 +1038,18 @@ function Kit.List(parent, options)
 				end)
 				headers[index] = cell
 			end
+			cell:SetShown(not hidden[column.id])
 			cell:ClearAllPoints()
 			cell:SetPoint("LEFT", left[index], 0)
 			cell:SetWidth(width[index])
 			local arrow = ""
 			if sort.id == column.id then
-				arrow = sort.descending and "  v" or "  ^"
+				arrow = sort.descending and "v  " or "^  "
 			end
 			cell.label:SetTextColor(unpack(column.labelColor or C.accent))
-			cell.label:SetText((column.label or "") .. arrow)
+			-- Put the marker before the heading, keeping its right edge aligned
+			-- with the values underneath in number columns.
+			cell.label:SetText(arrow .. (column.label or ""))
 		end
 	end
 
@@ -1061,13 +1121,15 @@ function Kit.List(parent, options)
 				row.cells[index] = cell
 			end
 			local x, w = left[index], width[index]
+			local visible = not hidden[column.id]
+			cell.text:SetShown(visible)
 			if cell.icon then
 				cell.icon:ClearAllPoints()
 				cell.icon:SetPoint("LEFT", x, 0)
 				-- No icon, no box: an empty square looks like something to click.
 				local art = column.icon(data)
 				cell.icon:SetIcon(art)
-				cell.icon:SetShown(art ~= nil)
+				cell.icon:SetShown(visible and art ~= nil)
 				x = x + rowHeight - 1
 				w = w - (rowHeight - 1)
 			end
@@ -1077,13 +1139,14 @@ function Kit.List(parent, options)
 			cell.text:SetText(column.text and column.text(data) or "")
 			cell.text:SetTextColor(unpack(column.color and column.color(data) or C.text))
 			if cell.meter then
+				cell.meter:SetShown(visible)
 				cell.meter:ClearAllPoints()
 				cell.meter:SetPoint("LEFT", x, 0)
 				cell.meter:SetReading(column.meter(data))
 			end
 			if cell.badge then
 				local label = column.badge(data)
-				cell.badge:SetShown(label ~= nil)
+				cell.badge:SetShown(visible and label ~= nil)
 				if label then
 					cell.badge:ClearAllPoints()
 					cell.badge:SetPoint("RIGHT", row, "LEFT", x + w, 0)
@@ -1120,6 +1183,7 @@ function Kit.List(parent, options)
 	ScrollUtil.InitScrollBoxListWithScrollBar(scrollBox, scrollBar, view)
 
 	function list:SetRows(rows, keepScroll)
+		Fit(rows)
 		Layout()
 		PaintHeaders()
 		scrollBox:SetDataProvider(CreateDataProvider(rows), keepScroll and ScrollBoxConstants.RetainScrollPosition or nil)

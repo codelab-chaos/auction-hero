@@ -82,7 +82,7 @@ local function ReadItems()
 	for index = 1, count do
 		local info = C_AuctionHouse.GetItemSearchResultInfo(wanted.itemKey, index)
 		if info and info.buyoutAmount then
-			local quantity = math.max(1, info.quantity or 1)
+			local quantity = ns.AuctionUnits(wanted.itemID, info.quantity)
 			listings[#listings + 1] = { unit = math.floor(info.buyoutAmount / quantity), quantity = quantity, buyout = info.buyoutAmount, mine = info.containsOwnerItem }
 		end
 	end

@@ -11,6 +11,9 @@
 local _, ns = ...
 local L = ns.L
 
+-- Older asking prices remain useful, but are presented as estimates.
+ns.RecipePriceRule = { freshSeconds = 15 * 60 }
+
 -- Units for sale at each different price, cheapest first (see market\market.lua).
 local function Prices(live)
 	return ns.Market.PricePoints(live)

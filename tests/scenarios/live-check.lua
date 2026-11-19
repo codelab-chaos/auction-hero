@@ -70,7 +70,7 @@ end
 local scannedTunics = market.byKey["2006:Tunic of the Bear"].listings
 MOCK.liveNames = { "Tunic of the Bear", "Tunic of the Bear" }
 check("gear is checked too", ns.LiveCheck:Request(market.byKey["2006:Tunic of the Bear"]), true)
-Tick(20)
+Tick(40) -- the key, a quiet gap, then the search
 check("its key is asked for by name", BROWSED[#BROWSED], "Tunic of the Bear")
 check("and its auctions by that full key, not the bare item id", SEARCHES[#SEARCHES], "search sorts=2 2006 level=12")
 check("the variant holds its live auctions", tunics(), "Tunic of the Bear x2")
@@ -93,6 +93,43 @@ Tick(6)
 check("bought", ns.Buying.state.phase, "done")
 Tick(20) -- buying an item checks it again
 
+-- At the price pressed, a fresh check is all it takes: one press buys.
+bear = market.byKey["2006:Tunic of the Bear"]
+local bought = #BUYS
+local cheapest = bear.liveAuctions[1]
+for _, auction in ipairs(bear.liveAuctions) do
+	if auction.buyout < cheapest.buyout then cheapest = auction end
+end
+local sentFirst
+ns.Bus:On("BUYING_CHANGED", function()
+	if sentFirst == nil then sentFirst = #BUYS == bought + 1 end
+end)
+ns.Buying:Start({ key = bear.key, itemID = 2006, name = bear.name, single = true, live = bear.liveAuctions, checkedAt = bear.checkedAt, price = cheapest.buyout })
+check("one press buys at an unchanged price", #BUYS, bought + 1)
+check("sent before anything else runs, as the game requires", sentFirst, true)
+check("with no confirm to wait on", ns.Buying.state.phase, "buying")
+Tick(20)
+check("bought", ns.Buying.state.phase, "done")
+
+-- If the game refuses the purchase anyway, nothing was spent and the next
+-- press sends it: no waiting on an answer that cannot come.
+bear = market.byKey["2006:Tunic of the Bear"]
+cheapest = bear.liveAuctions[1]
+for _, auction in ipairs(bear.liveAuctions) do
+	if auction.buyout < cheapest.buyout then cheapest = auction end
+end
+MOCK.blockBids = true
+bought = #BUYS
+ns.Buying:Start({ key = bear.key, itemID = 2006, name = bear.name, single = true, live = bear.liveAuctions, checkedAt = bear.checkedAt, price = cheapest.buyout })
+check("a refused purchase goes back to the confirm at once", ns.Buying.state.phase, "confirm")
+check("with nothing bought", #BUYS, bought)
+MOCK.blockBids = nil
+ns.Buying:Confirm()
+check("and the next press buys", #BUYS, bought + 1)
+Tick(20)
+check("bought", ns.Buying.state.phase, "done")
+request.live, request.checkedAt = bear.liveAuctions, bear.checkedAt
+
 -- An older check is not trusted for buying: Buy asks first.
 SkipTime(ns.LiveCheckRule.reuseSeconds + 1)
 asked = #SEARCHES
@@ -111,17 +148,27 @@ ns.LiveCheck:Request(market.byKey["2006:Tunic of the Bear"])
 Tick(20)
 check("unreadable auctions change nothing", market.byKey["2006:Tunic of the Bear"].checkedAt, kept)
 
--- Not finding an item by name is not proof that it is gone. Nothing is
--- removed on that alone: the scan's rows stand, and the reason is kept.
+-- Results that do not include the item are not proof that it is gone: the
+-- lookup may be at fault. Nothing is removed on that alone: the scan's rows
+-- stand, and the reason is kept.
 SkipTime(ns.LiveCheckRule.staleMinutes * 60 + 1)
-MOCK.browseGone = true
+MOCK.browseNames = { "Tunic of the Owl" }
 ns.ItemKey:Forget(2006, "Tunic of the Bear")
 local listed = market.byKey["2006:Tunic of the Bear"].listings
 ns.LiveCheck:Request(market.byKey["2006:Tunic of the Bear"])
 Tick(20)
 checkTrue("an item the lookup cannot find stays in the market", market.byKey["2006:Tunic of the Bear"] ~= nil)
 check("with what it had", market.byKey["2006:Tunic of the Bear"].listings, listed)
-checkMatch("and the reason is kept for the panel", ns.LiveCheck.problem.text, "could not find this item at the auction house.*0 results")
+checkMatch("and the reason is kept for the panel", ns.LiveCheck.problem.text, "could not find this item at the auction house.*1 results")
+MOCK.browseNames = nil
+
+-- Nothing at all listed by its name: it is gone, and comes off the list.
+SkipTime(ns.LiveCheckRule.staleMinutes * 60 + 1)
+MOCK.browseGone = true
+ns.ItemKey:Forget(2006, "Tunic of the Bear")
+ns.LiveCheck:Request(market.byKey["2006:Tunic of the Bear"])
+Tick(20)
+check("an item nothing is listed by comes off the list", market.byKey["2006:Tunic of the Bear"], nil)
 MOCK.browseGone = false
 
 -- On the Buy tab, choosing a row does it, and the panel says how fresh the prices are.

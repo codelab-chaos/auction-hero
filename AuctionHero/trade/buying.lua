@@ -48,11 +48,12 @@ local function Publish(phase, message, extra)
 	Bus:Fire("BUYING_CHANGED", state)
 end
 
-local function Fail(message)
+local function Fail(message, gone)
 	-- A purchase that was sent keeps its auction in the state, so whoever
 	-- listens can tell a refused purchase from a search that found nothing.
+	-- gone: the auction house has nothing listed by the item's name.
 	local sent = Buying.state.phase == "buying" and Buying.state.auctionID or nil
-	Publish("failed", message, { auctionID = sent })
+	Publish("failed", message, { auctionID = sent, gone = gone })
 	order = nil
 end
 
@@ -62,12 +63,14 @@ local function Done()
 end
 
 -- Why a purchase cannot be started right now, or nil when it can.
-local function Blocked()
+-- A single item's searches wait their turn (trade\requests.lua); goods are
+-- quoted at once, so they need the auction house free.
+local function Blocked(single)
 	if not ns.auctionHouseOpen then
 		return L.POST_NEEDS_AH
 	elseif ns.Downloader:IsRunning() then
 		return L.POST_SCANNING
-	elseif not C_AuctionHouse.IsThrottledMessageSystemReady() then
+	elseif not single and (ns.Requests:Busy() or not C_AuctionHouse.IsThrottledMessageSystemReady()) then
 		return L.POST_BUSY
 	end
 end
@@ -134,7 +137,10 @@ goods.events = {
 }
 
 -- ========= Single items =====================================================
-local single = { answerSeconds = ns.AnswerSeconds.buySingle }
+-- Searching and buying go through trade\requests.lua, which keeps them in
+-- order and waits on the answers: no waits of its own here.
+local single = { managed = true }
+local BLOCKED = {} -- single.Confirm's answer when the game refused to send the purchase
 
 -- The cheapest live auction of exactly this item, with a buyout, that is not
 -- the player's own. An item id covers every variant of a piece of gear ("of
@@ -153,7 +159,7 @@ local function CheapestLive()
 			if not name then
 				unread = true
 			elseif name == order.name then
-				local quantity = math.max(1, info.quantity or 1)
+				local quantity = ns.AuctionUnits(order.itemID, info.quantity)
 				local unit = math.floor(info.buyoutAmount / quantity)
 				if order.price and unit ~= order.price then
 					-- The player picked a price. Only an auction at it will do.
@@ -165,23 +171,6 @@ local function CheapestLive()
 		end
 	end
 	return best, unread, cheapest
-end
-
--- Asks for the live auctions of the item, by the key the auction house
--- knows it by (see trade\item-key.lua).
-local function Search()
-	if not C_AuctionHouse.IsThrottledMessageSystemReady() then
-		order.searchWhenReady = true -- the game is busy: sent when it says it is ready
-		return true
-	end
-	order.searchWhenReady = nil
-	local sorts = {
-		{ sortOrder = Enum.AuctionHouseSortOrder.Buyout, reverseSort = false },
-		{ sortOrder = Enum.AuctionHouseSortOrder.Bid, reverseSort = false },
-	}
-	local ok, problem = pcall(C_AuctionHouse.SendSearchQuery, order.itemKey, sorts, false)
-	ns.EventLog:Note("SendSearchQuery", order.itemID, order.itemKey.itemLevel, order.itemKey.itemSuffix, ok, problem)
-	return ok, problem
 end
 
 -- The cheapest of a list of auctions, at the price picked when one was:
@@ -199,15 +188,55 @@ local function Pick(auctions, price)
 	return best
 end
 
+local Answered -- reads the search's answer; below
+
+-- Asks for the live auctions of the item, by the key the auction house
+-- knows it by (see trade\item-key.lua). It waits its turn behind anything
+-- already asked.
+local function Search()
+	local mine = order
+	local sorts = {
+		{ sortOrder = Enum.AuctionHouseSortOrder.Buyout, reverseSort = false },
+		{ sortOrder = Enum.AuctionHouseSortOrder.Bid, reverseSort = false },
+	}
+	mine.request = ns.Requests:Ask({
+		kind = "itemSearch",
+		label = "buy search",
+		itemID = mine.itemID,
+		itemKey = mine.itemKey,
+		send = function()
+			return C_AuctionHouse.SendSearchQuery(mine.itemKey, sorts, false)
+		end,
+		read = function(request, last)
+			if order ~= mine or Buying.state.phase ~= "quoting" then
+				return nil
+			end
+			return Answered(request, last)
+		end,
+		done = function(outcome)
+			if order ~= mine or Buying.state.phase ~= "quoting" then
+				return
+			end
+			if outcome ~= "answered" then
+				Fail(L.BUY_NO_ANSWER)
+			end
+		end,
+	})
+end
+
 function single.Start(request)
-	-- The item was checked live a moment ago (see trade\live-check.lua): that
-	-- answer is the one a search now would give, so use it and ask nothing.
-	local fresh = request.live and request.checkedAt and GetServerTime() - request.checkedAt <= ns.LiveCheckRule.reuseSeconds
+	-- The item was checked live a moment ago (see trade\live-check.lua) and
+	-- the game still holds that answer: it is the one a search now would
+	-- give, so use it and ask nothing.
+	local holds = ns.Requests:Holding(request.itemID, ns.LiveCheckRule.reuseSeconds)
+	local fresh = holds and request.live and request.checkedAt and GetServerTime() - request.checkedAt <= ns.LiveCheckRule.reuseSeconds
 	local known = fresh and Pick(request.live, request.price)
 	if known then
 		order = { key = request.key, itemID = request.itemID, name = request.name, price = request.price, way = single, auctionID = known.auctionID, quantity = known.quantity }
 		ns.EventLog:Note("buy from live check", request.itemID, known.auctionID, known.buyout, known.quantity)
-		return true, nil, { unit = math.floor(known.buyout / known.quantity), total = known.buyout, auctionID = known.auctionID }
+		-- At the price the player pressed: nothing to confirm, it is bought now.
+		local unit = math.floor(known.buyout / known.quantity)
+		return true, nil, { unit = unit, total = known.buyout, auctionID = known.auctionID, now = request.price == unit }
 	end
 	-- First the item's key, then its live auctions. Both are only questions.
 	order = { key = request.key, itemID = request.itemID, name = request.name, price = request.price, way = single, pages = 1 }
@@ -220,56 +249,89 @@ function single.Start(request)
 				return -- backed out of, or overtaken, while the key was being found
 			end
 			if not itemKey then
-				return Fail(problem == "gone" and L.BUY_NOT_FOUND:format(found or "") or L.BUY_NO_ANSWER)
+				local missing = problem == "none" or problem == "gone"
+				return Fail(missing and L.BUY_NOT_FOUND:format(found or "") or L.BUY_NO_ANSWER, problem == "none")
 			end
 			order.itemKey = itemKey
-			local ok, failure = Search()
-			if not ok then
-				Fail(tostring(failure))
-			end
+			Search()
 		end)
 	end)
 	return true
 end
-
-function single.Confirm()
-	order.gold = GetMoney()
-	local ok, problem = pcall(C_AuctionHouse.PlaceBid, order.auctionID, Buying.state.total)
-	ns.EventLog:Note("PlaceBid", order.auctionID, Buying.state.total, ok, problem)
-	return ok, problem
-end
-
--- A search leaves nothing to take back.
-function single.Cancel() end
 
 -- The gold left the purse: the purchase went through, whatever else was said.
 local function Paid()
 	return order and order.gold and GetMoney() <= order.gold - Buying.state.total
 end
 
--- No answer in time. A search that went quiet spent nothing. A purchase that
--- went quiet may still have gone through, so go by the gold.
-function single.TimedOut(phase)
-	if phase ~= "buying" then
-		return Fail(L.BUY_NO_ANSWER)
+-- How a purchase ended, as trade\requests.lua tells it.
+local function Bought(mine, outcome, request)
+	if order ~= mine then
+		return
 	end
-	if Paid() then
+	if outcome == "busy" or outcome == "blocked" then
+		-- It never left: nothing was spent, and the next press sends it.
+		return Publish("confirm", outcome == "busy" and L.BUY_WAIT_BUSY or L.BUY_CHECKED_SAME, { unit = mine.unit, total = mine.total, auctionID = mine.auctionID })
+	end
+	if outcome == "answered" or Paid() then
 		return Done()
+	end
+	if outcome == "closed" then
+		return
 	end
 	-- State what is known and no more: the gold before and now.
 	local now = GetMoney()
-	ns.EventLog:Note("buy not confirmed", order.auctionID, order.errorCode, "gold", order.gold, now)
-	if order.errorCode ~= nil then
-		return Fail(L.BUY_PROBLEM:format(tostring(order.errorCode), ns.PlainMoney(order.gold or now), ns.PlainMoney(now)))
+	ns.EventLog:Note("buy not confirmed", mine.auctionID, request.errorCode, "gold", mine.gold, now)
+	if request.errorCode ~= nil then
+		return Fail(L.BUY_PROBLEM:format(tostring(request.errorCode), ns.PlainMoney(mine.gold or now), ns.PlainMoney(now)))
 	end
-	Fail(L.BUY_NO_CONFIRM)
+	Fail(outcome == "refused" and L.BUY_FAILED or L.BUY_NO_CONFIRM)
 end
 
--- The live auctions arrived. Offer the cheapest one of this item, or read on.
-local function Answered()
-	if Buying.state.phase ~= "quoting" then
-		return
+-- Sends the purchase, now, as part of the press. total: what to pay. Returns
+-- whether it left; BLOCKED and busy come back through Bought.
+function single.Confirm(total, unit)
+	local mine = order
+	mine.total, mine.unit = total or Buying.state.total, unit or Buying.state.unit
+	mine.gold = GetMoney()
+	local sent = false
+	local outcome
+	ns.Requests:Press({
+		kind = "bid",
+		label = "purchase",
+		auctionID = mine.auctionID,
+		itemID = mine.itemID,
+		send = function()
+			return C_AuctionHouse.PlaceBid(mine.auctionID, mine.total)
+		end,
+		onSend = function()
+			sent = true
+		end,
+		done = function(how, _, request)
+			outcome = how
+			-- Turned away at once: the press is answered where it was made.
+			if not sent then
+				return
+			end
+			Bought(mine, how, request)
+		end,
+	})
+	ns.EventLog:Note("PlaceBid", mine.auctionID, mine.total, sent, outcome)
+	if not sent then
+		return false, outcome == "busy" and "busy" or BLOCKED
 	end
+	return true
+end
+
+-- A search leaves nothing to take back.
+function single.Cancel() end
+
+-- Waits belong to the requests (trade\requests.lua).
+function single.TimedOut() end
+
+-- The live auctions arrived and are quiet. Offer the cheapest one of this
+-- item, or read on.
+function Answered(request, last)
 	local best, unread, cheapest = CheapestLive()
 	-- What the game handed back, for the log: how many auctions, whether that
 	-- is all of them, and what the first one looks like.
@@ -282,79 +344,41 @@ local function Answered()
 		order.auctionID = best.auctionID
 		order.quantity = best.quantity
 		ns.EventLog:Note("buy found", order.itemID, best.auctionID, best.buyout, best.quantity)
-		return Publish("confirm", L.BUY_CONFIRM_PRICE, { unit = math.floor(best.buyout / best.quantity), total = best.buyout, auctionID = best.auctionID })
+		Publish("confirm", L.BUY_CONFIRM_PRICE, { unit = math.floor(best.buyout / best.quantity), total = best.buyout, auctionID = best.auctionID })
+		return true
 	end
 	-- Not on this page. The list is cheapest first, so it may be further on.
-	local full = select(2, pcall(C_AuctionHouse.HasFullItemSearchResults, order.itemKey))
-	if full == false and order.pages < SEARCH_PAGES then
+	if whole == false and order.pages < SEARCH_PAGES and not last then
 		order.pages = order.pages + 1
-		if pcall(C_AuctionHouse.RequestMoreItemSearchResults, order.itemKey) then
-			return
-		end
+		return request:More(function()
+			return C_AuctionHouse.RequestMoreItemSearchResults(order.itemKey)
+		end)
 	end
 	if cheapest then
 		-- It is for sale, but not at the price picked any more.
-		return Fail(L.BUY_PRICE_GONE:format(ns.PlainMoney(order.price), ns.PlainMoney(cheapest)))
-	end
-	if unread then
-		return Fail(L.BUY_UNREADABLE)
-	end
-	-- Say what was found, so "none" is never a guess: how many auctions came
-	-- back for the item, and what the first of them is called.
-	local seen = counted and count or 0
-	local firstName = first.itemLink and first.itemLink:match("|h%[(.-)%]|h")
-	if seen > 0 then
-		return Fail(L.BUY_NOT_AMONG:format(ns.Comma(seen), whole == false and L.BUY_AND_MORE or "", order.name, tostring(firstName or first.itemLink)))
-	end
-	Fail(L.BUY_ITEM_GONE)
-end
-
--- Forever answers an item search with AUCTION_HOUSE_NEW_RESULTS_RECEIVED and
--- the item's key, where other clients send ITEM_SEARCH_RESULTS_UPDATED. Both
--- are taken. The results are read a moment later, once they have settled.
-local function Arrived(itemKey)
-	if not order.itemKey or (type(itemKey) == "table" and itemKey.itemID and itemKey.itemID ~= order.itemID) then
-		return -- not searched yet, or an answer to someone else's search
-	end
-	deadlines:Later(ns.SearchSettleSeconds, function()
-		if order and order.way == single then
-			Answered()
+		Fail(L.BUY_PRICE_GONE:format(ns.PlainMoney(order.price), ns.PlainMoney(cheapest)))
+	elseif unread then
+		Fail(L.BUY_UNREADABLE)
+	else
+		-- Say what was found, so "none" is never a guess: how many auctions came
+		-- back for the item, and what the first of them is called.
+		local seen = counted and count or 0
+		local firstName = first.itemLink and first.itemLink:match("|h%[(.-)%]|h")
+		if seen > 0 then
+			Fail(L.BUY_NOT_AMONG:format(ns.Comma(seen), whole == false and L.BUY_AND_MORE or "", order.name, tostring(firstName or first.itemLink)))
+		else
+			Fail(L.BUY_ITEM_GONE)
 		end
-	end)
+	end
+	return true
 end
 
 single.events = {
-	AUCTION_HOUSE_THROTTLED_SYSTEM_READY = function()
-		if order.searchWhenReady and order.itemKey then
-			Search()
-		end
-	end,
-	AUCTION_HOUSE_NEW_RESULTS_RECEIVED = Arrived,
-	ITEM_SEARCH_RESULTS_UPDATED = Arrived,
-	ITEM_SEARCH_RESULTS_ADDED = Arrived,
-	AUCTION_HOUSE_PURCHASE_COMPLETED = function(auctionID)
-		if Buying.state.phase == "buying" and auctionID == order.auctionID then
-			Done()
-		end
-	end,
+	-- The gold leaving is as good an answer as any.
 	PLAYER_MONEY = function()
 		if Buying.state.phase == "buying" and Paid() then
 			Done()
 		end
-	end,
-	-- The game reported a problem while buying. That is not yet an answer:
-	-- the gold may still be on its way out. Wait a moment, then go by the gold.
-	AUCTION_HOUSE_SHOW_ERROR = function(code)
-		if Buying.state.phase ~= "buying" then
-			return
-		end
-		order.errorCode = code
-		ns.EventLog:Note("buy error reported", order.auctionID, code, "gold", order.gold, GetMoney())
-		deadlines:Later(ns.AnswerSeconds.buyErrorSettle, function()
-			if Buying.state.phase == "buying" and order then
-				single.TimedOut("buying")
-			end
-		end)
 	end,
 }
 
@@ -362,7 +386,10 @@ single.events = {
 -- Asking for a price and buying both wait on the server. Entering either
 -- phase starts the wait; any other phase ends it.
 local function AnswerSeconds()
-	return order and order.way.answerSeconds or ns.AnswerSeconds.buy
+	if order and order.way.managed then
+		return nil
+	end
+	return ns.AnswerSeconds.buy
 end
 deadlines = ns.Deadlines({ quoting = AnswerSeconds, buying = AnswerSeconds }, function(phase)
 	if order then
@@ -380,7 +407,7 @@ function Buying:Start(request)
 	if phase == "quoting" or phase == "buying" then
 		return
 	end
-	local blocked = Blocked()
+	local blocked = Blocked(request.single)
 	if blocked then
 		order = { key = request.key, quantity = request.quantity }
 		ns.EventLog:Note("buy refused", blocked)
@@ -392,7 +419,23 @@ function Buying:Start(request)
 		return Fail(tostring(problem))
 	end
 	if ready then
-		-- The live price is already known. Straight to the confirm.
+		-- The live price is already known. At the price pressed, buy it in
+		-- this same press; otherwise it waits for a confirm.
+		local now = ready.now and ready.total <= GetMoney()
+		ready.now = nil
+		if now then
+			-- The game takes a purchase only as part of the player's press, so
+			-- it is sent first, before anything else runs: telling the window
+			-- (BUYING_CHANGED) first made the game refuse it.
+			local sent, failure = way.Confirm(ready.total, ready.unit)
+			if failure == BLOCKED or failure == "busy" then
+				-- Nothing left and nothing was spent: the next press sends it.
+				return Publish("confirm", failure == "busy" and L.BUY_WAIT_BUSY or L.BUY_CHECKED_SAME, ready)
+			elseif not sent then
+				return Fail(tostring(failure))
+			end
+			return Publish("buying", L.BUY_BUYING, ready)
+		end
 		return Publish("confirm", L.BUY_CONFIRM_PRICE, ready)
 	end
 	Publish("quoting", L.BUY_QUOTING)
@@ -408,8 +451,18 @@ function Buying:Confirm()
 		order.way.Cancel()
 		return Fail(L.BUY_OVER_GOLD)
 	end
+	-- A single item's price was read from the game's latest search. If another
+	-- search has replaced it since, that price is not known to hold: read it again.
+	if order.way == single and not ns.Requests:Holding(order.itemID) then
+		ns.EventLog:Note("buy search again", order.itemID, "another search came in between")
+		Publish("quoting", L.BUY_QUOTING)
+		order.pages = 1
+		return Search()
+	end
 	local ok, problem = order.way.Confirm()
-	if not ok then
+	if problem == BLOCKED or problem == "busy" then
+		return Publish("confirm", problem == "busy" and L.BUY_WAIT_BUSY or L.BUY_CHECKED_SAME, { unit = state.unit, total = state.total, auctionID = state.auctionID })
+	elseif not ok then
 		return Fail(tostring(problem))
 	end
 	Publish("buying", L.BUY_BUYING, { unit = state.unit, total = state.total, auctionID = state.auctionID })

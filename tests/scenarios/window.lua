@@ -14,11 +14,11 @@ local function tabs()
 	end
 	return table.concat(ids, ",")
 end
-check("tabs without debug", tabs(), "buy,sell,resell,auctions,ledger,history")
+check("tabs without debug", tabs(), "buy,sell,resell,auctions,ledger,history,progress")
 SlashCmdList.AUCTIONHERO("debug on")
-check("tabs with debug", tabs(), "buy,sell,resell,auctions,ledger,history,debug")
+check("tabs with debug", tabs(), "buy,sell,resell,auctions,ledger,history,progress,debug")
 
-local all = { "buy", "sell", "auctions", "resell", "history", "debug" }
+local all = { "buy", "sell", "auctions", "resell", "history", "debug", "progress" }
 for _, id in ipairs(all) do
 	ns.charDb.tab = id
 	ns.Window:Toggle()
@@ -71,7 +71,8 @@ checkTrue("there was plenty to click", clicked > 500)
 MONEY = 3
 ns.Window:RefreshActive()
 
--- Graphs and Debug sit at the right end of the tab row; Debug is a skull.
+-- Graphs, Progress and Debug sit at the right end of the tab row; Progress is
+-- a pouch, and Debug a skull, always last while it is on.
 SlashCmdList.AUCTIONHERO("debug")
 Tick(2)
 local function tabButton(id)
@@ -82,8 +83,12 @@ end
 check("Buy runs from the left", tabButton("buy").lastPoint[1], "TOPLEFT")
 check("Graphs sits at the right", tabButton("history").lastPoint[1], "TOPRIGHT")
 check("Debug too", tabButton("debug").lastPoint[1], "TOPRIGHT")
+local icon = ns.Theme.tabIconWidth + 2
 check("Debug at the very end", tabButton("debug").lastPoint[2], -ns.Theme.pad)
-check("with Graphs before it", tabButton("history").lastPoint[2], -(ns.Theme.pad + ns.Theme.tabIconWidth + 2))
+check("Progress before it", tabButton("progress").lastPoint[2], -(ns.Theme.pad + icon))
+check("with Graphs before that", tabButton("history").lastPoint[2], -(ns.Theme.pad + icon * 2))
+checkTrue("Progress shows its icon", tabButton("progress").icon ~= nil and tabButton("progress").label.text == "")
+check("with debug off, Progress is last", (function() SlashCmdList.AUCTIONHERO("debug"); Tick(2); local x = tabButton("progress").lastPoint[2]; SlashCmdList.AUCTIONHERO("debug"); Tick(2); return x end)(), -ns.Theme.pad)
 checkTrue("Debug shows a skull, not its name", tabButton("debug").icon ~= nil and tabButton("debug").label.text == "")
 SlashCmdList.AUCTIONHERO("debug")
 Tick(2)

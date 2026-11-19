@@ -29,6 +29,7 @@ The market the tabs read is the same whichever way the scan is kept, auction for
 - **Resell:** discount and minimum profit settings, "I can afford" and "Top deals", the list of leads, and the Buy, Relist, Keep plan.
 - **Graphs:** pick an item and see its usual and lowest price as lines and the units for sale as bars, over 3, 7, 14 or 30 days, with a hover readout. It draws from the first scan, and a note says it is early until two days are in.
 - **Debug:** the raw scan views and the event log. Hidden unless the debug switch is on: `/ah debug`.
+- **Progress:** the pouch icon at the far right (Debug, while on, is always last). Today's scan (one a day is the goal) with the streak, scan confidence and the Hero Coin balance (the same panel as on the scan card, `ui/progress-panel.lua`), the latest earnings, the last 30 days with the scanned ones lit, the streak bonuses, and every way to earn with today's count against its cap. Hero Coins pile up from using the addon: the day's first scan, opening the auction house, buying, posting, a sale, a first look at each tab, and streak bonuses. Each way is capped per day so nothing pays for scanning more than the market needs. Ways, caps and bonuses are rows in `data/rewards.lua`.
 
 ## Posting
 
@@ -52,6 +53,8 @@ A scan gives an item's id and name. The auction house only finds a single item b
 ## Every price is shown
 
 The Buy list never sums an item up as one price. An item's row gives how many are for sale in all ("For sale") and the lowest price ("From"). Clicking the row opens it: under it comes one row for each price the item is listed at, cheapest first, with how many are at that price and that price's own deal reading. Clicking a price picks it, and the Buy button then reads "Buy at" that price. For goods sold by the unit, which are always filled from the cheapest up, picking a price sets the quantity to everything up to and including it. Clicking the item again closes it. One item is open at a time.
+
+The number columns fit their text, leaving the rest of the width for item names. Gain hides when the filtered list has no upgrades to show. The deal column stays at 32 pixels for a four-character badge such as `-99%`; older dragged widths do not expand it. Sort markers sit before headings so numeric headings remain aligned with their values.
 
 ## Live checks
 
@@ -100,6 +103,14 @@ Hovering an item anywhere in the game (bags, chat links, the auction house) adds
 
 Every price quoted is one an auction is actually listed at, with its count. There is no blended "going rate" here: an average of asking prices can land on a figure nobody lists and nobody pays. The block never claims what an item sells for; the only confirmed sale price is your own. An item nothing is known about gets no block. The lines are data (`data/tooltip.lua`); "Prices in item tooltips" in Options turns it off.
 
+## Recipe tooltips
+
+Hover a recipe in the profession list, including an unlearned recipe, or its output icon to see a **Crafted output** block. It names what the recipe makes and the quantity, then shows the output's lowest asking price per item from your scan. Quotes older than 15 minutes, historical quotes and quotes from other random-suffix variants are marked **Est.**, with the scan's age. With no price data, the output price is **Unknown**.
+
+When the client provides the recipe's materials, the block also shows their estimated cost for one craft at scanned unit prices, plus a colored estimated margin before auction fees and deposits. Variable output quantities give a margin range. Selected optional materials count; unselected optional materials do not. Unpriced materials leave the total as a known lower bound and the margin as **Unknown**.
+
+Recipe items in bags or chat can also show their output's price when the client exposes the embedded product or crafting recipe. The recipe item's own auction prices stay separate from its product's prices. The existing **Prices in item tooltips** switch controls both blocks.
+
 ## What is not there yet
 
 The Resell tab's Buy button does nothing yet; buy the item from the Buy tab. Buying several single auctions in one go is not built: it is one auction per pair of presses.
@@ -117,12 +128,14 @@ Each full scan is folded into one small record per item (usual price, lowest and
 | `data/trading.lua` | Price rules, sale types, confidence, deal and resell rules, history settings |
 | `market/market.lua` | Price ladders built from a scan |
 | `market/history.lua` | The price memory |
+| `market/crafting.lua` | Recipe output quotes, material costs and estimated margins |
 | `market/signals.lua` | Price confidence and the deal meter |
 | `market/facets.lua`, `orders.lua`, `resell.lua` | Filtering, order costs, resell plans |
 | `inventory/bags.lua` | What in your bags can be auctioned |
 | `ui/kit.lua` | The building blocks every tab is drawn from |
 | `ui/window.lua` | The window and its tabs |
 | `ui/chart.lua` | Line and bar charts for the History tab |
+| `ui/item-tooltip.lua`, `ui/recipe-tooltip.lua` | Prices in item and profession recipe tooltips |
 | `ui/tabs/*.lua` | One file per tab |
 | `trade/*.lua` | Posting, the sell search, your own auctions |
 | `ledger/*.lua` | The trade ledger: the store, the buy and post recorder, the mail reader |
@@ -131,4 +144,4 @@ The scan engine (`feed/`, `store.lua`, `jobs.lua`) is unchanged.
 
 ## Checking it
 
-There is no automated test in the repo for the window. It was run against a mocked game client (every tab built, every button and row clicked), which catches Lua errors but cannot check how it looks or how the real client behaves. After deploying, restart the client, since the file list changed.
+Run `cd tests && npm test` for scenarios against a mocked game client, including list sizing, trading and recipe prices. The tests catch Lua errors and check the data and UI behavior they model; window appearance and the real profession tooltips still need an in-game check. After deploying new addon files or a changed TOC, restart the client. Existing-file edits need `/reload`.

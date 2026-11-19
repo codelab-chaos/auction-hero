@@ -172,19 +172,12 @@ ns.HistoryRule = {
 	trustAfterScans = 2,
 }
 
--- How long after the game says a search has been answered its results are
--- read, in seconds, so they are all in.
-ns.SearchSettleSeconds = 0.1
-
 -- How long each flow waits on the game before deciding by other evidence or
--- giving up, in seconds (see trade\deadlines.lua).
+-- giving up, in seconds (see trade\deadlines.lua). Single items, live checks
+-- and item keys wait as their request kind says (data\requests.lua).
 ns.AnswerSeconds = {
 	post = 8, -- then the bags decide: the item gone means it was posted
 	buy = 10, -- a quote or a purchase of goods
-	buySingle = 15, -- a single item takes two questions, its key and its auctions
-	buyErrorSettle = 3, -- after the game reports a problem, for the gold to move
-	liveCheck = 10,
-	itemKey = 10,
 	cancel = 10, -- then the list of owned auctions is asked for again to settle it
 }
 
@@ -199,8 +192,9 @@ ns.LiveCheckRule = {
 	-- list does not send a request for every row. In seconds.
 	settleSeconds = 0.4,
 	-- A check this recent is as good as asking again: pressing Buy on a single
-	-- item uses its answer and goes straight to the confirm. In seconds.
-	reuseSeconds = 30,
+	-- item at the price the check saw buys it in that one press. Choosing a
+	-- single item checks it again once its last check is older. In seconds.
+	reuseSeconds = 60,
 	-- A long list of auctions comes a page at a time. Read at most this many.
 	maxPages = 20,
 }

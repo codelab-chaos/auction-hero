@@ -132,6 +132,7 @@ local function ShowTab(id)
 		built[chosen.id] = tab
 	end
 	Window:RefreshActive()
+	ns.Bus:Fire("TAB_SHOWN", chosen.id)
 end
 
 -- ========= Scan status ======================================================
@@ -197,7 +198,11 @@ local function UpdateScanBar(state)
 	-- A scan can always be cancelled. Starting one needs the auction house
 	-- open and the server's wait between full scans to be over.
 	scanButton:SetDisabled(not running and (not ns.auctionHouseOpen or ScanWait() > 0))
-	if state and StatusText[state.phase] then
+	-- A running scan has the scan dialog up, which carries its progress under
+	-- the bar; saying it here too would only repeat it. A refusal still shows.
+	if running and not (state and state.phase == "failed") then
+		statusText:SetText("")
+	elseif state and StatusText[state.phase] then
 		statusText:SetText(StatusText[state.phase](state))
 		statusText:SetTextColor(unpack(state.phase == "failed" and C.bad or C.muted))
 	elseif not running then
@@ -230,18 +235,19 @@ end
 
 local function Build()
 	frame = CreateFrame("Frame", "AuctionHeroWindow", UIParent)
-	local minWidth, minHeight = Theme.window.width, Theme.window.height + Theme.footerHeight
+	local minWidth, minHeight = Theme.windowMin.width, Theme.windowMin.height + Theme.footerHeight
 	local maxWidth, maxHeight = Theme.windowMax.width, Theme.windowMax.height
 	local size = ns.charDb.windowSize
 	frame:SetSize(
-		math.max(minWidth, math.min(maxWidth, size and size.width or minWidth)),
-		math.max(minHeight, math.min(maxHeight, size and size.height or minHeight))
+		math.max(minWidth, math.min(maxWidth, size and size.width or Theme.window.width)),
+		math.max(minHeight, math.min(maxHeight, size and size.height or Theme.window.height + Theme.footerHeight))
 	)
 	frame:SetResizable(true)
 	if frame.SetResizeBounds then
 		frame:SetResizeBounds(minWidth, minHeight, maxWidth, maxHeight)
 	end
-	frame:SetFrameStrata("HIGH")
+	-- Share the normal panel layer so profession windows can come forward.
+	frame:SetFrameStrata("MEDIUM")
 	frame:SetToplevel(true)
 	frame:SetMovable(true)
 	frame:SetClampedToScreen(true)
@@ -284,6 +290,11 @@ local function Build()
 	local name = Kit.Text(title, "title", C.accent)
 	name:SetPoint("LEFT", brand, "RIGHT", 6, 0)
 	name:SetText(L.TITLE)
+	local badge = title:CreateTexture(nil, "ARTWORK")
+	badge:SetSize(Theme.brandIconSize, Theme.brandIconSize)
+	badge:SetPoint("LEFT", name, "RIGHT", 6, 0)
+	badge:SetTexture(Theme.titleBadge)
+	badge:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 
 	-- The game's own red close button, so closing looks like every other window.
 	local close = CreateFrame("Button", nil, title, "UIPanelCloseButtonNoScripts")
@@ -318,7 +329,7 @@ local function Build()
 			end
 		end,
 	})
-	scanButton:SetPoint("LEFT", name, "RIGHT", 14, 0)
+	scanButton:SetPoint("LEFT", badge, "RIGHT", 12, 0)
 
 	statusText = Kit.Text(title, "small", C.muted)
 	statusText:SetPoint("LEFT", scanButton, "RIGHT", 8, 0)
@@ -395,6 +406,7 @@ local function Build()
 	tinsert(UISpecialFrames, "AuctionHeroWindow") -- Escape closes it
 
 	frame:SetScript("OnShow", function()
+		frame:Raise() -- come forward when opened, then let clicks switch windows
 		ns.charDb.windowShown = true
 		UpdateScanBar()
 		ShowTab(ns.charDb.tab)

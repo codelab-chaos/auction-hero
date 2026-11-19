@@ -137,7 +137,7 @@ local function AddRow(items, byKey, row, at, get, catalog)
 		items[#items + 1] = item
 	end
 
-	local stack = math.max(1, get(row, at.quantity) or 1)
+	local stack = ns.AuctionUnits(itemID, get(row, at.quantity))
 	local buyout = get(row, at.buyout) or 0
 	local copies = at.copies and get(row, at.copies) or 1
 	item.listings = item.listings + copies

@@ -36,6 +36,7 @@ local railTiles, sideTiles, sideRows, toggleButtons = {}, {}, {}, {}
 local Refresh
 local lastOrder -- item key -> where it stood in the list as last sorted
 local gainOf, valueOf -- gear gain and gain per gold, rebuilt each time the list is painted
+local bagGainOf, bagValueOf -- the same for bags, in slots
 
 -- ========= Filtering ========================================================
 local function Prepare()
@@ -59,14 +60,38 @@ local function Prepare()
 	makeFilter = Facets:Filter(facets)
 end
 
+-- Bag kinds ticked in the filters: a kind the player looks for counts even
+-- when none is carried.
+local function PickedBagKinds()
+	local picked = {}
+	for value in pairs(state.selection.containers or {}) do
+		local subClassID = tonumber(tostring(value):match("^1:(%d+)$"))
+		if subClassID then
+			picked[subClassID] = true
+		end
+	end
+	return picked
+end
+
 local function FilteredItems()
 	local search = state.search:lower()
 	local passes = makeFilter(state.selection)
 	local gold = GetMoney()
 	local dealFrom = ns.DealBadgeRule.percent
-	local better = state.toggles.betterOnly and ns.Gear:Better()
+	-- Better: gear that beats what you wear, or a bag that holds more than
+	-- the one it would replace.
+	local better
+	if state.toggles.betterOnly then
+		local gear = ns.Gear:Better()
+		better = function(item)
+			local slots = bagGainOf and bagGainOf(item)
+			return gear(item) or (slots ~= nil and slots > 0)
+		end
+	end
 	local near = state.toggles.nearLevel and ns.Gear:Near()
-	local suggested = state.toggles.suggested and valueOf
+	local suggested = state.toggles.suggested and function(item)
+		return valueOf(item) or bagValueOf(item)
+	end
 	local rows = {}
 	for _, item in ipairs(listable) do
 		local keep = (search == "" or item.name:lower():find(search, 1, true) ~= nil)
@@ -167,7 +192,10 @@ local function PaintTile(tile, spec, width, height)
 		tile.fill:SetColorTexture(unpack(C.input))
 		tile.art:SetTexture(spec.icon)
 		tile.art:SetShown(spec.icon ~= nil)
-		tile.art:SetAlpha(1) -- full brightness either way: the check and the border say on
+		-- In gray until ticked, then in its own colors.
+		local off = not spec.on and Theme.tileIconOffGray
+		tile.art:SetDesaturated(off or spec.desaturate == true)
+		tile.art:SetAlpha(off and Theme.tileIconOff or 1)
 		tile.border:SetColor(spec.on and C.accent or C.inputBorder)
 		tile.mark:SetVertexColor(1, 1, 1)
 		tile.mark:ClearAllPoints()
@@ -525,7 +553,11 @@ local SORT_VALUES = {
 	end,
 	gain = function(item)
 		local gain = gainOf and gainOf(item)
-		return gain and gain > 0 and gain or nil
+		if gain and gain > 0 then
+			return gain
+		end
+		local slots = bagGainOf and bagGainOf(item)
+		return slots and slots > 0 and slots - ns.BagGainSortOffset or nil
 	end,
 }
 
@@ -560,6 +592,9 @@ end
 local function PaintList(keepScroll)
 	gainOf = ns.Gear:Gains()
 	valueOf = ns.Gear:ValuePerGold(ns.Orders.CheapestAuction)
+	local picked = PickedBagKinds()
+	bagGainOf = ns.BagSize:Gains(picked)
+	bagValueOf = ns.BagSize:ValuePerGold(ns.Orders.CheapestAuction, picked)
 	local items = FilteredItems()
 	if keepScroll and lastOrder then
 		-- The chosen item stays even when it no longer passes the filters.
@@ -634,6 +669,17 @@ local function PaintOrder()
 	parts.available:SetText(L.BUY_AVAILABLE:format(ns.Comma(item.units)))
 	stack:Add(parts.head)
 
+	-- Gear bought this session for the same slot, still in the mail.
+	local incoming = item.equipLoc and ns.Incoming:ForSlot(item.equipLoc) or {}
+	if #incoming > 0 then
+		local names, now = {}, GetServerTime()
+		for _, bought in ipairs(incoming) do
+			names[#names + 1] = L.BUY_INCOMING_ITEM:format(bought.name, ns.PlainMoney(bought.amount or 0), ns.Ago(math.max(0, now - bought.time)))
+		end
+		parts.incoming:SetBody(L.BUY_INCOMING:format(table.concat(names, ", ")))
+		stack:Add(parts.incoming, 4)
+	end
+
 	-- The price that was picked has gone since the scan: say so in two words,
 	-- and what changed when hovered.
 	if state.goneUnit then
@@ -692,8 +738,24 @@ local function PaintOrder()
 	-- The button follows a purchase as it goes: check the price, confirm, done.
 	local buying = ns.Buying.state
 	local mine = buying.key == item.key and buying.phase ~= "idle"
-	if mine and buying.phase == "confirm" then
-		parts.buy:SetLabel(L.BUY_CONFIRM_BUTTON:format(ns.Comma(buying.quantity), ns.PlainMoney(buying.total)))
+	-- "Confirm" only when the price is not what the button said: unchanged, the
+	-- button keeps its words and the next press buys.
+	local unchanged = mine and buying.phase == "confirm" and (filled.byUnit and buying.total == filled.cost
+		or not filled.byUnit and filled.lines[1] ~= nil and buying.unit == filled.lines[1].tier.unit and (buying.quantity or 1) == (filled.lines[1].tier.stack or 1))
+	if unchanged then
+		local first = filled.lines[1]
+		parts.buy:SetLabel(filled.byUnit and L.BUY_BUTTON:format(ns.Comma(filled.units))
+			or L.BUY_BUTTON_AT:format(ns.Comma(first.tier.stack or 1), ns.PlainMoney(first.tier.unit)))
+		parts.buy:SetDisabled(buying.total > gold)
+	elseif mine and buying.phase == "confirm" then
+		-- A single item's auction is all or nothing: say "stack of" so a stack
+		-- of 94 is not read as 94 single purchases, and say nothing when it is one.
+		local label = L.BUY_CONFIRM_BUTTON
+		if not filled.byUnit then
+			label = (buying.quantity or 1) > 1 and L.BUY_CONFIRM_STACK or nil
+		end
+		parts.buy:SetLabel(label and label:format(ns.Comma(buying.quantity), ns.PlainMoney(buying.total))
+			or L.BUY_CONFIRM_ONE:format(ns.PlainMoney(buying.total)))
 		parts.buy:SetDisabled(buying.total > gold)
 	elseif mine and (buying.phase == "quoting" or buying.phase == "buying") then
 		parts.buy:SetLabel(buying.message)
@@ -704,14 +766,25 @@ local function PaintOrder()
 	else
 		-- A single item is bought one auction at a time, the cheapest first.
 		local first = filled.lines[1]
-		parts.buy:SetLabel(first and L.BUY_BUTTON_AT:format(ns.PlainMoney(first.tier.unit)) or L.BUY_BUTTON_AUCTION)
+		-- An auction is bought whole, so name how many units it holds as well
+		-- as the price of each: a stack of 94 is never read as one at 23c.
+		parts.buy:SetLabel(first and L.BUY_BUTTON_AT:format(ns.Comma(first.tier.stack or 1), ns.PlainMoney(first.tier.unit))
+			or L.BUY_BUTTON_AUCTION)
 		parts.buy:SetDisabled(not first or first.tier.buyout > gold)
 	end
 	stack:Add(parts.buy, 10)
 	parts.buyStatus:SetShown(mine)
 	if mine then
 		local tone = buying.phase == "failed" and C.bad or (buying.phase == "done" and C.good or C.muted)
-		parts.buyStatus:SetBody(buying.message or "", tone)
+		local message = buying.message or ""
+		if unchanged and message == L.BUY_CONFIRM_PRICE then
+			message = L.BUY_CHECKED_SAME
+		elseif buying.phase == "confirm" and not filled.byUnit and (buying.quantity or 1) > 1 and message == L.BUY_CONFIRM_PRICE then
+			message = L.BUY_CONFIRM_STACK_NOTE:format(ns.Comma(buying.quantity), ns.Comma(buying.quantity))
+		elseif buying.phase == "confirm" and message == L.BUY_CONFIRM_PRICE then
+			message = L.BUY_CONFIRM_CHANGED
+		end
+		parts.buyStatus:SetBody(message, tone)
 		stack:Add(parts.buyStatus, 4)
 	end
 	PaintStats(item)
@@ -898,6 +971,11 @@ local function BuildOrder(parent)
 		return note
 	end
 	parts.dealNote, parts.warning, parts.budget, parts.more, parts.buyStatus = Note(), Note(), Note(), Note(), Note()
+	parts.incoming = Note()
+	parts.incoming:EnableMouse(true)
+	Kit.Tip(parts.incoming, function()
+		return { L.BUY_INCOMING_TIP }
+	end)
 	parts.changed = Note()
 	parts.changed:EnableMouse(true)
 	Kit.Tip(parts.changed, function(self)
@@ -1084,6 +1162,7 @@ local function Create(parent)
 
 	list = Kit.List(parent, {
 		id = "buy",
+		gap = 6, -- the number columns sit close, as thin as they can
 		columns = {
 			{
 				id = "name",
@@ -1107,29 +1186,39 @@ local function Create(parent)
 					return Kit.QualityColor(row.quality)
 				end,
 			},
-			{ id = "level", label = L.BUY_COL_LEVEL, width = 44, fixed = true, align = "RIGHT", text = function(row)
+			-- Level, for sale, from and gain fit their widest text, no wider.
+			{ id = "level", label = L.BUY_COL_LEVEL, width = 44, fixed = true, fit = true, align = "RIGHT", text = function(row)
 				return not row.item and row.levelType == "REQ_LEVEL_ABBR" and tostring(row.level or "") or ""
 			end },
 			-- An item's row gives the total and the lowest price. Its price rows
 			-- give how many are at each price.
-			{ id = "units", label = L.BUY_COL_AVAILABLE, width = 64, fixed = true, align = "RIGHT", text = function(row)
+			{ id = "units", label = L.BUY_COL_AVAILABLE, width = 64, fixed = true, fit = true, align = "RIGHT", text = function(row)
 				if row.more then
 					return ""
 				end
 				return ns.Comma(row.point and row.point.units or row.units)
 			end },
-			{ id = "min", label = L.BUY_COL_FROM, width = 96, fixed = true, align = "RIGHT", text = function(row)
+			{ id = "min", label = L.BUY_COL_FROM, width = 96, fixed = true, fit = true, align = "RIGHT", text = function(row)
 				if row.more then
 					return ""
 				end
 				return ns.Money(row.point and row.point.unit or row.min)
 			end },
-			-- How much better than what you wear, for gear that is.
-			{ id = "gain", label = L.BUY_COL_GAIN, width = 48, fixed = true, align = "RIGHT", text = function(row)
-				local gain = not row.item and SORT_VALUES.gain(row)
+			-- How much better than what you wear for gear, in weighted stat
+			-- points; for a bag, how many more slots than the one it replaces.
+			{ id = "gain", label = L.BUY_COL_GAIN, width = 48, fixed = true, fit = true, hideEmpty = true, align = "RIGHT", text = function(row)
+				if row.item then
+					return ""
+				end
+				local slots = bagGainOf and bagGainOf(row)
+				if slots then
+					return slots > 0 and L.BUY_GAIN_SLOTS:format(slots) or ""
+				end
+				local gain = SORT_VALUES.gain(row)
 				return gain and ("+%.1f"):format(gain) or ""
 			end },
-			{ id = "deal", label = L.BUY_COL_DEAL, labelColor = C.good, width = 52, fixed = true, align = "RIGHT", badge = function(row)
+			-- Four characters (-99%) and a little padding, independent of the header.
+			{ id = "deal", label = L.BUY_COL_DEAL, labelColor = C.good, width = 32, fixed = true, align = "RIGHT", badge = function(row)
 				local deal = row.deal
 				if row.item then
 					-- Each price is judged by itself: the cheap one may be a deal
@@ -1174,7 +1263,9 @@ local function Create(parent)
 				state.seenUnit, state.goneUnit = item.min, nil
 				state.wanted = 1
 				-- When the scan is no longer fresh, ask what the item looks like now.
-				ns.LiveCheck:Request(item)
+				-- A single item is asked about again unless checked a moment ago,
+				-- so pressing Buy can buy it in one press.
+				ns.LiveCheck:Request(item, not ns.Orders.IsCommodity(item) and not ns.LiveCheck:FreshForBuying(item))
 			end
 			PaintList(true)
 			PaintOrder()
@@ -1245,13 +1336,23 @@ ns.Bus:On("LIVE_CHECK_CHANGED", function()
 	end
 end)
 
+-- Gear was bought: the panel names it beside gear for the same slot.
+ns.Bus:On("INCOMING_CHANGED", function()
+	if order and ns.charDb.tab == "buy" then
+		ns.Window:RefreshActive()
+	end
+end)
+
 -- The order panel follows a purchase as it goes.
 ns.Bus:On("BUYING_CHANGED", function(buying)
 	-- What was just bought is no longer for sale: look again. The same after a
 	-- purchase that did not go through, so the next press is not aimed at an
 	-- auction that has since gone to someone else.
 	local attempted = buying.phase == "done" or (buying.phase == "failed" and buying.auctionID ~= nil)
-	if attempted and market and buying.key and market.byKey[buying.key] then
+	if buying.phase == "failed" and buying.gone and market and buying.key and market.byKey[buying.key] then
+		-- Nothing listed by its name any more: off the list it comes.
+		ns.LiveCheck:Gone(market.byKey[buying.key])
+	elseif attempted and market and buying.key and market.byKey[buying.key] then
 		ns.LiveCheck:Request(market.byKey[buying.key], true)
 	end
 	if order and ns.charDb.tab == "buy" then

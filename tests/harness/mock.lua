@@ -58,7 +58,10 @@ local real = {
 	SetWidth = function(self, w) assert(type(w) == "number", "SetWidth needs a number") rawset(self, "w", w) end,
 	SetSize = function(self, w, h) assert(type(w) == "number" and type(h) == "number", "SetSize needs numbers") rawset(self, "w", w) rawset(self, "h", h) end,
 	SetHeight = function(self, h) assert(type(h) == "number", "SetHeight needs a number") rawset(self, "h", h) end,
-	GetStringWidth = function(self) return #tostring(self.text or "") * 6 end,
+	GetStringWidth = function(self)
+		local text = tostring(self.text or ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+		return #text * 6
+	end,
 	GetStringHeight = function() return 12 end,
 	GetEffectiveScale = function() return 1 end,
 	GetFrameLevel = function() return 1 end,
@@ -67,6 +70,8 @@ local real = {
 	GetFont = function() return "font", 12, "" end,
 	GetThumbTexture = function(self) return self end,
 	GetVerticalScroll = function() return 0 end,
+	SetDesaturated = function(self, on) rawset(self, "desaturated", on == true) end,
+	IsDesaturated = function(self) return rawget(self, "desaturated") == true end,
 	SetColorTexture = function(self, r, g, b) assert(type(r) == "number" and type(g) == "number" and type(b) == "number", "SetColorTexture needs numbers") end,
 	SetTextColor = function(self, r, g, b) assert(type(r) == "number" and type(g) == "number" and type(b) == "number", "SetTextColor needs numbers") end,
 	SetPoint = function(self, point, a, b, c, d) assert(type(point) == "string", "SetPoint needs a point name") rawset(self, "lastPoint", { point, a, b, c, d }) end,
@@ -74,6 +79,9 @@ local real = {
 	Click = function(self) if self.scripts.OnClick then self.scripts.OnClick(self) end end,
 	GetHeight = function(self) return rawget(self, "h") or 20 end,
 	GetPoint = function() return "CENTER", nil, "CENTER", 0, 0 end,
+	ForEachFrame = function(self, callback)
+		for _, frame in ipairs(rawget(self, "rowsDrawn") or {}) do callback(frame) end
+	end,
 	SetDataProvider = function(self, provider)
 		self.provider = provider
 		self.rowsDrawn = {}
@@ -109,7 +117,25 @@ GameTooltip = NewStub("GameTooltip")
 TIP = {}
 rawset(GameTooltip, "SetText", function(_, t) TIP = { t } end)
 rawset(GameTooltip, "AddLine", function(_, t) TIP[#TIP + 1] = t end)
+rawset(GameTooltip, "AddDoubleLine", function(_, left, right) TIP[#TIP + 1] = left .. ": " .. right end)
 rawset(GameTooltip, "SetHyperlink", function(_, l) TIP = { "LINK " .. l } end)
+rawset(GameTooltip, "GetItem", function(self) return self.itemName, self.itemLink end)
+rawset(GameTooltip, "SetRecipeResultItem", function(self, recipeID)
+	if self.scripts.OnTooltipCleared then self.scripts.OnTooltipCleared(self) end
+	local recipe = CRAFTING_RECIPES[recipeID]
+	self.itemLink = recipe and recipe.output and recipe.output.hyperlink
+	self.itemName = self.itemLink and self.itemLink:match("|h%[(.-)%]|h")
+	TIP = { self.itemName or "Recipe" }
+	if self.scripts.OnTooltipSetItem then self.scripts.OnTooltipSetItem(self) end
+end)
+EventRegistry = { callbacks = {} }
+function EventRegistry:RegisterCallback(event, callback, owner)
+	self.callbacks[event] = self.callbacks[event] or {}
+	table.insert(self.callbacks[event], { callback, owner })
+end
+function EventRegistry:TriggerEvent(event, ...)
+	for _, entry in ipairs(self.callbacks[event] or {}) do entry[1](entry[2], ...) end
+end
 function CreateDataProvider(tbl) return { elements = tbl } end
 function CreateScrollBoxListLinearView()
 	return { SetElementExtent = function() end, SetPadding = function() end,
@@ -223,7 +249,13 @@ function C_AuctionHouse.GetItemKeyInfo(key)
 	return { itemName = "Item " .. key.itemID, quality = key.itemID % 5, iconFileID = 1, isCommodity = key.itemID % 2 == 0, isEquipment = key.itemID % 2 == 1, isPet = false }
 end
 function C_AuctionHouse.GetItemKeyRequiredLevel(key) return key.itemID % 60 end
-C_Item = { GetItemInfoInstant = function(id) return id, "Armor", "Leather", "INVTYPE_CHEST", 1, 4, 2 end }
+-- MOCK_ITEM_CLASS[id or link] = { classID, subClassID } for items that are not armor.
+MOCK_ITEM_CLASS = {}
+C_Item = { GetItemInfoInstant = function(id)
+	local class = MOCK_ITEM_CLASS[id]
+	if class then return id, "Container", "Bag", "INVTYPE_BAG", 1, class[1], class[2] end
+	return id, "Armor", "Leather", "INVTYPE_CHEST", 1, 4, 2
+end }
 function C_AuctionHouse.MakeItemKey(id) return { itemID = id, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 } end
 function C_AuctionHouse.GetItemKeyInfo(key) return { itemName = "x", quality = 1, iconFileID = 1, isCommodity = key.itemID % 2 == 0, isEquipment = false, isPet = false } end
 
@@ -241,9 +273,18 @@ local BAG = {
 }
 -- Bags past the backpack, by bag index: MOCK_BAGS[5] is a reagent bag.
 MOCK_BAGS = {}
+-- A bag slot's size when it is not just its items: MOCK_BAG_SIZES[1] = 10.
+MOCK_BAG_SIZES = {}
+-- Tooltip lines by item id, as C_TooltipInfo gives them; nil while unloaded.
+MOCK_TOOLTIPS = {}
+C_TooltipInfo = { GetItemByID = function(id)
+	local lines = {}
+	for _, text in ipairs(MOCK_TOOLTIPS[id] or {}) do lines[#lines + 1] = { leftText = text } end
+	return { lines = lines }
+end }
 local function BagList(bag) if bag == 0 then return BAG end return MOCK_BAGS[bag] or {} end
 C_Container = {
-	GetContainerNumSlots = function(bag) return #BagList(bag) end,
+	GetContainerNumSlots = function(bag) return MOCK_BAG_SIZES[bag] or #BagList(bag) end,
 	GetContainerItemInfo = function(bag, slot)
 		local it = BagList(bag)[slot]; if not it then return nil end
 		return { iconFileID = 134000 + slot, stackCount = it.count, quality = 1, itemID = it.id, isBound = it.bound or false,
@@ -321,7 +362,7 @@ function C_AuctionHouse.GetNumItemSearchResults(key) return Findable(key) and (M
 -- variant apart); MOCK.liveMine marks the first as the player's own.
 function C_AuctionHouse.GetItemSearchResultInfo(key, i)
 	local name = MOCK.liveNames and MOCK.liveNames[i]
-	return { auctionID = 700 + i, buyoutAmount = (MOCK.livePrice or 100) * i, quantity = 1, containsOwnerItem = MOCK.liveMine == true and i == 1,
+	return { auctionID = 700 + i, buyoutAmount = (MOCK.livePrice or 100) * i * (MOCK.liveQuantity or 1), quantity = MOCK.liveCount or MOCK.liveQuantity or 1, containsOwnerItem = MOCK.liveMine == true and i == 1,
 		itemLink = name and ("|cff1eff00|Hitem:" .. key.itemID .. "|h[" .. name .. "]|h|r") or nil }
 end
 function C_AuctionHouse.HasFullItemSearchResults() return true end
@@ -372,9 +413,31 @@ function hooksecurefunc(owner, name, hook)
 	end
 end
 C_Item.GetItemNameByID = function(id) return "item " .. id end
+-- Gear never stacks. MOCK.liveCount is a count the live search reports
+-- without the price covering it, as the game does for bags.
+C_Item.GetItemMaxStackSizeByID = function(id) return (id == 2006 or id == 2007) and 1 or 200 end
+
+CRAFTING_RECIPES = {}
+C_TradeSkillUI = {
+	GetRecipeSchematic = function(recipeID)
+		if MOCK.recipeAPIFails then error("recipe data not available") end
+		local recipe = CRAFTING_RECIPES[recipeID]
+		return recipe and recipe.schematic
+	end,
+	GetRecipeOutputItemData = function(recipeID)
+		if MOCK.recipeAPIFails then error("recipe data not available") end
+		local recipe = CRAFTING_RECIPES[recipeID]
+		return recipe and recipe.output
+	end,
+}
 
 -- Buying a single item out. MOCK.bidFails leaves it unanswered.
 function C_AuctionHouse.PlaceBid(auctionID, amount)
+	-- The game refuses a purchase that is not part of the player's press.
+	if MOCK.blockBids then
+		FireEvent("ADDON_ACTION_BLOCKED", "AuctionHero", "UNKNOWN()")
+		return
+	end
 	BUYS[#BUYS + 1] = "bid " .. auctionID .. " " .. amount
 	if MOCK.bidTakesGold then MONEY = MONEY - amount end
 	if not MOCK.bidFails then C_Timer.After(0, function() FireEvent("AUCTION_HOUSE_PURCHASE_COMPLETED", auctionID) end) end

@@ -18,8 +18,10 @@ ns.Theme = {
 
 	-- The size of the game's own auction house window.
 	window = { width = 900, height = 600 },
-	-- The window can be dragged bigger from its corner, never smaller than the
-	-- size above: the tabs are laid out for that.
+	-- The window opens at the size above and can be dragged between these from
+	-- its corner. Width stays at the designed size (the tabs' columns are laid
+	-- out for it); height can shrink, since the lists and rails scroll.
+	windowMin = { width = 900, height = 420 },
 	windowMax = { width = 1500, height = 1000 },
 	-- Sizers: the draggable separators between list columns and between panels.
 	sizerWidth = 8, -- the drag area
@@ -32,6 +34,7 @@ ns.Theme = {
 	titleHeight = 30,
 	brandIcon = "Interface\\Icons\\INV_Misc_Coin_01", -- before the title, and with coins raining onto it on the scan shield
 	brandIconSize = 20,
+	titleBadge = 132351, -- after the name: ability_warrior_rallyingcry, the hero's shout (a file ID)
 	tabHeight = 27,
 	tabWidth = 84,
 	tabIconWidth = 40, -- a tab that shows an icon instead of its name
@@ -55,6 +58,8 @@ ns.Theme = {
 	ledgerTile = { width = 118, headline = 150, height = 48, gap = 16 }, -- the totals across the Ledger tab
 	swatch = 12, -- rail quality swatches (their height)
 	swatchIconOff = 0.45, -- how faded a quality icon is when it is not ticked
+	tileIconOffGray = true, -- an item icon tile is in gray until ticked, then in color
+	tileIconOff = 0.75, -- and this faded while gray
 	bagSlot = 40,
 
 	-- A narrow sans-serif, the closest the client ships to the concept's font.

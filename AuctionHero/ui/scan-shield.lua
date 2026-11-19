@@ -76,12 +76,16 @@ local function Between(range)
 	return range[1] + (range[2] - range[1]) * math.random()
 end
 
--- A drop starting a new fall: somewhere new along the top, a new size and coin.
+-- A drop starting a new fall: out of the bar's filled part, mostly near its
+-- leading edge, with a new size, toss and coin.
 local function NewFall(drop, cycle)
 	local rain = Rule.coinRain
 	drop.cycle = cycle
 	drop.size = math.floor(Between(rain.size) + 0.5)
-	drop.x = rain.margin + (Rule.card.width - 2 * rain.margin) * math.random()
+	local edge = parts.fill:GetWidth() or 1
+	local back = math.min(edge, rain.spill) * math.random() ^ 2 -- bunched at the edge
+	drop.x = parts.barX + edge - back
+	drop.toss = Between(rain.toss)
 	drop:SetSize(drop.size, drop.size)
 	local icon = rain.icons[math.random(#rain.icons)]
 	drop:SetTexture(icon)
@@ -97,7 +101,8 @@ end
 
 local function RainCoins(now)
 	local rain = Rule.coinRain
-	local fall = Rule.card.height - 2 * rain.margin
+	local top = parts.barTop -- the bar's middle, where coins come out
+	local fall = Rule.card.height - rain.margin - top
 	for _, drop in ipairs(parts.drops) do
 		local position = now / drop.seconds + drop.offset
 		local cycle = math.floor(position)
@@ -107,9 +112,10 @@ local function RainCoins(now)
 		local share = position - cycle
 		local sway = rain.sway * math.sin((now / rain.swaySeconds + drop.offset) * 2 * math.pi)
 		local depth = (fall - drop.size) * share ^ rain.gravity -- falling under gravity
+		local x = drop.x + drop.toss * share + sway * share
 		local bright = Brightness(share)
 		drop:ClearAllPoints()
-		drop:SetPoint("TOP", parts.card, "TOPLEFT", drop.x + sway, -(rain.margin + depth))
+		drop:SetPoint("TOP", parts.card, "TOPLEFT", x, -(top + depth))
 		drop:SetAlpha(bright)
 		drop.shine:SetAlpha(bright * rain.shine)
 	end
@@ -123,6 +129,8 @@ local function ShowRain(shown)
 end
 
 -- ========= Painting =========================================================
+local PaintGoals -- the day's scan, confidence and Hero Coins; below
+
 local function Paint()
 	if not shield or not run then
 		return
@@ -158,6 +166,12 @@ local function Paint()
 	-- Pricing cannot be stopped, and a finished scan has nothing to stop.
 	parts.cancel:SetLabel((finished or run.stage == "pricing") and L.SHIELD_CLOSE or L.CANCEL)
 	parts.cancel:SetDisabled(run.cancelling == true)
+	PaintGoals()
+end
+
+-- ========= The day's scan, confidence and Hero Coins =====================
+function PaintGoals()
+	parts.progress:Paint(run.earnedFrom)
 end
 
 local function NextQuip()
@@ -199,8 +213,9 @@ local function Build()
 	parts.coin:SetPoint("TOPLEFT", pad, -pad)
 	parts.coin:SetTexture(Rule.coinIcon)
 
-	-- The coin rain: drawn on the card above its fill and below its text and
-	-- bar, so it reads as a light sprinkle behind everything. Each drop keeps
+	-- The coin rain: coins spill out of the progress bar and fall to the card's
+	-- foot, drawn above the card's fill and below its text and bar, so they
+	-- come out from behind the bar. Each drop keeps
 	-- its own speed, and starts part way through a fall so they never line up.
 	local rain = Rule.coinRain
 	parts.card = card
@@ -242,6 +257,7 @@ local function Build()
 	track:SetColorTexture(unpack(C.input))
 	track:SetSize(parts.barWidth, 12)
 	track:SetPoint("TOPLEFT", pad, barY)
+	parts.barX, parts.barTop = pad, -barY + 6 -- where the coins spill from
 	parts.fill = card:CreateTexture(nil, "OVERLAY")
 	parts.fill:SetColorTexture(unpack(C.gold))
 	parts.fill:SetSize(1, 12)
@@ -257,6 +273,16 @@ local function Build()
 	parts.detail:SetPoint("RIGHT", card, "RIGHT", -pad, 0)
 	parts.footer = Kit.Text(card, "small", C.muted)
 	parts.footer:SetPoint("TOPLEFT", pad, barY - 46)
+
+	-- The day's scan, scan confidence and Hero Coins, under a rule.
+	local y = barY - 76
+	local rule = card:CreateTexture(nil, "ARTWORK")
+	rule:SetColorTexture(unpack(C.line))
+	rule:SetHeight(1)
+	rule:SetPoint("TOPLEFT", pad, y + 12)
+	rule:SetPoint("TOPRIGHT", -pad, y + 12)
+	parts.progress = ns.ProgressPanel.Create(card, Rule.card.width - pad * 2)
+	parts.progress:SetPoint("TOPLEFT", pad, y)
 
 	parts.cancel = Kit.Button(card, {
 		text = L.CANCEL,
@@ -313,6 +339,7 @@ local function Raise(state)
 		startedAt = now,
 		stageAt = now,
 		previous = snapshot and snapshot.meta and snapshot.meta.count,
+		earnedFrom = ns.HeroCoins:EarnedThisSession(), -- what this scan earns is said at its end
 	}
 	-- A search box being typed in would keep the keyboard behind the shield.
 	local focus = GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus()
@@ -341,6 +368,7 @@ local function RaiseReading()
 		startedAt = now,
 		stageAt = now,
 		count = snapshot and snapshot.meta and snapshot.meta.count,
+		earnedFrom = ns.HeroCoins:EarnedThisSession(),
 	}
 	parts.quip:SetText(NextQuip())
 	ShowRain(true)

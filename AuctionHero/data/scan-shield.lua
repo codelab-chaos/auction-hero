@@ -37,9 +37,13 @@ ns.ScanShield = {
 		shine = 0.6, -- how strong the added copy on top is, 0 for none
 		fadeIn = 0.03, -- share of the fall spent fading in
 		fadeOut = 0.15, -- and fading out
-		sway = 4, -- how far a drop drifts left and right
+		sway = 2, -- how far a drop drifts left and right
 		swaySeconds = 2.4, -- one drift there and back
-		margin = 10, -- kept clear at the card's edges
+		margin = 10, -- kept clear at the card's edges and its foot
+		-- Coins spill out of the progress bar's filled part, mostly near its
+		-- leading edge, and fall from there to the card's foot.
+		spill = 60, -- how far behind the leading edge a coin can come from
+		toss = { -18, 28 }, -- how far sideways a coin travels over its fall
 		icons = {
 			"Interface\\MoneyFrame\\UI-GoldIcon",
 		},
@@ -51,6 +55,7 @@ ns.ScanShield = {
 	-- Reading the last scan after a reload or login: the same card, its first
 	-- stages already done, and the bar running the whole width for pricing.
 	reading = { stage = "pricing", from = 0, to = 1 },
-	card = { width = 400, height = 268 },
+	card = { width = 440, height = 480 },
+	-- Below the progress: the progress panel (ns.RewardsLook, data\rewards.lua).
 	dim = 0.86, -- how dark the cover over the tabs is
 }

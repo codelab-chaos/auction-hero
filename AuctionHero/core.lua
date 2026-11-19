@@ -44,6 +44,30 @@ function Bus:Fire(message, ...)
 	end
 end
 
+-- ========= Item helpers =====================================================
+
+-- How many units one auction of an item really holds. The auction house's
+-- live search can report a count for items that do not stack (a bag listed
+-- once comes back as "68"), which would split one price into many cheap
+-- units. The count is held to the item's stack size; nil or junk reads as 1.
+-- Stack sizes are kept once known, since every scan row asks.
+local maxStack = {}
+function ns.AuctionUnits(itemID, quantity)
+	quantity = math.max(1, tonumber(quantity) or 1)
+	if quantity == 1 or not itemID then
+		return quantity
+	end
+	local most = maxStack[itemID]
+	if not most and C_Item and C_Item.GetItemMaxStackSizeByID then
+		local ok, read = pcall(C_Item.GetItemMaxStackSizeByID, itemID)
+		if ok and type(read) == "number" and read >= 1 then
+			most = read
+			maxStack[itemID] = read
+		end
+	end
+	return most and math.min(quantity, most) or quantity
+end
+
 -- ========= Text helpers =====================================================
 
 -- 2450 -> "2,450"

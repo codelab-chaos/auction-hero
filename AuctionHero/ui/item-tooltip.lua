@@ -71,7 +71,7 @@ local function Shown(tooltip, data)
 end
 
 -- data is what newer clients pass along with the tooltip: { id = item id }.
-function ItemTooltip.OnItem(tooltip, data)
+local function AddItemLines(tooltip, data)
 	if not (ns.db and ns.IsEnabled("itemTooltips")) then
 		return
 	end
@@ -93,6 +93,13 @@ function ItemTooltip.OnItem(tooltip, data)
 	tooltip:AddLine(L.TITLE, C.accent[1], C.accent[2], C.accent[3])
 	for _, line in ipairs(lines) do
 		tooltip:AddDoubleLine(line[1], line[2], label[1], label[2], label[3], value[1], value[2], value[3])
+	end
+end
+
+function ItemTooltip.OnItem(tooltip, data)
+	AddItemLines(tooltip, data)
+	if ns.RecipeTooltip then
+		ns.RecipeTooltip.OnItem(tooltip, data)
 	end
 end
 
@@ -120,6 +127,7 @@ for _, tooltip in ipairs({ GameTooltip, ItemRefTooltip }) do
 	if tooltip and tooltip.HookScript then
 		pcall(tooltip.HookScript, tooltip, "OnTooltipCleared", function(self)
 			self.auctionHeroAdded = nil
+			self.auctionHeroRecipeAdded = nil
 		end)
 	end
 end

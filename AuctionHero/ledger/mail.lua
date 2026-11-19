@@ -79,10 +79,13 @@ local function ReadInbox()
 	return found
 end
 
+local openingAll = false -- the game's Open All is taking the mail
+
 local function Scan()
 	if not (GetInboxNumItems and GetInboxInvoiceInfo and GetInboxHeaderInfo and ns.charDb) then
 		return
 	end
+	ns.EventLog:Note("mail read", GetInboxNumItems(), openingAll and "opening all" or "")
 	local tolerance = ns.LedgerRules.sameMailSeconds
 	local used = {} -- arrival times matched in this reading, per mail details
 	for _, entry in ipairs(ReadInbox()) do
@@ -106,7 +109,6 @@ local function Scan()
 	end
 end
 
-local openingAll = false -- the game's Open All is taking the mail
 local waiting = false -- a reading is due once the mailbox settles
 local changedAt = 0
 

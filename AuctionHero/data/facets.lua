@@ -88,8 +88,8 @@ ns.ItemCategories = {
 		notSlots = BODY_SLOT_NAMES,
 		boxes = {
 			{ label = L.BOX_CLOAKS, slots = { "INVTYPE_CLOAK" }, inRail = true },
-			{ label = L.BOX_NECK, slots = { "INVTYPE_NECK" } },
-			{ label = L.BOX_FINGER, slots = { "INVTYPE_FINGER" } },
+			{ label = L.BOX_NECK, slots = { "INVTYPE_NECK" }, inRail = true },
+			{ label = L.BOX_FINGER, slots = { "INVTYPE_FINGER" }, inRail = true },
 			{ label = L.BOX_TRINKET, slots = { "INVTYPE_TRINKET" } },
 			{ label = L.BOX_OFF_HAND, slots = { "INVTYPE_HOLDABLE" } },
 			{ label = L.BOX_SHIELD, slots = { "INVTYPE_SHIELD" }, inRail = true },
@@ -121,6 +121,8 @@ ns.BuyRail = {
 	{ { refine = "weapons" }, { box = L.BOX_SHIELD, of = "accessories" } },
 	-- What you wear: the body slots, then the back.
 	{ { refine = "armor" }, { box = L.BOX_CLOAKS, of = "accessories" } },
+	-- What you wear that is not armor: necklaces and rings.
+	{ { box = L.BOX_NECK, of = "accessories" }, { box = L.BOX_FINGER, of = "accessories" } },
 }
 
 -- The quality squares' icons, by quality: icons the game has had since the
