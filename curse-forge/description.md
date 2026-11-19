@@ -8,7 +8,7 @@ Auction Hero replaces the stock auction house window on **World of Warcraft: For
 
 ### What it does
 
-- **Buy:** quick filters down the side (quality, weapon hand, armor slot), category checkboxes and search. Toggles for gear you can use, gear better than what you wear (stats weighted for your class) and gear near your level. A deal meter shows how each price compares with what the item usually goes for.
+- **Buy:** a fresh filter layout built around finding better gear. Pick a slot from the rail, then toggle **Better** for anything that beats what you wear (stats weighted for your class) or **Picks** for upgrades you can wear today, sorted by how much they gain. Quality, category, near-level and search filters are one click away, and a deal meter shows how each price compares with what the item usually goes for.
 - **Sell:** your bags as a grid, price rules (match, undercut, quick sale and more), how confident the price is, and the competition you would be listed against.
 - **Resell:** small markets you could buy out and relist at a profit.
 - **Auctions:** what you have up for sale, with cancelling in two presses, like the game's own window.

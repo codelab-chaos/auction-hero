@@ -4,7 +4,7 @@
     {
       "file": "buy.png",
       "label": "Buy",
-      "description": "Filter by quality, slot and category, then see how each price compares with what the item usually sells for."
+      "description": "A fresh filter layout built around finding better gear fast: pick a slot, toggle Better or Picks, and see upgrades for your class with how much each one gains."
     },
     {
       "file": "scan.png",
