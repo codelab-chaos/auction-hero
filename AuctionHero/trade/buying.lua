@@ -15,7 +15,8 @@
 --                 purchase buys that one auction.
 --
 -- The state, published as BUYING_CHANGED:
---   phase     "idle", "quoting", "confirm", "buying", "done" or "failed"
+--   phase     "idle", "quoting", "confirm", "buying", "done", "failed" or
+--             "expired" (a price check the game let lapse: nothing went wrong)
 --   key       the market item
 --   quantity  units: asked for (goods), or in the auction found (single items)
 --   unit, total   the live price, once the server has answered
@@ -505,7 +506,8 @@ C_Timer.NewTicker(1, function()
 	if Buying.state.phase == "confirm" and order and order.way == goods then
 		local ok, left = pcall(C_AuctionHouse.GetQuoteDurationRemaining)
 		if ok and left == 0 then
-			Fail(L.BUY_QUOTE_EXPIRED)
+			Publish("expired", L.BUY_QUOTE_EXPIRED)
+			order = nil
 		end
 	end
 end)

@@ -142,7 +142,24 @@ function CreateScrollBoxListLinearView()
 		SetElementInitializer = function(self, _, fn) self.init = fn end }
 end
 ScrollUtil = { InitScrollBoxListWithScrollBar = function(box, _, view) box.view = view; SCROLLBOX = box end }
-C_Timer = { After = function(delay, fn) timers[#timers + 1] = { at = clock + (delay or 0), fn = fn } end, NewTicker = function() end }
+C_Timer = { After = function(delay, fn) timers[#timers + 1] = { at = clock + (delay or 0), fn = fn } end }
+-- A ticker runs every `delay` seconds until cancelled (or `iterations` runs).
+function C_Timer.NewTicker(delay, fn, iterations)
+	local ticker = { cancelled = false }
+	function ticker:Cancel() self.cancelled = true end
+	function ticker:IsCancelled() return self.cancelled end
+	local runs = 0
+	local function step()
+		if ticker.cancelled then return end
+		runs = runs + 1
+		fn(ticker)
+		if not ticker.cancelled and (not iterations or runs < iterations) then
+			C_Timer.After(delay, step)
+		end
+	end
+	C_Timer.After(delay, step)
+	return ticker
+end
 
 function FireEvent(event, ...)
 	for i = 1, #frames do

@@ -648,6 +648,26 @@ local function Filled(item)
 	return ns.Orders.Fill(item, state.wanted)
 end
 
+-- What the Buy button says: how many and what they cost in all, never a
+-- count beside a price of each, which reads as that many at that price.
+-- Goods: the whole order. A single item: its cheapest auction, whole.
+local function BuyLabel(filled)
+	local count, total
+	if filled.byUnit then
+		count, total = filled.units, filled.cost
+	else
+		local first = filled.lines[1]
+		if not first then
+			return L.BUY_BUTTON_AUCTION
+		end
+		count, total = first.tier.stack or 1, first.tier.buyout
+	end
+	if count == 1 then
+		return L.BUY_BUTTON_ONE:format(ns.PlainMoney(total))
+	end
+	return L.BUY_BUTTON_MANY:format(ns.Comma(count), ns.PlainMoney(total))
+end
+
 local function PaintOrder()
 	stack:Reset()
 	local item = market and state.selectedKey and market.byKey[state.selectedKey]
@@ -743,33 +763,26 @@ local function PaintOrder()
 	local unchanged = mine and buying.phase == "confirm" and (filled.byUnit and buying.total == filled.cost
 		or not filled.byUnit and filled.lines[1] ~= nil and buying.unit == filled.lines[1].tier.unit and (buying.quantity or 1) == (filled.lines[1].tier.stack or 1))
 	if unchanged then
-		local first = filled.lines[1]
-		parts.buy:SetLabel(filled.byUnit and L.BUY_BUTTON:format(ns.Comma(filled.units))
-			or L.BUY_BUTTON_AT:format(ns.Comma(first.tier.stack or 1), ns.PlainMoney(first.tier.unit)))
+		parts.buy:SetLabel(BuyLabel(filled))
 		parts.buy:SetDisabled(buying.total > gold)
 	elseif mine and buying.phase == "confirm" then
 		-- A single item's auction is all or nothing: say "stack of" so a stack
-		-- of 94 is not read as 94 single purchases, and say nothing when it is one.
-		local label = L.BUY_CONFIRM_BUTTON
-		if not filled.byUnit then
-			label = (buying.quantity or 1) > 1 and L.BUY_CONFIRM_STACK or nil
-		end
-		parts.buy:SetLabel(label and label:format(ns.Comma(buying.quantity), ns.PlainMoney(buying.total))
-			or L.BUY_CONFIRM_ONE:format(ns.PlainMoney(buying.total)))
+		-- of 94 is not read as 94 single purchases.
+		local count = buying.quantity or 1
+		local label = count == 1 and L.BUY_CONFIRM_ONE:format(ns.PlainMoney(buying.total))
+			or (filled.byUnit and L.BUY_CONFIRM_BUTTON or L.BUY_CONFIRM_STACK):format(ns.Comma(count), ns.PlainMoney(buying.total))
+		parts.buy:SetLabel(label)
 		parts.buy:SetDisabled(buying.total > gold)
 	elseif mine and (buying.phase == "quoting" or buying.phase == "buying") then
 		parts.buy:SetLabel(buying.message)
 		parts.buy:SetDisabled(true)
 	elseif filled.byUnit then
-		parts.buy:SetLabel(L.BUY_BUTTON:format(ns.Comma(filled.units)))
+		parts.buy:SetLabel(BuyLabel(filled))
 		parts.buy:SetDisabled(overBudget or filled.units == 0)
 	else
 		-- A single item is bought one auction at a time, the cheapest first.
 		local first = filled.lines[1]
-		-- An auction is bought whole, so name how many units it holds as well
-		-- as the price of each: a stack of 94 is never read as one at 23c.
-		parts.buy:SetLabel(first and L.BUY_BUTTON_AT:format(ns.Comma(first.tier.stack or 1), ns.PlainMoney(first.tier.unit))
-			or L.BUY_BUTTON_AUCTION)
+		parts.buy:SetLabel(BuyLabel(filled))
 		parts.buy:SetDisabled(not first or first.tier.buyout > gold)
 	end
 	stack:Add(parts.buy, 10)
@@ -777,7 +790,10 @@ local function PaintOrder()
 	if mine then
 		local tone = buying.phase == "failed" and C.bad or (buying.phase == "done" and C.good or C.muted)
 		local message = buying.message or ""
-		if unchanged and message == L.BUY_CONFIRM_PRICE then
+		if buying.phase == "confirm" and (buying.total or 0) > gold then
+			-- The button is greyed out: say why, or it only looks broken.
+			message, tone = L.BUY_CONFIRM_OVER_GOLD:format(ns.PlainMoney(buying.total), ns.PlainMoney(gold)), C.bad
+		elseif unchanged and message == L.BUY_CONFIRM_PRICE then
 			message = L.BUY_CHECKED_SAME
 		elseif buying.phase == "confirm" and not filled.byUnit and (buying.quantity or 1) > 1 and message == L.BUY_CONFIRM_PRICE then
 			message = L.BUY_CONFIRM_STACK_NOTE:format(ns.Comma(buying.quantity), ns.Comma(buying.quantity))
@@ -1243,15 +1259,9 @@ local function Create(parent)
 				state.selectedUnit = row.point.unit
 				state.seenUnit, state.goneUnit = row.point.unit, nil
 				if ns.Orders.IsCommodity(item) then
-					-- Goods are filled from the cheapest up, so picking a price
-					-- means everything up to and including it.
-					local units = 0
-					for _, point in ipairs(ns.Market.PricePoints(item)) do
-						if point.unit <= row.point.unit then
-							units = units + point.units
-						end
-					end
-					state.wanted = units
+					-- Start at one: the quantity box adds more, and goods are
+					-- always filled from the cheapest up.
+					state.wanted = 1
 				end
 			else
 				-- An item: open it to show every price, or close it again.
