@@ -1,5 +1,7 @@
 # Builds and releases
 
+Before each release, add the version's section to `CHANGELOG.md` (newest first). The same section goes into the CurseForge file's changelog and the GitHub release notes.
+
 Every push to `main` and every pull request runs Lua 5.1 syntax checks, the
 addon tests, packaging tests and an installable ZIP build. Download test
 builds from the **Checks and package** workflow's `AuctionHero-build`
