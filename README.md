@@ -57,6 +57,7 @@ Copy the `AuctionHero` folder into
 | `AuctionHero/` | The addon |
 | `tests/` | The addon's tests, run against a mocked game client |
 | `docs/` | Research notes and how the window is put together |
+| `curse-forge/` | The CurseForge description and Media tab entries |
 | `scripts/deploy.sh` | Copies the addon into a local game install |
 | `scripts/package.py` | Builds an installable ZIP (into `dist/`) |
 

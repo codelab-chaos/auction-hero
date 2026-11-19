@@ -1,0 +1,45 @@
+{
+  "about": "CurseForge Media tab entries, in upload order. Each file lives in curse-forge/media/. Paste label into Title and description into Description.",
+  "entries": [
+    {
+      "file": "buy.png",
+      "label": "Buy",
+      "description": "Filter by quality, slot and category, then see how each price compares with what the item usually sells for."
+    },
+    {
+      "file": "scan.png",
+      "label": "Scanning",
+      "description": "One full scan reads the whole auction house. Coins spill from the progress bar while it works."
+    },
+    {
+      "file": "sell.png",
+      "label": "Sell",
+      "description": "Your bags as a grid, price rules, price confidence and the competition you would be listed against."
+    },
+    {
+      "file": "resell.png",
+      "label": "Resell",
+      "description": "Small markets you could buy out and relist at a profit."
+    },
+    {
+      "file": "graphs.png",
+      "label": "Graphs",
+      "description": "Usual and lowest price as lines, units for sale as bars, over 3 to 30 days."
+    },
+    {
+      "file": "ledger.png",
+      "label": "Ledger",
+      "description": "Every auction house trade your character makes, and what each item has made you."
+    },
+    {
+      "file": "progress.png",
+      "label": "Progress and Hero Coins",
+      "description": "Scan confidence, your daily scan streak, and Hero Coins earned by using the addon."
+    },
+    {
+      "file": "tooltips.png",
+      "label": "Tooltips",
+      "description": "Going rate, lowest price and supply on any item; crafted price, material cost and margin on recipes."
+    }
+  ]
+}
