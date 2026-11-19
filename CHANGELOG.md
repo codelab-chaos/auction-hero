@@ -4,7 +4,7 @@ Features and fixes shipped in each release. Copy a version's section into
 CurseForge's changelog field using Markdown formatting, and into the GitHub
 release notes.
 
-## 0.2.0 - 2026-11-19
+## 0.1.4 - 2026-11-19
 
 ### Fixed
 
