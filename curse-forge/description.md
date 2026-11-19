@@ -18,14 +18,6 @@ Auction Hero replaces the stock auction house window on **World of Warcraft: For
 - **Recipe tooltips:** hover a profession recipe for the crafted item's price, the material cost and the margin.
 - **Progress and Hero Coins:** scan confidence, a daily scan streak, and Hero Coins earned just by using the addon. Can you spend them? ...TBD
 
-### Getting started
-
-1. Install, then open the auction house. Auction Hero opens with it (or type `/ah`).
-2. Press **Scan**. The first full scan takes a moment; the server allows one every 15 minutes.
-3. Shop, sell and flip. The more days you scan, the surer the prices get.
-
-`/ah help` lists the commands.
-
 ### Early access
 
 Auction Hero is young and changing fast.
