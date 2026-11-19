@@ -16,7 +16,7 @@ class) or **Picks** for upgrades you can wear today, sorted by how much they
 gain. A deal meter shows how each price compares with what the item usually
 goes for.
 
-![The Buy tab](docs/img-barn/cat-buy-0.2.0.png)
+![The Buy tab](docs/img-barn/cat-buy.png)
 
 ## Sell
 
@@ -25,27 +25,27 @@ the ladder of current listings, so you know where it lands before you post.
 Pick from your bags, choose a price rule (match, undercut, quick sale and
 more), and see how sure the going rate is.
 
-![The Sell tab](docs/img-barn/cat-sell-0.2.0.png)
+![The Sell tab](docs/img-barn/cat-sell.png)
 
 ## Resell
 
 Small markets you could buy out and relist at a profit.
 
-![The Resell tab](docs/img-barn/cat-resell-0.2.0.png)
+![The Resell tab](docs/img-barn/cat-resell.png)
 
 ## Graphs
 
 Usual and lowest price as lines and units for sale as bars, over 3, 7, 14 or
 30 days.
 
-![The Graphs tab](docs/img-barn/cat-graphs-0.2.0.png)
+![The Graphs tab](docs/img-barn/cat-graphs.png)
 
 ## Progress and Hero Coins
 
 Scan confidence, a daily scan streak, and Hero Coins earned just by using the
 addon. Can you spend them? ...TBD
 
-![The Progress tab](docs/img-barn/cat-hero-coin-fun.0.2.0.png)
+![The Progress tab](docs/img-barn/cat-hero-coins.png)
 
 ## And more
 

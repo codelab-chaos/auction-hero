@@ -2,7 +2,7 @@
   "about": "CurseForge Media tab entries, in upload order. Images live in docs/img-barn/ (the cat-* shots, also used by the README). Paste label into Title and description into Description. Entries whose file is missing still need a screenshot.",
   "entries": [
     {
-      "file": "cat-buy-0.2.0.png",
+      "file": "cat-buy.png",
       "label": "Buy",
       "description": "A fresh filter layout built around finding better gear fast: pick a slot, toggle Better or Picks, and see upgrades for your class with how much each one gains."
     },
@@ -12,17 +12,17 @@
       "description": "One full scan reads the whole auction house. Coins spill from the progress bar while it works."
     },
     {
-      "file": "cat-sell-0.2.0.png",
+      "file": "cat-sell.png",
       "label": "Sell",
       "description": "See at a glance how competitive your price is: your auction slotted into the ladder of current listings, with price rules and how sure the going rate is."
     },
     {
-      "file": "cat-resell-0.2.0.png",
+      "file": "cat-resell.png",
       "label": "Resell",
       "description": "Small markets you could buy out and relist at a profit."
     },
     {
-      "file": "cat-graphs-0.2.0.png",
+      "file": "cat-graphs.png",
       "label": "Graphs",
       "description": "Usual and lowest price as lines, units for sale as bars, over 3 to 30 days."
     },
@@ -32,7 +32,7 @@
       "description": "Every auction house trade your character makes, and what each item has made you."
     },
     {
-      "file": "cat-hero-coin-fun.0.2.0.png",
+      "file": "cat-hero-coins.png",
       "label": "Progress and Hero Coins",
       "description": "Scan confidence, your daily scan streak, and Hero Coins earned by using the addon."
     },
