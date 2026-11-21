@@ -127,3 +127,11 @@ ns.GearCopperPerGold = 10000
 -- Sorted by gain, bags follow the gear as a group of their own: their sort
 -- value is their extra slots less this, far under any stat gain.
 ns.BagGainSortOffset = 100000
+
+-- Gear bought and still in the mail (inventory\incoming.lua). Mail is
+-- returned after 30 days, so nothing is incoming for longer. The icon marks
+-- gear in the Buy list for a slot with something incoming.
+ns.IncomingRule = {
+	keepDays = 30,
+	icon = "|TInterface\\Icons\\INV_Letter_15:14:14|t",
+}

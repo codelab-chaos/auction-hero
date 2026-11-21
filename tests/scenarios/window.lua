@@ -113,3 +113,20 @@ ns.Window:Show()
 ns.Downloader.IsRunning = function() return true end
 frame:Hide()
 check("but never while a scan runs", closes, 1)
+
+-- The title says it is early access, and "feedback welcome" gives the
+-- CurseForge page's address to copy.
+local function titleText(text)
+	return Frames(function(frame)
+		local value = type(frame.text) == "table" and frame.text.text or frame.text
+		return value == text
+	end)[1]
+end
+ShowTab("buy") -- the window, open
+checkTrue("the title says early access", titleText("Early Access  |  ") ~= nil)
+local feedback = Frames(function(frame)
+	return frame.label and frame.label.text == "feedback welcome" and frame.scripts.OnClick
+end)[1]
+checkTrue("with a feedback link", feedback ~= nil)
+feedback.scripts.OnClick(feedback)
+checkTrue("that shows the project page to copy", titleText("https://www.curseforge.com/wow/addons/auction-hero") ~= nil)

@@ -648,6 +648,24 @@ local function Filled(item)
 	return ns.Orders.Fill(item, state.wanted)
 end
 
+-- One incoming purchase, as "Name (Slot, price, when)".
+local function IncomingText(bought, now)
+	return L.BUY_INCOMING_ITEM:format(bought.name, ns.PlainMoney(bought.amount or 0), ns.Ago(math.max(0, now - bought.time)))
+end
+
+-- With nothing picked: what to do, and the gear already on its way.
+local function PickPrompt()
+	local all = ns.Incoming:All()
+	if #all == 0 then
+		return L.BUY_PICK
+	end
+	local names, now = {}, GetServerTime()
+	for _, bought in ipairs(all) do
+		names[#names + 1] = L.BUY_INCOMING_SLOT:format(bought.name, _G[bought.equipLoc] or bought.equipLoc, ns.PlainMoney(bought.amount or 0))
+	end
+	return L.BUY_PICK .. "\n\n" .. L.BUY_INCOMING_ALL:format(table.concat(names, ", "))
+end
+
 -- What the Buy button says: how many and what they cost in all, never a
 -- count beside a price of each, which reads as that many at that price.
 -- Goods: the whole order. A single item: its cheapest auction, whole.
@@ -673,7 +691,7 @@ local function PaintOrder()
 	local item = market and state.selectedKey and market.byKey[state.selectedKey]
 	prompt:SetShown(item == nil)
 	-- A live check can find that what was chosen has gone since the scan.
-	prompt:SetBody(state.gone and L.BUY_GONE:format(state.gone) or L.BUY_PICK)
+	prompt:SetBody(state.gone and L.BUY_GONE:format(state.gone) or PickPrompt())
 	if not item then
 		return
 	end
@@ -694,7 +712,7 @@ local function PaintOrder()
 	if #incoming > 0 then
 		local names, now = {}, GetServerTime()
 		for _, bought in ipairs(incoming) do
-			names[#names + 1] = L.BUY_INCOMING_ITEM:format(bought.name, ns.PlainMoney(bought.amount or 0), ns.Ago(math.max(0, now - bought.time)))
+			names[#names + 1] = IncomingText(bought, now)
 		end
 		parts.incoming:SetBody(L.BUY_INCOMING:format(table.concat(names, ", ")))
 		stack:Add(parts.incoming, 4)
@@ -763,7 +781,10 @@ local function PaintOrder()
 	local unchanged = mine and buying.phase == "confirm" and (filled.byUnit and buying.total == filled.cost
 		or not filled.byUnit and filled.lines[1] ~= nil and buying.unit == filled.lines[1].tier.unit and (buying.quantity or 1) == (filled.lines[1].tier.stack or 1))
 	if unchanged then
-		parts.buy:SetLabel(BuyLabel(filled))
+		-- The press checked the price and bought nothing (the game only buys
+		-- on a press, and the check could not be skipped). Same price, but the
+		-- button must not look as if the press went through.
+		parts.buy:SetLabel(L.BUY_PRESS_AGAIN:format((BuyLabel(filled):gsub("^%u", string.lower))))
 		parts.buy:SetDisabled(buying.total > gold)
 	elseif mine and buying.phase == "confirm" then
 		-- A single item's auction is all or nothing: say "stack of" so a stack
@@ -895,7 +916,7 @@ local function BuildOrder(parent)
 	prompt:SetPoint("TOPLEFT", 16, -30)
 	prompt:SetPoint("TOPRIGHT", -16, -30)
 	prompt:SetWidth(width - 16)
-	prompt:SetBody(L.BUY_PICK)
+	prompt:SetBody(PickPrompt())
 
 	parts.head = CreateFrame("Frame", nil, parent)
 	parts.head:SetHeight(34)
@@ -1233,6 +1254,14 @@ local function Create(parent)
 				local gain = SORT_VALUES.gain(row)
 				return gain and ("+%.1f"):format(gain) or ""
 			end },
+			-- A letter beside gear for a slot you already bought for, still in
+			-- the mail. The column only shows while something is incoming.
+			{ id = "incoming", label = ns.IncomingRule.icon, width = 18, fixed = true, hideEmpty = true, sortable = false, align = "CENTER", text = function(row)
+				if row.item or not row.equipLoc then
+					return ""
+				end
+				return #ns.Incoming:ForSlot(row.equipLoc) > 0 and ns.IncomingRule.icon or ""
+			end },
 			-- Four characters (-99%) and a little padding, independent of the header.
 			{ id = "deal", label = L.BUY_COL_DEAL, labelColor = C.good, width = 32, fixed = true, align = "RIGHT", badge = function(row)
 				local deal = row.deal
@@ -1363,7 +1392,12 @@ ns.Bus:On("BUYING_CHANGED", function(buying)
 		-- Nothing listed by its name any more: off the list it comes.
 		ns.LiveCheck:Gone(market.byKey[buying.key])
 	elseif attempted and market and buying.key and market.byKey[buying.key] then
-		ns.LiveCheck:Request(market.byKey[buying.key], true)
+		-- Bought: read the next auction from what the game already holds, so
+		-- the next press buys at once. Otherwise, or after a failure, ask.
+		local item = market.byKey[buying.key]
+		if not (buying.phase == "done" and ns.LiveCheck:Reread(item, buying.auctionID)) then
+			ns.LiveCheck:Request(item, true)
+		end
 	end
 	if order and ns.charDb.tab == "buy" then
 		ns.Window:RefreshActive()

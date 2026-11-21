@@ -79,7 +79,7 @@ end
 -- The live auctions as scan rows, or nil when they could not be read. For
 -- single items it also returns the auctions themselves by item name, each
 -- { auctionID, buyout, quantity, mine }, for the Buy button to use.
-local function ReadRows(snapshot)
+local function ReadRows(snapshot, skip)
 	local byName, any = Templates(snapshot)
 	if not any then
 		return nil
@@ -102,6 +102,8 @@ local function ReadRows(snapshot)
 		local name = found and info and info.itemLink and info.itemLink:match("|h%[(.-)%]|h")
 		if name and name ~= wanted.name then
 			-- Another variant of the item. The search was for this one only.
+		elseif found and info and skip and info.auctionID == skip then
+			-- Just bought: the game may still list it a moment longer.
 		elseif name then
 			local units = ns.AuctionUnits(wanted.itemID, info.quantity)
 			auctions[name] = auctions[name] or {}
@@ -211,6 +213,35 @@ local function Answered(gone)
 	Patch(snapshot, market, itemID, not wanted.commodity and wanted.name or nil, rows, auctions)
 	Publish("done")
 	wanted = nil
+end
+
+-- After buying an auction of a single item: the game still holds that
+-- item's search results (a purchase is not a search), less the auction just
+-- bought. Reads them again, with nothing sent, so the next press can buy the
+-- next auction at once instead of landing while a new search is out.
+-- Returns false when the game no longer holds them, so a check must be asked.
+function LiveCheck:Reread(item, bought)
+	local holding = item and not ns.Orders.IsCommodity(item) and ns.Requests:Holding(item.itemID, ns.LiveCheckRule.reuseSeconds)
+	local snapshot = ns.Store:GetSourceSnapshot(SOURCE)
+	local market = ns.Analysis and ns.Analysis.market
+	if not (holding and holding.itemKey and snapshot and market and ns.Schemas[snapshot.meta.schema]) then
+		return false
+	end
+	if wanted then
+		ns.Requests:Cancel(wanted.request)
+	end
+	turn = turn + 1
+	wanted = { itemID = item.itemID, name = item.name, itemKey = holding.itemKey }
+	local rows, auctions = ReadRows(snapshot, bought)
+	ns.EventLog:Note("live check reread", item.itemID, rows and #rows or "could not be read", "less", bought)
+	if not rows then
+		wanted = nil
+		return false
+	end
+	Patch(snapshot, market, item.itemID, item.name, rows, auctions)
+	Publish("done")
+	wanted = nil
+	return true
 end
 
 -- Queues the search for the item. It goes when the auction house is free:

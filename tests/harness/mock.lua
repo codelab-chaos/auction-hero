@@ -319,6 +319,9 @@ MOCK.postError = false
 Enum.ItemCommodityStatus = { Unknown = 0, Item = 1, Commodity = 2 }
 Enum.AuctionHouseError = { NotEnoughMoney = 0, ItemNotFound = 4 }
 C_Item.DoesItemExist = function(loc) return loc ~= nil end
+-- How many of an item the bags hold: MOCK.bagCounts[itemID], or none.
+function GetItemCount(itemID) return (MOCK.bagCounts or {})[itemID] or 0 end
+INVTYPE_CHEST = "Chest"
 C_Item.GetItemID = function(loc) local info = C_Container.GetContainerItemInfo(loc.bag, loc.slot) return info and info.itemID end
 function C_AuctionHouse.GetItemCommodityStatus(loc) local id = C_Item.GetItemID(loc) return (id == 2003 or id == 2001) and 2 or 1 end
 function C_AuctionHouse.CalculateCommodityDeposit(id, duration, qty) return qty * duration end

@@ -108,8 +108,33 @@ ns.Buying:Start({ key = bear.key, itemID = 2006, name = bear.name, single = true
 check("one press buys at an unchanged price", #BUYS, bought + 1)
 check("sent before anything else runs, as the game requires", sentFirst, true)
 check("with no confirm to wait on", ns.Buying.state.phase, "buying")
+local searched = #SEARCHES
 Tick(20)
 check("bought", ns.Buying.state.phase, "done")
+
+-- Two in a row: after a purchase the game still holds the item's auctions,
+-- so the next one is read from them, with no search a second press could
+-- land in the middle of. That press buys at once.
+check("the next auction is read with nothing asked", #SEARCHES, searched)
+local reread = false
+for _, line in ipairs(ns.db.log) do
+	if line.event == "> live check reread" then reread = true end
+end
+check("from what the game holds", reread, true)
+bear = market.byKey["2006:Tunic of the Bear"]
+local boughtID = tonumber(BUYS[#BUYS]:match("^bid (%d+)"))
+local left = true
+for _, auction in ipairs(bear.liveAuctions) do
+	if auction.auctionID == boughtID then left = false end
+end
+check("without the auction just bought", left, true)
+local nextOne = bear.liveAuctions[1]
+bought = #BUYS
+ns.Buying:Start({ key = bear.key, itemID = 2006, name = bear.name, single = true, live = bear.liveAuctions, checkedAt = bear.checkedAt, price = nextOne.buyout })
+check("the second press buys at once", #BUYS, bought + 1)
+check("the next auction", BUYS[#BUYS], "bid " .. nextOne.auctionID .. " " .. nextOne.buyout)
+Tick(20)
+check("bought again", ns.Buying.state.phase, "done")
 
 -- If the game refuses the purchase anyway, nothing was spent and the next
 -- press sends it: no waiting on an answer that cannot come.

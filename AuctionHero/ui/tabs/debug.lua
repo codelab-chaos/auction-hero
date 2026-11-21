@@ -179,11 +179,23 @@ local function Create(parent)
 end
 
 -- Order 99: Debug is always the last tab, right of everything, while it is on.
-ns.Window:RegisterTab({ id = "debug", label = L.TAB_DEBUG, order = 99, debug = true, align = "right", icon = ns.Theme.debugTabIcon, Create = Create })
+ns.Window:RegisterTab({ id = "debug", label = L.TAB_DEBUG, order = 99, debug = true, duringScan = true, align = "right", icon = ns.Theme.debugTabIcon, Create = Create })
 
--- The log view fills in as events arrive.
+-- The log view fills in as events arrive, redrawn at most every
+-- ns.LogRedrawSeconds however many arrive in between.
+local redrawPending = false
+local function ShowingLog()
+	return ns.charDb.tab == "debug" and ns.charDb.view == "log"
+end
 ns.Bus:On("LOG_ADDED", function()
-	if ns.charDb.tab == "debug" and ns.charDb.view == "log" then
-		ns.Window:RefreshActive()
+	if redrawPending or not ShowingLog() then
+		return
 	end
+	redrawPending = true
+	C_Timer.After(ns.LogRedrawSeconds, function()
+		redrawPending = false
+		if ShowingLog() then
+			ns.Window:RefreshActive()
+		end
+	end)
 end)

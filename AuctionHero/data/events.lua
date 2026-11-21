@@ -98,3 +98,7 @@ ns.LoggedEventsCollapsed = {
 }
 
 ns.LogLimit = 600
+
+-- The Log view redraws at most this often. A scan logs an event per item,
+-- thousands a second, and redrawing on each one froze the game.
+ns.LogRedrawSeconds = 0.5

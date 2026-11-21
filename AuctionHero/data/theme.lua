@@ -35,6 +35,9 @@ ns.Theme = {
 	brandIcon = "Interface\\Icons\\INV_Misc_Coin_01", -- before the title, and with coins raining onto it on the scan shield
 	brandIconSize = 20,
 	titleBadge = 132351, -- after the name: ability_warrior_rallyingcry, the hero's shout (a file ID)
+	-- After the badge: where things stand, and where to say what you think.
+	-- The game cannot open a browser, so a click shows the page's address to copy.
+	projectPage = "https://www.curseforge.com/wow/addons/auction-hero",
 	tabHeight = 27,
 	tabWidth = 84,
 	tabIconWidth = 40, -- a tab that shows an icon instead of its name

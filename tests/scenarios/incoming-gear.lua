@@ -1,5 +1,5 @@
--- Gear bought this session is named beside gear for the same slot, as a
--- reminder of what is on its way in the mail. It is not kept past the session.
+-- Gear bought at the auction house is named beside gear for the same slot, as
+-- a reminder of what is on its way in the mail, until it reaches the bags.
 local ns = Boot()
 OpenAuctionHouse()
 Scan()
@@ -19,7 +19,7 @@ local function select(key)
 end
 local function incomingNote()
 	return Frames(function(frame)
-		return type(frame.text) == "table" and tostring(frame.text.text):match("^Bought this session for this slot: ")
+		return type(frame.text) == "table" and tostring(frame.text.text):match("^Already bought for this slot, in your mail: ")
 	end)[1]
 end
 
@@ -59,3 +59,34 @@ end
 -- Goods are not gear, and are not incoming.
 MOCK_ITEM_CLASS[2003] = { 7, 0 }
 check("a trade good is not gear", ns.Incoming:Add({ name = "Not gear", itemID = 2003, amount = 5 }), nil)
+
+-- The list marks gear for that slot, and with nothing picked, the panel names
+-- everything on its way.
+local function shown(pattern)
+	return Frames(function(frame)
+		local text = type(frame.text) == "table" and frame.text.text or frame.text
+		return type(text) == "string" and text:find(pattern, 1, true) ~= nil
+	end)[1]
+end
+checkTrue("gear for the slot is marked in the list", shown(ns.IncomingRule.icon) ~= nil)
+ns.Window:RefreshActive()
+checkTrue("it is kept with the character, through a reload", ns.charDb.incoming[1] and ns.charDb.incoming[1].name == "Tunic of the Bear")
+
+-- Taken from the mail: it is in the bags, and no longer incoming.
+MOCK.bagCounts = { [tunic.itemID] = 1 }
+FireEvent("BAG_UPDATE_DELAYED")
+check("taken from the mail, it is not incoming", #ns.Incoming:ForSlot(tunic.equipLoc), 0)
+check("and is dropped from the saved list", #ns.charDb.incoming, 0)
+MOCK.bagCounts = nil
+
+-- Mail is returned after 30 days, so nothing is incoming for longer.
+ns.Incoming:Add({ name = "Tunic of the Bear", itemID = tunic.itemID, amount = 200, time = GetServerTime() - 31 * 86400 })
+FireEvent("BAG_UPDATE_DELAYED")
+check("an old purchase is dropped", #ns.Incoming:All(), 0)
+
+-- Only gear this character can wear: leather bought on a mage is not a
+-- reminder for anything.
+local class = PLAYER.class
+PLAYER.class = "MAGE"
+check("gear the class cannot wear is not incoming", ns.Incoming:Add({ name = "Tunic of the Bear", itemID = tunic.itemID, amount = 200 }), nil)
+PLAYER.class = class

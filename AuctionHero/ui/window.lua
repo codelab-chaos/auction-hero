@@ -5,6 +5,8 @@
 -- A tab is registered with:
 --   id, label, order
 --   debug     true to show the tab only while the debug switch is on
+--   duringScan true when it can be opened while a scan runs. Other tabs are
+--             locked then: opening one builds and reads the market mid-scan.
 --   Create(parent) -> { Refresh = function() ... end }
 -- Refresh is called when the tab is shown and whenever its data changes.
 local _, ns = ...
@@ -61,6 +63,22 @@ function Window:RefreshActive()
 	end
 end
 
+-- Whether a tab can be opened right now: not while a scan runs, unless it
+-- says it can.
+local function Openable(tab)
+	return tab.duringScan or not (ns.Downloader and ns.Downloader:IsRunning())
+end
+
+-- Locks the tabs that cannot be opened mid-scan, and unlocks them after.
+local function LockTabs()
+	for _, tab in ipairs(Window.tabs) do
+		local button = tabButtons[tab.id]
+		if button then
+			button:SetDisabled(not Openable(tab) and tab.id ~= ns.charDb.tab)
+		end
+	end
+end
+
 local function ShowTab(id)
 	local visible = VisibleTabs()
 	local chosen = visible[1]
@@ -92,7 +110,9 @@ local function ShowTab(id)
 				width = tab.icon and Theme.tabIconWidth or Theme.tabWidth,
 				height = Theme.tabHeight,
 				onClick = function()
-					ShowTab(tab.id)
+					if Openable(tab) then
+						ShowTab(tab.id)
+					end
 				end,
 			})
 			button.tabId = tab.id
@@ -131,6 +151,7 @@ local function ShowTab(id)
 		tab.frame = holder
 		built[chosen.id] = tab
 	end
+	LockTabs()
 	Window:RefreshActive()
 	ns.Bus:Fire("TAB_SHOWN", chosen.id)
 end
@@ -296,6 +317,31 @@ local function Build()
 	badge:SetTexture(Theme.titleBadge)
 	badge:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 
+	-- "Early Access | feedback welcome": the second part is a link to the
+	-- project page, shown as an address to copy.
+	local early = Kit.Text(title, "small", C.muted)
+	early:SetPoint("LEFT", badge, "RIGHT", 10, 0)
+	early:SetText(L.WIN_EARLY_ACCESS)
+	local feedback = CreateFrame("Button", nil, title)
+	feedback.label = Kit.Text(feedback, "small", C.accent)
+	feedback.label:SetPoint("LEFT")
+	feedback.label:SetText(L.WIN_FEEDBACK)
+	feedback:SetSize(math.floor(feedback.label:GetStringWidth() + 0.5), Theme.titleHeight)
+	feedback:SetPoint("LEFT", early, "RIGHT", 0, 0)
+	local linkLine = feedback:CreateTexture(nil, "ARTWORK")
+	linkLine:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 0.6)
+	linkLine:SetHeight(1)
+	linkLine:SetPoint("TOPLEFT", feedback.label, "BOTTOMLEFT", 0, -1)
+	linkLine:SetPoint("TOPRIGHT", feedback.label, "BOTTOMRIGHT", 0, -1)
+	Kit.Tip(feedback, function()
+		return { L.WIN_FEEDBACK, L.WIN_FEEDBACK_TIP, Theme.projectPage }
+	end)
+	local pageBox
+	feedback:SetScript("OnClick", function()
+		pageBox = pageBox or Kit.CopyBox(body)
+		pageBox:Open(L.WIN_FEEDBACK_COPY, Theme.projectPage)
+	end)
+
 	-- The game's own red close button, so closing looks like every other window.
 	local close = CreateFrame("Button", nil, title, "UIPanelCloseButtonNoScripts")
 	close:SetSize(24, 24)
@@ -329,7 +375,7 @@ local function Build()
 			end
 		end,
 	})
-	scanButton:SetPoint("LEFT", badge, "RIGHT", 12, 0)
+	scanButton:SetPoint("LEFT", feedback, "RIGHT", 12, 0)
 
 	statusText = Kit.Text(title, "small", C.muted)
 	statusText:SetPoint("LEFT", scanButton, "RIGHT", 8, 0)
@@ -467,6 +513,7 @@ Bus:On("DOWNLOAD_STATE", function(state)
 		ns.Print(state.detail)
 	end
 	UpdateScanBar(state)
+	LockTabs()
 end)
 
 for _, message in ipairs({ "ANALYSIS_READY", "HISTORY_CHANGED", "BAGS_CHANGED" }) do
