@@ -152,10 +152,10 @@ local function BuildPlan(parent)
 		end
 	end })
 	parts.limitMinus:SetPoint("LEFT", 60, 0)
-	parts.limit = Kit.Input(parts.limitRow, { width = 60, height = 26, numeric = true, justify = "RIGHT", maxLetters = 6, onChange = function(text)
+	parts.limit = Kit.Input(parts.limitRow, { width = 60, height = 26, numeric = true, justify = "RIGHT", maxLetters = 6, onNumber = function(number)
 		local lead = Current()
 		if lead then
-			SetLimit(tonumber(text) or 1, lead.available)
+			SetLimit(number, lead.available)
 		end
 	end })
 	parts.limit:SetPoint("LEFT", parts.limitMinus, "RIGHT", 4, 0)
@@ -374,8 +374,8 @@ local function Create(parent)
 	local maxLabel = Kit.Text(bar, "normal", C.accent)
 	maxLabel:SetPoint("LEFT", margins, "RIGHT", 16, 0)
 	maxLabel:SetText(L.RESELL_MAX_BUY)
-	maxInput = Kit.Input(bar, { width = 50, numeric = true, maxLetters = 5, justify = "CENTER", onChange = function(text)
-		state.maxItems = math.max(1, tonumber(text) or ns.ResellMaxItems)
+	maxInput = Kit.Input(bar, { width = 50, numeric = true, maxLetters = 5, justify = "CENTER", onNumber = function(number)
+		state.maxItems = math.max(1, number)
 		state.limit = nil
 		Refresh()
 	end })

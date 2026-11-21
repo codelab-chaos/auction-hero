@@ -953,12 +953,7 @@ local function BuildOrder(parent)
 		SetWanted(state.wanted - 1)
 	end })
 	minus:SetPoint("LEFT", 62, 0)
-	parts.quantity = Kit.Input(parts.quantityRow, { width = 64, height = 26, numeric = true, justify = "RIGHT", maxLetters = 6, onChange = function(text)
-		-- An emptied box is mid-edit, not a quantity: wait for a number.
-		if tonumber(text) then
-			SetWanted(tonumber(text))
-		end
-	end })
+	parts.quantity = Kit.Input(parts.quantityRow, { width = 64, height = 26, numeric = true, justify = "RIGHT", maxLetters = 6, onNumber = SetWanted })
 	parts.quantity:SetPoint("LEFT", minus, "RIGHT", 4, 0)
 	local plus = Kit.Button(parts.quantityRow, { text = "+", width = 26, height = 26, onClick = function()
 		SetWanted(state.wanted + 1)

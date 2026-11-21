@@ -327,7 +327,9 @@ end
 
 -- ========= Text entry ======================================================
 -- options: width, height, numeric, placeholder, maxLetters, justify,
--- onChange(text) for typing only. Returns the edit box.
+-- onChange(text) for typing only, onNumber(n) for typing that reads as a
+-- whole number (an emptied box is mid-edit, so nothing is called until a
+-- number is typed). Returns the edit box.
 function Kit.Input(parent, options)
 	local box = CreateFrame("EditBox", nil, parent)
 	box:SetSize(options.width or 80, options.height or Theme.controlHeight)
@@ -360,6 +362,10 @@ function Kit.Input(parent, options)
 		UpdatePlaceholder()
 		if userInput and options.onChange then
 			options.onChange(self:GetText())
+		end
+		local number = userInput and options.onNumber and tonumber(self:GetText())
+		if number then
+			options.onNumber(math.floor(number))
 		end
 	end)
 	box:SetScript("OnEscapePressed", box.ClearFocus)
@@ -408,11 +414,8 @@ function Kit.Stepper(parent, options)
 		numeric = true,
 		maxLetters = options.maxLetters or 3,
 		justify = "CENTER",
-		onChange = function(text)
-			local number = tonumber(text)
-			if number then
-				options.onChange(Clamp(number))
-			end
+		onNumber = function(number)
+			options.onChange(Clamp(number))
 		end,
 	})
 	stepper.box:SetPoint("LEFT")
@@ -1280,10 +1283,17 @@ function Kit.Stack(parent, inset)
 	local stack = { y = inset or 8, known = {} }
 	function stack:Paint(draw, ...)
 		self.y = inset or 8
-		local added = {}
+		local added, outer = {}, self.added
 		self.added = added
 		draw(...)
-		self.added = nil
+		self.added = outer
+		if outer then
+			-- Drawn again from inside a draw: the outer draw finishes the job.
+			for frame in pairs(added) do
+				outer[frame] = true
+			end
+			return
+		end
 		for frame in pairs(self.known) do
 			if not added[frame] then
 				frame:Hide()
