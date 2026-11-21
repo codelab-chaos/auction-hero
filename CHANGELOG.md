@@ -4,6 +4,21 @@ Features and fixes shipped in each release. Copy a version's section into
 CurseForge's changelog field using Markdown formatting, and into the GitHub
 release notes.
 
+## 0.1.5 - 2026-11-21
+
+### Fixed
+
+- **Buying twice in a row:** after a purchase, the next auction of the same item is ready at once, so the next press buys it instead of only checking the price.
+- **A press that only checks says so:** when a press can only check the price, the button reads "Press again: buy 1 for ..." instead of looking unchanged.
+- **Debug tab froze during a scan:** the Log view redraws at most twice a second instead of once per event.
+- **Tabs during a scan:** every tab except Debug and the one on screen is locked until the scan ends, so nothing loads mid-scan.
+
+### Improved
+
+- **Gear already bought:** equippable gear your class can wear, bought here and still in your mail, is shown while you shop: a mail icon on rows for the same slot, and a list in the pick prompt. It clears once you take it from the mail.
+- **Confidence label:** the lowest scan confidence now reads "Mostly guessing".
+- **Early Access | feedback welcome** in the title, with a link to the CurseForge page.
+
 ## 0.1.4 - 2026-11-19
 
 ### Fixed
