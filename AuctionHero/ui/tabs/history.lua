@@ -213,8 +213,11 @@ local function BuildDetail(parent)
 	parts.readout:SetPoint("LEFT")
 end
 
+local DrawDetail
 local function PaintDetail(rows)
-	stack:Reset()
+	stack:Paint(DrawDetail, rows)
+end
+DrawDetail = function(rows)
 	local market = ns.Window:Market()
 	local item = market and state.selectedKey and market.byKey[state.selectedKey]
 	prompt:SetShown(item == nil)

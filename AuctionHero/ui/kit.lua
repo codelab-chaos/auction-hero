@@ -1271,18 +1271,30 @@ function Kit.Note(parent, size, color, justify)
 	return note
 end
 
--- Stacks frames down a column. Call :Reset(), then :Add(frame, gap) for each
--- frame that should show this time. Frames not added are hidden.
+-- Stacks frames down a column. :Paint(draw, ...) calls draw(...), which
+-- calls :Add(frame, gap) for each frame that should show this time; frames
+-- not added are hidden afterwards. A frame that stays is never hidden, even
+-- for a moment, since hiding an edit box takes its keyboard focus and the
+-- next key typed would go to the game.
 function Kit.Stack(parent, inset)
 	local stack = { y = inset or 8, known = {} }
-	function stack:Reset()
+	function stack:Paint(draw, ...)
 		self.y = inset or 8
+		local added = {}
+		self.added = added
+		draw(...)
+		self.added = nil
 		for frame in pairs(self.known) do
-			frame:Hide()
+			if not added[frame] then
+				frame:Hide()
+			end
 		end
 	end
 	function stack:Add(frame, gap, indent)
 		self.known[frame] = true
+		if self.added then
+			self.added[frame] = true
+		end
 		self.y = self.y + (gap or 0)
 		frame:ClearAllPoints()
 		frame:SetPoint("TOPLEFT", parent, "TOPLEFT", (inset or 8) + (indent or 0), -self.y)

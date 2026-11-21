@@ -686,8 +686,11 @@ local function BuyLabel(filled)
 	return L.BUY_BUTTON_MANY:format(ns.Comma(count), ns.PlainMoney(total))
 end
 
+local DrawOrder
 local function PaintOrder()
-	stack:Reset()
+	stack:Paint(DrawOrder)
+end
+DrawOrder = function()
 	local item = market and state.selectedKey and market.byKey[state.selectedKey]
 	prompt:SetShown(item == nil)
 	-- A live check can find that what was chosen has gone since the scan.
@@ -728,6 +731,19 @@ local function PaintOrder()
 
 	parts.quantity:SetValue(tostring(state.wanted))
 	stack:Add(parts.quantityRow, 8)
+	-- Goods bought by the unit can be had in whole stacks with one press.
+	local stackSize = ns.Orders.IsCommodity(item) and ns.MaxStack(item.itemID)
+	if stackSize and stackSize > 1 then
+		for index, count in ipairs(ns.BuyStackPresets) do
+			local button = parts.stackButtons[index]
+			local units = count * stackSize
+			button.units = units
+			button:SetDisabled(units > item.units)
+			button.tipLines = { button.label:GetText(), L.BUY_STACKS_TIP:format(ns.Comma(units), ns.Comma(stackSize)),
+				units > item.units and L.BUY_STACKS_SHORT:format(ns.Comma(item.units)) or nil }
+		end
+		stack:Add(parts.stackRow, 4)
+	end
 	stack:Add(parts.rule1, 8)
 	parts.total:Set(L.BUY_TOTAL, ns.Money(filled.cost))
 	stack:Add(parts.total, 6)
@@ -938,7 +954,10 @@ local function BuildOrder(parent)
 	end })
 	minus:SetPoint("LEFT", 62, 0)
 	parts.quantity = Kit.Input(parts.quantityRow, { width = 64, height = 26, numeric = true, justify = "RIGHT", maxLetters = 6, onChange = function(text)
-		SetWanted(tonumber(text) or 1)
+		-- An emptied box is mid-edit, not a quantity: wait for a number.
+		if tonumber(text) then
+			SetWanted(tonumber(text))
+		end
 	end })
 	parts.quantity:SetPoint("LEFT", minus, "RIGHT", 4, 0)
 	local plus = Kit.Button(parts.quantityRow, { text = "+", width = 26, height = 26, onClick = function()
@@ -950,6 +969,33 @@ local function BuildOrder(parent)
 		SetWanted(item and item.units or 1)
 	end })
 	all:SetPoint("LEFT", plus, "RIGHT", 4, 0)
+
+	-- Whole stacks, under the quantity: 1, 2, 5 (ns.BuyStackPresets).
+	parts.stackRow = CreateFrame("Frame", nil, parent)
+	parts.stackRow:SetHeight(22)
+	parts.stackButtons = {}
+	local previous
+	for index, count in ipairs(ns.BuyStackPresets) do
+		local button
+		button = Kit.Button(parts.stackRow, {
+			text = count == 1 and L.BUY_STACKS_ONE or L.BUY_STACKS_MANY:format(count),
+			height = 22,
+			size = "small",
+			tip = function()
+				return button.tipLines
+			end,
+			onClick = function()
+				SetWanted(button.units)
+			end,
+		})
+		if previous then
+			button:SetPoint("LEFT", previous, "RIGHT", 4, 0)
+		else
+			button:SetPoint("LEFT", 62, 0)
+		end
+		parts.stackButtons[index] = button
+		previous = button
+	end
 
 	local function Rule()
 		local holder = CreateFrame("Frame", nil, parent)

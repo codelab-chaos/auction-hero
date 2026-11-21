@@ -465,8 +465,11 @@ PaintSummary = function()
 	end
 end
 
+local DrawForm
 PaintForm = function()
-	stack:Reset()
+	stack:Paint(DrawForm)
+end
+DrawForm = function()
 	local owned = Owned()
 	formHint:SetShown(owned == nil)
 	if not owned then

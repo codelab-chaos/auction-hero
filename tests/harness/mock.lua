@@ -49,7 +49,20 @@ local real = {
 		self.events[event] = true
 	end,
 	Show = function(self) local was = self.shown; self.shown = true; if not was and self.scripts.OnShow then self.scripts.OnShow(self) end end,
-	Hide = function(self) local was = self.shown; self.shown = false; if was and self.scripts.OnHide then self.scripts.OnHide(self) end end,
+	Hide = function(self)
+		local was = self.shown; self.shown = false
+		-- As in the game, hiding a frame takes the keyboard focus from any
+		-- edit box in it.
+		local focus = KEYBOARD_FOCUS
+		while focus do
+			if focus == self then KEYBOARD_FOCUS = nil break end
+			focus = rawget(focus, "parentFrame")
+		end
+		if was and self.scripts.OnHide then self.scripts.OnHide(self) end
+	end,
+	SetFocus = function(self) KEYBOARD_FOCUS = self end,
+	ClearFocus = function(self) if KEYBOARD_FOCUS == self then KEYBOARD_FOCUS = nil end end,
+	HasFocus = function(self) return KEYBOARD_FOCUS == self end,
 	SetShown = function(self, v) if v then self:Show() else self:Hide() end end,
 	IsShown = function(self) return self.shown end,
 	SetText = function(self, t) assert(t == nil or type(t) == "string" or type(t) == "number", "SetText got " .. type(t)); self.text = t end,
@@ -113,6 +126,7 @@ Stub.__index = function(self, key)
 end
 function CreateFrame(kind, name, parent) local f = NewStub(kind) rawset(f, "parentFrame", parent) rawset(f, "GetParent", function(self) return rawget(self, "parentFrame") end) return f end
 UIParent = NewStub("UIParent")
+function GetCurrentKeyBoardFocus() return KEYBOARD_FOCUS end
 GameTooltip = NewStub("GameTooltip")
 TIP = {}
 rawset(GameTooltip, "SetText", function(_, t) TIP = { t } end)

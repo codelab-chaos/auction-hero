@@ -206,6 +206,10 @@ ns.LiveCheckRule = {
 -- the answer ready. For the rest we go by item class.
 ns.CommodityClassIDs = { [0] = true, [5] = true, [6] = true, [7] = true, [12] = true, [15] = true }
 
+-- Quick quantities for goods bought by the unit, in whole stacks (a stack is
+-- what one bag slot holds: 200 arrows, 20 cloth). One button each.
+ns.BuyStackPresets = { 1, 2, 5 }
+
 -- ========= Deals ============================================================
 -- A price is a deal against the price you would otherwise pay: the baseline.
 --   floorShare      the baseline starts from today's floor, the price reached

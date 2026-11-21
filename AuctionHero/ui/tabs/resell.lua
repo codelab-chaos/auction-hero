@@ -226,8 +226,11 @@ local function BuildPlan(parent)
 	parts.more:SetWidth(width)
 end
 
+local DrawPlan
 PaintPlan = function()
-	stack:Reset()
+	stack:Paint(DrawPlan)
+end
+DrawPlan = function()
 	local full = SelectedLead()
 	prompt:SetShown(full == nil)
 	if not full then
