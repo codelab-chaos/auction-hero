@@ -4,6 +4,19 @@ Features and fixes shipped in each release. Copy a version's section into
 CurseForge's changelog field using Markdown formatting, and into the GitHub
 release notes.
 
+## 0.1.6 - 2026-11-21
+
+### Fixed
+
+- **Quantity box:** you can type more than one digit again.
+- Clearing a quantity or Resell limit to retype no longer snaps it back to 1.
+
+### New
+
+- **Buy in stacks:** 1, 2 and 5 stack buttons for goods like arrows and cloth.
+- **Bags grouped by kind** on the Sell tab, with All, Gear, Trade and Take filters and rarity-colored borders.
+- **List view for your bags:** an option that shows one row per item with its count, sortable by name or count.
+
 ## 0.1.5 - 2026-11-21
 
 ### Fixed

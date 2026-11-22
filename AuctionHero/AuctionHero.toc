@@ -2,7 +2,7 @@
 ## Title: Auction Hero
 ## Notes: Browse, price and trade auctions with scan history and a compact Buy, Sell and Resell interface.
 ## Author: Wizwonk
-## Version: 0.1.5
+## Version: 0.1.6
 ## AllowLoadGameType: forever
 ## ExcludeLoadGameType: standard, classic
 ## Category: Auction House
