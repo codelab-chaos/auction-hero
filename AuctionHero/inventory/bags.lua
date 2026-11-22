@@ -15,6 +15,66 @@ function Bags:Slots()
 	return self.slots
 end
 
+-- The items carried, grouped by class in ns.BagCategoryOrder, each group
+-- led by a heading row { heading = name }. options (all optional):
+--   classes     only items of these classes ({ [classID] = true })
+--   sort        { field = "name" | "total", descending } within each group;
+--               without it, by subclass, then name
+local Group
+function Bags:Grouped(options)
+	return Group(self.items, options or {})
+end
+
+local rank = {}
+for position, classID in ipairs(ns.BagCategoryOrder) do
+	rank[classID] = position
+end
+local function ClassRank(classID)
+	return rank[classID] or (#ns.BagCategoryOrder + 1 + (classID or 99))
+end
+
+local function ClassName(classID)
+	local read = classID and (C_Item.GetItemClassInfo or GetItemClassInfo)
+	local name = read and read(classID)
+	return (name and name ~= "") and name or ns.L.SELL_BAGS_OTHER
+end
+
+Group = function(items, options)
+	local sorted = {}
+	for _, item in ipairs(items) do
+		if not options.classes or options.classes[item.classID] then
+			sorted[#sorted + 1] = item
+		end
+	end
+	local sort = options.sort
+	table.sort(sorted, function(a, b)
+		local ra, rb = ClassRank(a.classID), ClassRank(b.classID)
+		if ra ~= rb then
+			return ra < rb
+		end
+		if sort and a[sort.field] ~= b[sort.field] then
+			if sort.descending then
+				return a[sort.field] > b[sort.field]
+			end
+			return a[sort.field] < b[sort.field]
+		end
+		if not sort and (a.subClassID or 0) ~= (b.subClassID or 0) then
+			return (a.subClassID or 0) < (b.subClassID or 0)
+		end
+		return a.name < b.name
+	end)
+	local rows, current = {}, false
+	for _, item in ipairs(sorted) do
+		local group = ClassRank(item.classID)
+		if group ~= current then
+			current = group
+			rows[#rows + 1] = { heading = ClassName(item.classID) }
+		end
+		rows[#rows + 1] = item
+	end
+	return rows
+end
+
 function Bags:Find(key)
 	for _, item in ipairs(self.items) do
 		if item.key == key then

@@ -12,6 +12,7 @@ local C = Theme.color
 
 local LADDER_ROWS = 9
 local BAG_COLUMNS = 4
+local BAG_TOP = 56 -- below the title and the filters
 local LABEL_WIDTH = 86 -- the name column of the form's control rows
 
 local state = {
@@ -26,7 +27,10 @@ local state = {
 }
 
 local bags, form, ladder, bagHint, formHint
-local bagTiles, parts, ladderRows = {}, {}, {}
+local bagList, bagFilters
+local bagTiles = {}
+local gridEmpty -- says so when a filter leaves the grid empty
+local parts, ladderRows = {}, {}
 local stack
 local Refresh, PaintForm, PaintLadder, PaintSummary, PaintPostButton, PressPost
 
@@ -120,6 +124,86 @@ local function Choose(key)
 end
 
 -- ========= Bags =============================================================
+-- One row per item, its slots added up, grouped by kind under a heading
+-- (ns.Bags:Grouped). A heading row is { heading = name } and cannot be picked.
+-- The filter and sort picked, kept for the character.
+local function BagView()
+	ns.charDb.sellBags = ns.charDb.sellBags or { filter = "all" }
+	return ns.charDb.sellBags
+end
+
+local function BagFilter()
+	for _, filter in ipairs(ns.BagFilters) do
+		if filter.id == BagView().filter then
+			return filter
+		end
+	end
+	return ns.BagFilters[1]
+end
+
+local function BuildBagList(parent)
+	bagList = Kit.List(parent, {
+		rowHeight = Theme.bagRow,
+		columns = {
+			{
+				id = "name",
+				label = L.SELL_BAGS_ITEM,
+				flex = true,
+				icon = function(row)
+					return row.icon
+				end,
+				iconEdge = function(row)
+					return row.quality and Kit.QualityColor(row.quality)
+				end,
+				text = function(row)
+					return row.heading or row.name
+				end,
+				color = function(row)
+					return row.heading and C.accent or Kit.QualityColor(row.quality)
+				end,
+			},
+			{
+				id = "count",
+				label = L.SELL_BAGS_COUNT,
+				fit = true,
+				fixed = true,
+				align = "RIGHT",
+				text = function(row)
+					return row.total and ns.Comma(row.total) or ""
+				end,
+			},
+		},
+		isSelected = function(row)
+			return row.key ~= nil and row.key == state.key
+		end,
+		link = function(row)
+			return row.link
+		end,
+		onClick = function(row)
+			if row.key then
+				Choose(row.key)
+			end
+		end,
+		-- Sorting is within each group: name, then count, then back to the
+		-- usual order (by kind, then name).
+		onSort = function(columnId)
+			local field = columnId == "count" and "total" or "name"
+			local view, current = BagView(), BagView().sort
+			if not current or current.field ~= field then
+				view.sort = { field = field, descending = field == "total" }
+			elseif current.descending == (field == "total") then
+				view.sort = { field = field, descending = not current.descending }
+			else
+				view.sort = nil
+			end
+			ns.Window:RefreshActive()
+		end,
+	})
+	return bagList
+end
+
+-- The grid: one tile per bag slot, in the list's order (same kinds
+-- together), each framed in its item's rarity color.
 local function BagTile(index)
 	local tile = bagTiles[index]
 	if not tile then
@@ -151,24 +235,58 @@ local function BagTile(index)
 	return tile
 end
 
-local function PaintBags()
+local function PaintGrid(rows)
 	for _, tile in ipairs(bagTiles) do
 		tile:Hide()
 	end
-	local slots = ns.Bags:Slots()
-	bagHint:SetShown(#slots == 0)
+	if not rows then
+		return
+	end
 	local step = Theme.bagSlot + 4
-	for index, slot in ipairs(slots) do
-		local tile = BagTile(index)
-		local column, row = (index - 1) % BAG_COLUMNS, math.floor((index - 1) / BAG_COLUMNS)
-		tile:ClearAllPoints()
-		tile:SetPoint("TOPLEFT", bags, "TOPLEFT", 8 + column * step, -(30 + row * step))
-		tile.slot = slot
-		tile.art:SetTexture(slot.icon)
-		tile.count:SetText(slot.count > 1 and slot.count or "")
-		local chosen = slot.item.key == state.key
-		tile.border:SetColor(chosen and C.accent or C.inputBorder)
-		tile:Show()
+	local index = 0
+	for _, row in ipairs(rows) do
+		for _, slot in ipairs(row.slots or {}) do
+			index = index + 1
+			local tile = BagTile(index)
+			local column, line = (index - 1) % BAG_COLUMNS, math.floor((index - 1) / BAG_COLUMNS)
+			tile:ClearAllPoints()
+			tile:SetPoint("TOPLEFT", bags, "TOPLEFT", 8 + column * step, -(BAG_TOP + line * step))
+			tile.slot = slot
+			tile.art:SetTexture(slot.icon)
+			tile.count:SetText(slot.count > 1 and slot.count or "")
+			-- The chosen item is lit; the rest wear their rarity.
+			local chosen = row.key == state.key
+			tile.border:SetColor(chosen and C.accent or Kit.QualityColor(row.quality))
+			tile:Show()
+		end
+	end
+end
+
+local function PaintBags()
+	local view = BagView()
+	local carried = #ns.Bags.items > 0
+	local asList = ns.IsEnabled("sellBagList")
+	bagHint:SetShown(not carried)
+	bagFilters:SetShown(carried)
+	bagFilters:Refresh()
+	local sort = asList and view.sort or nil
+	local rows = ns.Bags:Grouped({ classes = BagFilter().classes, sort = sort })
+	bagList:SetShown(carried and asList)
+	PaintGrid(carried and not asList and rows or nil)
+	gridEmpty:SetShown(carried and not asList and #rows == 0)
+	if asList then
+		bagList:SetSort(sort and (sort.field == "total" and "count" or "name"), sort and sort.descending)
+		bagList:SetEmptyText(L.SELL_BAGS_NONE_HERE)
+		bagList:SetRows(rows, true)
+	end
+end
+
+-- The first item in the list, for picking one when nothing is.
+local function FirstItem()
+	for _, row in ipairs(ns.Bags:Grouped()) do
+		if row.key then
+			return row
+		end
 	end
 end
 
@@ -628,9 +746,9 @@ Refresh = function()
 		state.key = nil
 	end
 	if not state.key then
-		local first = ns.Bags:Slots()[1]
+		local first = FirstItem()
 		if first then
-			return Choose(first.item.key)
+			return Choose(first.key)
 		end
 	end
 	PaintBags()
@@ -655,6 +773,28 @@ local function Create(parent)
 	bagHint:SetPoint("TOPRIGHT", -8, -32)
 	bagHint:SetWidth(Theme.sell.bags - 16)
 	bagHint:SetBody(L.SELL_BAGS_EMPTY)
+	bagFilters = Kit.Choices(bags, {
+		items = ns.BagFilters,
+		size = "small",
+		height = 22,
+		padding = 12,
+		isActive = function(filter)
+			return filter.id == BagFilter().id
+		end,
+		onPick = function(filter)
+			BagView().filter = filter.id
+			ns.Window:RefreshActive()
+		end,
+	})
+	bagFilters:SetPoint("TOPLEFT", 8, -30)
+	BuildBagList(bags)
+	gridEmpty = Kit.Note(bags, "small", C.muted)
+	gridEmpty:SetPoint("TOPLEFT", 8, -BAG_TOP)
+	gridEmpty:SetPoint("TOPRIGHT", -8, -BAG_TOP)
+	gridEmpty:SetWidth(Theme.sell.bags - 16)
+	gridEmpty:SetBody(L.SELL_BAGS_NONE_HERE)
+	bagList:SetPoint("TOPLEFT", 4, -BAG_TOP)
+	bagList:SetPoint("BOTTOMRIGHT", -4, 4)
 
 	ladder = Kit.Panel(parent)
 	ladder:SetPoint("TOPRIGHT")
@@ -691,4 +831,10 @@ ns.Bus:On("POSTING_CHANGED", function()
 	end
 	-- The game is asked for the item's live listings, as its own sell form does.
 	ns.SellSearch:Request(state.key)
+end)
+
+ns.Bus:On("SETTING_CHANGED", function(id)
+	if id == "sellBagList" then
+		ns.Window:RefreshActive()
+	end
 end)

@@ -63,7 +63,8 @@ ns.Theme = {
 	swatchIconOff = 0.45, -- how faded a quality icon is when it is not ticked
 	tileIconOffGray = true, -- an item icon tile is in gray until ticked, then in color
 	tileIconOff = 0.75, -- and this faded while gray
-	bagSlot = 40,
+	bagSlot = 40, -- a tile of the Sell tab's bag grid
+	bagRow = 24, -- a row of the Sell tab's bag list
 
 	-- A narrow sans-serif, the closest the client ships to the concept's font.
 	-- If it cannot be loaded the game's standard font is used.

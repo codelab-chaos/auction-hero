@@ -287,6 +287,8 @@ C_Item = { GetItemInfoInstant = function(id)
 	if class then return id, "Container", "Bag", "INVTYPE_BAG", 1, class[1], class[2] end
 	return id, "Armor", "Leather", "INVTYPE_CHEST", 1, 4, 2
 end }
+local CLASS_NAMES = { [0] = "Consumable", [2] = "Weapon", [4] = "Armor", [6] = "Projectile", [7] = "Trade Goods", [15] = "Miscellaneous" }
+C_Item.GetItemClassInfo = function(classID) return CLASS_NAMES[classID] end
 function C_AuctionHouse.MakeItemKey(id) return { itemID = id, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 } end
 function C_AuctionHouse.GetItemKeyInfo(key) return { itemName = "x", quality = 1, iconFileID = 1, isCommodity = key.itemID % 2 == 0, isEquipment = false, isPet = false } end
 

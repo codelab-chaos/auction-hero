@@ -297,18 +297,24 @@ end
 
 -- ========= Icons ===========================================================
 -- An item icon with a thin dark edge. :SetIcon(fileID) hides it when nil.
-function Kit.Icon(parent, size)
+-- edge: the width of the frame around the art, 1 unless given.
+-- :SetEdge(color) tints that frame, as the game does for an item's rarity.
+function Kit.Icon(parent, size, edge)
+	edge = edge or 1
 	local icon = CreateFrame("Frame", nil, parent)
 	icon:SetSize(size, size)
-	Kit.Fill(icon, C.black)
+	icon.back = Kit.Fill(icon, C.black)
 	icon.art = icon:CreateTexture(nil, "ARTWORK")
-	icon.art:SetPoint("TOPLEFT", 1, -1)
-	icon.art:SetPoint("BOTTOMRIGHT", -1, 1)
+	icon.art:SetPoint("TOPLEFT", edge, -edge)
+	icon.art:SetPoint("BOTTOMRIGHT", -edge, edge)
 	icon.art:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 
 	function icon:SetIcon(fileID)
 		self.art:SetTexture(fileID)
 		self.art:SetShown(fileID ~= nil)
+	end
+	function icon:SetEdge(color)
+		self.back:SetColorTexture(unpack(color or C.black))
 	end
 	return icon
 end
@@ -842,6 +848,7 @@ end
 --                 text(row) -> string,            what the cell says
 --                 color(row) -> color | nil,      its text color
 --                 icon(row) -> fileID | nil,      an icon before the text
+--                 iconEdge(row) -> color | nil,   a 2px frame around it
 --                 meter(row) -> reading, pips,    draw a meter instead of text
 --                 badge(row) -> string | nil }    draw a tinted badge instead
 --   rowHeight, empty (text when there are no rows), gap (between columns, 8)
@@ -1096,7 +1103,7 @@ function Kit.List(parent, options)
 	local function BuildCell(row, column)
 		local cell = { text = Kit.Text(row, "normal", C.text, column.align) }
 		if column.icon then
-			cell.icon = Kit.Icon(row, rowHeight - 7)
+			cell.icon = Kit.Icon(row, rowHeight - 7, column.iconEdge and 2 or 1)
 		end
 		if column.meter then
 			cell.meter = Kit.Meter(row, column.pips or 5)
@@ -1132,6 +1139,9 @@ function Kit.List(parent, options)
 				-- No icon, no box: an empty square looks like something to click.
 				local art = column.icon(data)
 				cell.icon:SetIcon(art)
+				if column.iconEdge then
+					cell.icon:SetEdge(column.iconEdge(data))
+				end
 				cell.icon:SetShown(visible and art ~= nil)
 				x = x + rowHeight - 1
 				w = w - (rowHeight - 1)

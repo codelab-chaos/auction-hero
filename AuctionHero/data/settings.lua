@@ -25,6 +25,7 @@ ns.Settings = {
 	{ id = "closeAuctionHouse", section = "general", default = false, label = L.SETTING_CLOSE_AH, tip = L.SETTING_CLOSE_AH_TIP },
 	{ id = "itemTooltips", section = "general", default = true, label = L.SETTING_ITEM_TOOLTIPS, tip = L.SETTING_ITEM_TOOLTIPS_TIP },
 	{ id = "railLarge", section = "general", default = false, label = L.SETTING_RAIL_LARGE, tip = L.SETTING_RAIL_LARGE_TIP },
+	{ id = "sellBagList", section = "general", default = false, label = L.SETTING_BAG_LIST, tip = L.SETTING_BAG_LIST_TIP },
 	{ id = "logEvents", section = "debug", default = true, label = L.SETTING_LOG_EVENTS, tip = L.SETTING_LOG_EVENTS_TIP },
 	{ id = "debug", section = "debug", default = false, label = L.SETTING_DEBUG, tip = L.SETTING_DEBUG_TIP },
 }

@@ -206,6 +206,21 @@ ns.LiveCheckRule = {
 -- the answer ready. For the rest we go by item class.
 ns.CommodityClassIDs = { [0] = true, [5] = true, [6] = true, [7] = true, [12] = true, [15] = true }
 
+-- The order the Sell tab groups your bags in, by item class: what is most
+-- often sold first. A class not listed comes after these, by class number.
+--   7 trade goods, 0 consumables, 5 reagents, 6 projectiles, 1 containers,
+--   2 weapons, 4 armor, 9 recipes, 3 gems, 15 miscellaneous, 12 quest
+ns.BagCategoryOrder = { 7, 0, 5, 6, 1, 2, 4, 9, 3, 15, 12 }
+
+-- The Sell tab's bag filters, left to right. classes: the item classes it
+-- shows; none means everything.
+ns.BagFilters = {
+	{ id = "all", label = L.SELL_FILTER_ALL },
+	{ id = "gear", label = L.SELL_FILTER_GEAR, tip = L.SELL_FILTER_GEAR_TIP, classes = { [2] = true, [4] = true } },
+	{ id = "trade", label = L.SELL_FILTER_TRADE, tip = L.SELL_FILTER_TRADE_TIP, classes = { [7] = true, [5] = true, [3] = true, [9] = true } },
+	{ id = "use", label = L.SELL_FILTER_USE, tip = L.SELL_FILTER_USE_TIP, classes = { [0] = true, [6] = true } },
+}
+
 -- Quick quantities for goods bought by the unit, in whole stacks (a stack is
 -- what one bag slot holds: 200 arrows, 20 cloth). One button each.
 ns.BuyStackPresets = { 1, 2, 5 }
