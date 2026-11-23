@@ -883,7 +883,9 @@ end
 --                 iconEdge(row) -> color | nil,   a 2px frame around it
 --                 meter(row) -> reading, pips,    draw a meter instead of text
 --                 badge(row) -> string | nil,     draw a tinted badge instead
---                 badgeColor(row) -> color }      its color (green unless given)
+--                 badgeColor(row) -> color,       its color (green unless given)
+--                 tip(row) -> lines | nil }       a tooltip while the mouse is over this
+--                                                 column's cell, in place of the row's
 --   rowHeight, empty (text when there are no rows), gap (between columns, 8)
 --   onClick(row), isSelected(row), tip(row) -> lines, link(row) -> item link
 --   onSort(columnId)
@@ -1196,10 +1198,29 @@ function Kit.List(parent, options)
 		row.line:SetPoint("BOTTOMRIGHT")
 		row.cells = {}
 		row:EnableMouse(true)
-		row:SetScript("OnEnter", function(self)
-			self.hover:Show()
+		-- The column under the mouse, when it has a tip of its own.
+		local function TipColumn(self)
+			local cursor = GetCursorPosition() / (self:GetEffectiveScale() or 1) - (self:GetLeft() or 0)
+			for index, column in ipairs(columns) do
+				if column.tip and left[index] and cursor >= left[index] and cursor < left[index] + (width[index] or 0) then
+					return column
+				end
+			end
+		end
+		local function ShowTip(self, column)
+			GameTooltip:Hide()
+			local lines = column and column.tip(self.data)
+			if lines then
+				GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
+				GameTooltip:SetText(lines[1], 1, 0.82, 0)
+				for index = 2, #lines do
+					GameTooltip:AddLine(lines[index], 0.95, 0.91, 0.84, true)
+				end
+				GameTooltip:Show()
+				return
+			end
 			local link = options.link and options.link(self.data)
-			local lines = options.tip and options.tip(self.data)
+			lines = options.tip and options.tip(self.data)
 			if link or lines then
 				GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 				if not (link and pcall(GameTooltip.SetHyperlink, GameTooltip, link)) and lines then
@@ -1210,9 +1231,29 @@ function Kit.List(parent, options)
 				end
 				GameTooltip:Show()
 			end
+		end
+		local hasColumnTips = false
+		for _, column in ipairs(columns) do
+			hasColumnTips = hasColumnTips or column.tip ~= nil
+		end
+		row:SetScript("OnEnter", function(self)
+			self.hover:Show()
+			self.tipColumn = hasColumnTips and TipColumn(self) or nil
+			ShowTip(self, self.tipColumn)
+			if hasColumnTips then
+				-- Moving between columns changes the tip.
+				self:SetScript("OnUpdate", function()
+					local column = TipColumn(self)
+					if column ~= self.tipColumn then
+						self.tipColumn = column
+						ShowTip(self, column)
+					end
+				end)
+			end
 		end)
 		row:SetScript("OnLeave", function(self)
 			self.hover:Hide()
+			self:SetScript("OnUpdate", nil)
 			GameTooltip:Hide()
 		end)
 		row:SetScript("OnMouseUp", function(self)

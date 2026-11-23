@@ -4,12 +4,13 @@ Features and fixes shipped in each release. Copy a version's section into
 CurseForge's changelog field using Markdown formatting, and into the GitHub
 release notes.
 
-## 0.1.8 - 2026-11-23
+## 0.1.8 - Unreleased
 
 ### Fixed
 
 - **Auctions tab:** gear you have listed shows its name again. Until the game has the item loaded, it says "Loading item...".
 - **Sales estimates are paused:** they counted too many sales when scans were hours apart, so they no longer show. Counts already saved are cleared. The Sell tab still shows how many are listed at or under your price.
+- **Ledger:** Last trade shows how long ago, such as 45m, 5h or 3d, so it is easy to compare and sort. Hover it for the date.
 - **No memory figure:** the Progress tab and Options no longer show memory used. The game's number counts memory not yet freed and read far too high right after a scan.
 
 ## 0.1.7 - 2026-11-23

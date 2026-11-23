@@ -148,3 +148,11 @@ ns.RedrawRule = { noticeFrames = 1, slowGapSeconds = 0.25, loopLimit = 3 }
 -- measured, up to this many, or this share of the list. More than that, and
 -- every row is measured again.
 ns.ListFitRule = { fewRows = 200, fewShare = 0.1 }
+
+-- How long ago, short, as in a list column (see age.lua): the first step
+-- whose limit the age is under, counted in its unit. "45m", "5h", "3d".
+ns.AgeSteps = {
+	{ under = 3600, unit = 60, suffix = "m" }, -- 1m to 59m
+	{ under = 48 * 3600, unit = 3600, suffix = "h" }, -- 1h to 47h
+	{ unit = 86400, suffix = "d" }, -- 2d on
+}

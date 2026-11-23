@@ -144,6 +144,27 @@ end
 checkTrue("the totals are tiles, profit first", shows("^PROFIT$") and shows("^EARNED$") and shows("^UNSOLD STOCK$"))
 checkTrue("profit says it went up", shows("^%+77c$"))
 checkTrue("with counts under the amounts", shows("^%d+ sold$") and shows("^%d+ bought$"))
+
+-- Last trade reads as an age, and hovering it gives the date.
+checkTrue("last trade reads as an age", shows("^%d+[mhd]$"))
+local heading
+for _, frame in ipairs(ALL_FRAMES()) do
+	if frame.label and type(frame.label.text) == "string" and frame.label.text:gsub("^[v%^]  ", "") == ns.L.LEDGER_COL_LAST then
+		heading = frame
+	end
+end
+local itemRow = Frames(function(frame)
+	return frame.data ~= nil and frame.data.last ~= nil and frame.data.soldUnit ~= nil and frame.scripts.OnEnter ~= nil
+end)[1]
+checkTrue("found the heading and a row", heading ~= nil and itemRow ~= nil)
+CURSOR_X = itemRow:GetLeft() + heading.lastPoint[2] + 2
+itemRow.scripts.OnEnter(itemRow)
+check("hovering it gives the date", TIP and TIP[2], date(ns.L.LEDGER_DATE_LONG, itemRow.data.last))
+CURSOR_X = itemRow:GetLeft() + 5
+itemRow.scripts.OnUpdate(itemRow)
+checkTrue("away from it, not the date", not (TIP and TIP[2] == date(ns.L.LEDGER_DATE_LONG, itemRow.data.last)) or not GameTooltip:IsShown())
+itemRow.scripts.OnLeave(itemRow)
+CURSOR_X = nil
 ButtonNamed("Every trade").scripts.OnClick(ButtonNamed("Every trade"))
 checkTrue("and switches to every trade", ButtonNamed("By item") ~= nil)
 

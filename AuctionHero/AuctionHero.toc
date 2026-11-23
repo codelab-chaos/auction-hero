@@ -13,6 +13,7 @@
 
 core.lua
 versions.lua
+age.lua
 jobs.lua
 locales\en-us.lua
 data\settings.lua

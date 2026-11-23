@@ -97,8 +97,11 @@ local VIEWS = {
 			end, color = function(row)
 				return row.change and (row.change > 0 and C.good or row.change < 0 and C.bad) or C.muted
 			end },
-			{ id = "last", label = L.LEDGER_COL_LAST, width = 90, align = "RIGHT", text = function(row)
-				return row.last and date(L.LEDGER_DAY, row.last) or ""
+			-- How long ago, which sorts and compares at a glance; the date on hover.
+			{ id = "last", label = L.LEDGER_COL_LAST, width = 70, align = "RIGHT", text = function(row)
+				return row.last and ns.ShortAge(GetServerTime() - row.last) or ""
+			end, tip = function(row)
+				return row.last and { L.LEDGER_COL_LAST, date(L.LEDGER_DATE_LONG, row.last) } or nil
 			end },
 		},
 	},
