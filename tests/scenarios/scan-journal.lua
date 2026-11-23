@@ -1,6 +1,7 @@
 -- The scan journal keeps each scan as the change from the one before, so an
 -- earlier scan can be rebuilt exactly, and counts what sold between them.
 local ns = Boot()
+ns.TurnoverRule.shown = true -- shelved for players; the counting is still tested
 OpenAuctionHouse()
 Scan()
 local J = ns.ScanJournal
@@ -9,9 +10,10 @@ local KEY = "2003:Light Leather"
 check("the first scan has nothing to compare with", J:Stats().scans, 0)
 checkTrue("the journal is on by default", J:IsOn())
 
--- An hour on, some leather is gone. Each is split by likelihood: the share
--- of its time left band the hour reaches past ran out, a small share of the
--- rest was taken down, and the remainder sold.
+-- An hour on, some leather is gone. How each one is split between sold,
+-- ran out and taken down is the sale odds' job (tests/unit/sale-odds.lua).
+-- Here: that every unit gone is accounted for once, and that what could not
+-- have run out counts as sold, and what must have run out does not.
 local first = ns.Store:GetSourceSnapshot("replicate")
 local before = J:Listings(first)
 local gone = {}
@@ -23,24 +25,23 @@ for i = 0, 299 do
 		MOCK.gone[i] = true
 	end
 end
-local function Expected(elapsed)
+local function Bounds(elapsed)
 	local bands, pull = ns.Assumptions.timeLeftBands, ns.TurnoverRule.pullShare
-	local sold, expired, pulled, top = 0, 0, 0, 0
+	local total, safeSold, mustRunOut, sellable, top = 0, 0, 0, 0, 0
 	for _, r in ipairs(gone) do
 		local range = bands[tostring(r.timeLeft)]
-		local out = r[10] == 0 and 1 or math.max(0, math.min(1, (elapsed - range.min) / (range.max - range.min)))
-		if r[11] > 0 then
-			sold = sold + r[3] * out
-		else
-			expired = expired + r[3] * out
+		total = total + r[3]
+		if r[10] > 0 or r[11] > 0 then
+			sellable = sellable + r[3] -- a buyout, or a bid that wins at the end
 		end
-		sold = sold + r[3] * (1 - out) * (1 - pull)
-		pulled = pulled + r[3] * (1 - out) * pull
-		if r[10] > 0 and out < 0.5 then
+		if r[10] > 0 and range.min > elapsed then
+			safeSold = safeSold + r[3] * (1 - pull) -- could not have run out
 			top = math.max(top, math.floor(r[10] / r[3]))
+		elseif range.max <= elapsed and r[11] == 0 then
+			mustRunOut = mustRunOut + r[3] -- had to run out, with no bid
 		end
 	end
-	return sold, expired, pulled, top
+	return total, safeSold, mustRunOut, sellable, top
 end
 local function near(label, got, want)
 	checkTrue(label .. " (" .. tostring(got) .. " for " .. want .. ")", got and math.abs(got - want) < 0.5)
@@ -72,14 +73,15 @@ check("and back 0 is the saved scan", next(J:Rebuild(0)) ~= nil, true)
 local seen = ns.History:Turnover(KEY, 7)
 checkTrue("the leather's history has sales", seen ~= nil)
 local delta = AuctionHeroDB.scanJournal.deltas[1]
-local sold, expired, pulled, top = Expected(delta.time - delta.from)
-checkTrue("some of each outcome", sold > 0 and expired > 0 and pulled > 0)
-near("sold: likely bought", seen.sold, sold)
-near("expired: likely ran out", seen.expired, expired)
-near("pulled: rarely, so a small share", seen.pulled, pulled)
+local total, safeSold, mustRunOut, sellable, top = Bounds(delta.time - delta.from)
+checkTrue("some could not have run out, some must have", safeSold > 0 and mustRunOut > 0)
+near("every unit gone is counted once", seen.sold + seen.expired + seen.pulled, total)
+checkTrue("what could not have run out counts as sold", seen.sold >= safeSold - 0.5)
+checkTrue("nothing that cannot sell is sold", seen.sold <= sellable + 0.5)
+checkTrue("what had to run out is not sold", seen.expired >= mustRunOut - 0.5)
 checkTrue("pulled is the smallest", seen.pulled < seen.sold)
 check("watched for the hour between", seen.watched, 60)
-check("the highest price likely sold", seen.top, top)
+checkTrue("the highest price likely sold is at least the dearest sure one", seen.top >= top)
 -- Gone with lots of time left while the same stack was posted again cheaper:
 -- that looks like a seller taking theirs down to undercut.
 local leatherVariant
@@ -112,10 +114,11 @@ check("nothing is under the lowest price but itself", early.ahead, leather.tiers
 
 -- Ninety minutes more, nothing else goes. The scans share a graph point, so
 -- the counts add up on it.
+local soldBefore = ns.History:Turnover(KEY, 7).sold
 SkipTime(5400)
 Scan()
 seen = ns.History:Turnover(KEY, 7)
-near("the sales stay on the shared point", seen.sold, sold)
+near("the sales stay on the shared point", seen.sold, soldBefore)
 check("and the watching adds up", seen.watched, 150)
 local watchedHours = seen.watched / 60
 check("two changes kept", J:Stats().scans, 2)

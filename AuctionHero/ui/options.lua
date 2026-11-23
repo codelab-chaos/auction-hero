@@ -34,9 +34,8 @@ local footprint -- the line at the foot of the panel saying how much is kept
 local function Paint()
 	local kept = ns.Footprint:Read()
 	if kept then
-		local size = kept.megabytes and L.OPTIONS_DATA_MB:format(kept.megabytes) or L.OPTIONS_DATA_UNKNOWN
 		local journal = kept.journal and L.OPTIONS_JOURNAL:format(ns.Comma(kept.journal.scans), ns.Duration(kept.journal.reach), ns.Comma(kept.journal.changes)) or L.OPTIONS_JOURNAL_OFF
-		footprint:SetText(L.OPTIONS_DATA:format(size, ns.Comma(kept.auctions), ns.Comma(kept.items), ns.Comma(kept.points), kept.days) .. " " .. journal)
+		footprint:SetText(L.OPTIONS_DATA:format(ns.Comma(kept.auctions), ns.Comma(kept.items), ns.Comma(kept.points), kept.days) .. " " .. journal)
 	else
 		footprint:SetText(L.TRACK_COUNTING)
 	end

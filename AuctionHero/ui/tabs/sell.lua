@@ -566,48 +566,28 @@ local function Chance()
 	return listed and ns.SellChance:Judge(listed, UnitPrice(), state.perAuction * state.auctions, state.duration)
 end
 
+-- Only how many are listed at or under the price shows: a fact. The chance
+-- to sell built on sales between scans is shelved (ns.TurnoverRule.shown).
 local function PaintChance()
 	local reading = Chance()
 	if not reading then
 		return
 	end
 	local ahead = reading.ahead > 0 and L.CHANCE_AHEAD:format(ns.Comma(reading.ahead)) or L.CHANCE_NONE_AHEAD
-	local facts
-	if reading.perDay and reading.sold > 0 then
-		facts = L.CHANCE_RATE:format(ahead, ns.Comma(math.max(1, math.floor(reading.perDay + 0.5))))
-	elseif reading.perDay then
-		facts = L.CHANCE_NO_SALES:format(ahead)
-	else
-		facts = L.CHANCE_EARLY:format(ahead)
+	local level = ns.TurnoverRule.shown and reading.level
+	if ns.TurnoverRule.shown and reading.perDay and reading.sold > 0 then
+		ahead = L.CHANCE_RATE:format(ahead, ns.Comma(math.max(1, math.floor(reading.perDay + 0.5))))
 	end
-	local level = reading.level
-	parts.chance:Set(level and level.label or L.CHANCE_UNKNOWN, facts)
+	parts.chance:Set(level and level.label or L.CHANCE_UNKNOWN, ahead)
 	parts.chance.left:SetTextColor(unpack(level and C[level.color] or C.muted))
 end
 
 ChanceTip = function()
 	local reading = Chance()
 	local lines = { L.CHANCE_TIP_HEAD }
-	if not reading then
-		return lines
+	if reading then
+		lines[#lines + 1] = L.CHANCE_TIP_AHEAD:format(ns.Comma(reading.ahead))
 	end
-	lines[#lines + 1] = L.CHANCE_TIP_AHEAD:format(ns.Comma(reading.ahead))
-	if reading.perDay then
-		local function Units(value)
-			return ns.Comma(math.floor(value + 0.5))
-		end
-		lines[#lines + 1] = L.CHANCE_TIP_RATE:format(Units(reading.sold), ns.Duration(math.floor(reading.watched * 3600)), Units(reading.perDay))
-		lines[#lines + 1] = L.CHANCE_TIP_REST:format(Units(reading.expired), Units(reading.pulled))
-		if reading.top then
-			lines[#lines + 1] = L.CHANCE_TIP_TOP:format(ns.Money(reading.top))
-		end
-		if reading.over then
-			lines[#lines + 1] = L.CHANCE_TIP_OVER
-		end
-	else
-		lines[#lines + 1] = L.CHANCE_TIP_EARLY
-	end
-	lines[#lines + 1] = L.CHANCE_TIP_HOW
 	return lines
 end
 

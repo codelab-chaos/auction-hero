@@ -2,17 +2,18 @@
 -- read from the scan journal's change between them.
 --
 -- An auction that is gone sold, was taken down by its seller, or ran out of
--- time. None of that is told, so each is a likelihood (ns.TurnoverRule):
--- the scan before said which time left band it was in, and the share of
--- that band the time between the scans reaches past is the chance it ran
--- out. Of the rest, a small share was taken down, more when the same stack
--- was just posted again; the remainder sold.
+-- time. None of that is told, so each is a likelihood, worked out by
+-- market\sale-odds.lua from its time left band and its item's sale rate over
+-- the gap (how many of the item's auctions that could not have run out
+-- vanished anyway). Of those taken rather than run out, a small share was
+-- taken down, more when the same stack was just posted again (ns.TurnoverRule).
 local _, ns = ...
 
 local Turnover = {}
 ns.Turnover = Turnover
 
 local VARIANT = ns.ScanJournal.VARIANT
+local SaleOdds = ns.SaleOdds
 
 local function HistoryKey(entry)
 	local itemID, name = entry and entry[VARIANT.itemID], entry and entry[VARIANT.name]
@@ -29,18 +30,6 @@ local function SeenTimes(delta)
 		seen[entry.id] = math.max(seen[entry.id] or 0, entry.time or 0)
 	end
 	return seen
-end
-
--- The chance an auction in a band ran out within `elapsed` seconds.
-local function RanOut(bands, band, elapsed)
-	local range = bands[tostring(band)]
-	if not range then
-		return 1
-	end
-	if range.max <= range.min then
-		return elapsed >= range.min and 1 or 0
-	end
-	return math.max(0, math.min(1, (elapsed - range.min) / (range.max - range.min)))
 end
 
 -- The longest band a scan reads: a fresh post sits in it.
@@ -107,6 +96,67 @@ function Turnover:Read(delta, counts, old)
 		end
 	end
 
+	-- Which of a group's removed auctions are the ones gone is not known (the
+	-- rest moved to a shorter band); the likeliest to have run out are taken
+	-- first, so sold is never overcounted. Each gone auction is kept with the
+	-- item it is of, and the item counts its buyable gone ones by band.
+	local gone, goneByBand = {}, {}
+	done = 0
+	for _, group in pairs(groups) do
+		local entry = group.net < 0 and ns.ScanJournal:Variant(group.variant)
+		local key = entry and HistoryKey(entry)
+		if key then
+			local elapsed = Elapsed(entry[VARIANT.itemID])
+			for _, removed in ipairs(group.removed) do
+				removed.ranOut = SaleOdds.RanOut(bands, removed.band, elapsed)
+			end
+			table.sort(group.removed, function(a, b)
+				return a.ranOut > b.ranOut
+			end)
+			local left = -group.net
+			for _, removed in ipairs(group.removed) do
+				local copies = math.min(left, removed.copies)
+				left = left - copies
+				if copies > 0 then
+					gone[#gone + 1] = { key = key, group = group, copies = copies, ranOut = removed.ranOut, bid = removed.bid, range = bands[tostring(removed.band)], elapsed = elapsed }
+					if group.buyout > 0 then
+						local byBand = goneByBand[key] or {}
+						goneByBand[key] = byBand
+						byBand[removed.band] = (byBand[removed.band] or 0) + copies
+					end
+				end
+				if left == 0 then
+					break
+				end
+			end
+		end
+		done = done + 1
+		if done % 500 == 0 then
+			ns.Breathe()
+		end
+	end
+
+	-- Each item's buyable auctions in the scan before, by band: what its sale
+	-- rate is measured against.
+	local startByBand, elapsedOf = {}, {}
+	local get = old and ns.RowReader(old)
+	for count, row in ipairs(old and old.rows or {}) do
+		if (get(row, "buyoutPrice") or 0) > 0 then
+			local itemID, name = get(row, "itemID"), get(row, "name")
+			if itemID and name and name ~= "" then
+				local key = itemID .. ":" .. name
+				local band = get(row, "timeLeft")
+				local byBand = startByBand[key] or {}
+				startByBand[key] = byBand
+				byBand[band] = (byBand[band] or 0) + (get(row, "copies") or 1)
+				elapsedOf[key] = Elapsed(itemID)
+			end
+		end
+		if count % 500 == 0 then
+			ns.Breathe()
+		end
+	end
+
 	local facts = {}
 	local function Fact(key)
 		local fact = facts[key]
@@ -116,58 +166,55 @@ function Turnover:Read(delta, counts, old)
 		end
 		return fact
 	end
-	done = 0
-	for _, group in pairs(groups) do
-		local entry = group.net < 0 and ns.ScanJournal:Variant(group.variant)
-		local key = entry and HistoryKey(entry)
-		if key then
-			local elapsed = Elapsed(entry[VARIANT.itemID])
-			-- Which of the removed auctions are the gone ones is not known (the
-			-- rest moved to a shorter band). The likeliest to have run out are
-			-- taken first, so sold is never overcounted.
-			for _, removed in ipairs(group.removed) do
-				removed.ranOut = RanOut(bands, removed.band, elapsed)
+	-- Each item's sale rate over the gap, false when it cannot be measured.
+	local rates = {}
+	local function RateOf(key)
+		if rates[key] == nil then
+			local observed = {}
+			for band, start in pairs(startByBand[key] or {}) do
+				observed[#observed + 1] = {
+					ranOut = SaleOdds.RanOut(bands, band, elapsedOf[key]),
+					start = start,
+					gone = goneByBand[key] and goneByBand[key][band] or 0,
+				}
 			end
-			table.sort(group.removed, function(a, b)
-				return a.ranOut > b.ranOut
-			end)
+			rates[key] = SaleOdds.SaleRate(observed, rule) or false
+		end
+		return rates[key]
+	end
+	-- An item with an auction that could have run out, and no rate to weigh
+	-- it by, is not counted for this gap at all: not as sold, not
+	-- as unsold, and not as watched. A blank is better than a guess.
+	local unknown = {}
+	for _, item in ipairs(gone) do
+		if item.ranOut > 0 and item.group.buyout > 0 and item.bid == 0 and not RateOf(item.key) then
+			unknown[item.key] = true
+		end
+	end
+	for index, item in ipairs(gone) do
+		if not unknown[item.key] then
+			local group = item.group
 			local pull = reposted[group.variant .. ":" .. group.count] and rule.repostPullShare or rule.pullShare
-			local left = -group.net
-			local sold, expired, pulled = 0, 0, 0
-			for _, removed in ipairs(group.removed) do
-				local copies = math.min(left, removed.copies)
-				left = left - copies
-				local out = group.buyout > 0 and removed.ranOut or 1 -- no buyout: it can only run out
-				local taken = copies * (1 - out)
-				if removed.bid > 0 then
-					sold = sold + copies * out -- ran out with a bid: the bidder won it
-				else
-					expired = expired + copies * out
-				end
-				sold = sold + taken * (1 - pull)
-				pulled = pulled + taken * pull
-				if left == 0 then
-					break
-				end
-			end
-			local fact = Fact(key)
-			fact.sold = fact.sold + sold * group.count
-			fact.expired = fact.expired + expired * group.count
-			fact.pulled = fact.pulled + pulled * group.count
-			if group.buyout > 0 and sold > (expired + pulled) then
+			local sold, expired, pulled = SaleOdds.Split(item.range, item.elapsed, RateOf(item.key) or 0, pull, item.bid > 0, group.buyout > 0)
+			local fact = Fact(item.key)
+			local units = item.copies * group.count
+			fact.sold = fact.sold + sold * units
+			fact.expired = fact.expired + expired * units
+			fact.pulled = fact.pulled + pulled * units
+			if group.buyout > 0 and sold > expired + pulled then
 				fact.top = math.max(fact.top or 0, math.floor(group.buyout / group.count))
 			end
 		end
-		done = done + 1
-		if done % 500 == 0 then
+		if index % 500 == 0 then
 			ns.Breathe()
 		end
 	end
 
-	-- Every item the scan before had was watched, sold or not.
+	-- Every item the scan before had was watched, sold or not, except one
+	-- left unknown for this gap.
 	for count, entry in ipairs(old and old.variants or {}) do
 		local key = HistoryKey(entry)
-		if key then
+		if key and not unknown[key] then
 			local fact = Fact(key)
 			fact.watched = math.max(fact.watched, math.floor(Elapsed(entry[VARIANT.itemID]) / 60))
 		end

@@ -6,25 +6,7 @@ local _, ns = ...
 local Footprint = {}
 ns.Footprint = Footprint
 
-local BYTES_PER_MB = 1024 * 1024
-
--- The addon's memory as the game counts it, in bytes, or nil when the client
--- cannot say.
-local function Memory()
-	local update = UpdateAddOnMemoryUsage
-	local usage = GetAddOnMemoryUsage or (C_AddOns and C_AddOns.GetAddOnMemoryUsage)
-	if not usage then
-		return nil
-	end
-	if update then
-		pcall(update)
-	end
-	local ok, kilobytes = pcall(usage, "AuctionHero")
-	return ok and kilobytes and kilobytes * 1024 or nil
-end
-
 -- What is counted, once a count is in:
--- megabytes   the addon's memory, nil when the client cannot say
 -- auctions    auctions in the saved scan, variants the item variants in it,
 --             scanAge seconds since it was made (nil without one)
 -- items       items with a price history, points the graph points across
@@ -77,9 +59,7 @@ local function Count()
 		end
 	end
 	local snapshot = ns.Store:GetSourceSnapshot("replicate") or ns.Store:GetSnapshot()
-	local memory = Memory()
 	return {
-		megabytes = memory and memory / BYTES_PER_MB,
 		auctions = snapshot and snapshot.rows and ns.AuctionCount(snapshot) or 0,
 		variants = snapshot and snapshot.variants and #snapshot.variants or 0,
 		scanAge = snapshot and snapshot.meta.time and math.max(0, GetServerTime() - snapshot.meta.time) or nil,

@@ -341,6 +341,51 @@ function History:Fold(market)
 	return true
 end
 
+-- Counts of sales kept under an earlier way of counting them are cleared,
+-- once, when the way changes (ns.TurnoverRule.model): a count that was wrong
+-- must not keep feeding what the Sell tab says. The points themselves stay.
+-- Runs as a job; every point of every item is looked at.
+function History:ClearOldTurnover()
+	if ns.db.turnoverModel == ns.TurnoverRule.model then
+		return
+	end
+	ns.Jobs:Run(function()
+		local count, cleared = 0, 0
+		for _, market in pairs(ns.db.historyByMarket or {}) do
+			for _, record in pairs(market.items or {}) do
+				if record.h and record.h ~= "" then
+					local kept, changed = {}, false
+					for chunk in record.h:gmatch("[^;]+") do
+						local base = chunk:match("^(%d+:%d+:%d+:%d+:%d+):")
+						kept[#kept + 1] = base or chunk
+						changed = changed or base ~= nil
+					end
+					if changed then
+						record.h = table.concat(kept, ";")
+						cleared = cleared + 1
+					end
+				end
+				count = count + 1
+				if count % 200 == 0 then
+					ns.Breathe()
+				end
+			end
+		end
+		return cleared
+	end, function(cleared)
+		ns.db.turnoverModel = ns.TurnoverRule.model
+		if cleared > 0 then
+			Bus:Fire("HISTORY_CHANGED")
+		end
+	end, function(message)
+		ns.EventLog:Note("clearing old sales failed", message)
+	end)
+end
+
+Bus:On("READY", function()
+	History:ClearOldTurnover()
+end)
+
 function History:Clear()
 	ns.db.historyByMarket[Scope()] = { items = {}, folded = {}, scans = 0 }
 	Bus:Fire("HISTORY_CHANGED")

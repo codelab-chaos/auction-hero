@@ -32,7 +32,7 @@ Bus:On("SNAPSHOT_CHANGED", function()
 		-- A new scan is journaled as the change from the one before, and what
 		-- went between them is counted onto the item's history.
 		local delta, counts, old = ns.ScanJournal:RecordScan(full)
-		if delta and market then
+		if delta and market and ns.TurnoverRule.shown then
 			ns.History:AddTurnover(market.place, ns.Turnover:Read(delta, counts, old))
 		end
 		-- With this scan in the history, say how each item's price compares.

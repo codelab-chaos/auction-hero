@@ -207,9 +207,9 @@ ns.JournalRule = {
 }
 
 -- How an auction that vanished between two scans is split into what likely
--- happened to it, each a share of its units (market\turnover.lua):
---   ran out  the share of its time left band the time between the scans
---            reaches past (time left is taken as even across the band)
+-- happened to it, each a share of its units (market\sale-odds.lua):
+--   ran out  weighed from the share of its time left band the gap reaches
+--            past against its item's measured sale rate over the gap
 --   pulled   of the rest, taken down by its seller: rarely, so weighted low,
 --            unless a stack of the same item and size was freshly posted in
 --            the same gap, which is what taking one down to undercut looks like
@@ -217,6 +217,21 @@ ns.JournalRule = {
 ns.TurnoverRule = {
 	pullShare = 0.05,
 	repostPullShare = 0.5,
+	-- An item's sale rate over a gap is measured from one time left band of
+	-- its buyable auctions: one with at least minEvidence of them and at most
+	-- maxRanOutForRate chance of running out (market\sale-odds.lua). With no
+	-- such band, the item gets no counts for that gap.
+	minEvidence = 10,
+	maxRanOutForRate = 0.5,
+	-- The way sales are counted. Counts kept under an earlier way are cleared
+	-- once, when it changes (market\history.lua).
+	model = 2,
+	-- Shelved: sales are neither counted into history nor shown until the
+	-- odds are accurate for scans far apart. Validation (tests/unit/
+	-- sale-odds.lua, 30 runs a case) found them within 2% for scans up to
+	-- 2.5 hours apart, but over by up to 7% at 6 hours and 23% at 14 hours
+	-- for slow sellers.
+	shown = false,
 }
 
 -- How likely an auction is to sell at a price, from how many units sit at or

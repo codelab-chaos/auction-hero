@@ -50,8 +50,11 @@ checkTrue("as tall as the rows", scroll.contentHeight > 4 * 40)
 checkTrue("with a bar when they do not all fit", scroll.bar.shown)
 check("and no Debug section", debugHeading(), 0)
 checkTrue("the foot of the panel says how much data is kept", #Frames(function(frame)
-	return type(frame.text) == "string" and frame.text:find("^Data kept: .* The last scan %(300 auctions%) and price history for ") ~= nil
+	return type(frame.text) == "string" and frame.text:find("^Data kept: the last scan %(300 auctions%) and price history for ") ~= nil
 end) == 1)
+checkTrue("and shows no memory figure", #Frames(function(frame)
+	return type(frame.text) == "string" and frame.text:find("MB") ~= nil
+end) == 0)
 local order = {}
 for index, setting in ipairs(ns.Settings) do
 	order[index] = setting.id

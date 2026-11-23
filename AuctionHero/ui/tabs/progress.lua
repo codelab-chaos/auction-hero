@@ -1,6 +1,6 @@
 -- Progress tab: the far right icon tab (only Debug, while on, sits after it). Left: today's scan, scan confidence
 -- and the Hero Coin balance (the same panel as the scan card), then the
--- latest earnings and what is tracked, with the memory it takes. Right: the last days with a scan, the streak bonuses and
+-- latest earnings and what is tracked. Right: the last days with a scan, the streak bonuses and
 -- every way to earn with today's count. The rules are data\rewards.lua.
 local _, ns = ...
 local L = ns.L
@@ -65,7 +65,7 @@ local function PaintRecent()
 	end
 end
 
--- What is kept and how much memory it takes (data\tracking.lua).
+-- What is kept (data\tracking.lua).
 local function PaintTracked()
 	local kept = ns.Footprint:Read()
 	for _, line in ipairs(tracked) do

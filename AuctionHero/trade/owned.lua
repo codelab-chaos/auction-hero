@@ -10,7 +10,32 @@ local Bus = ns.Bus
 local Owned = { auctions = {}, asked = false }
 ns.Owned = Owned
 
+-- An auction's item name. An item the game has not loaded yet comes with an
+-- empty name in its link ("[]"), so an empty name is no name: the item info
+-- is tried next, and failing that the game is asked to load the item, and the
+-- list is read again when it says it has (see the events below).
+local missing = false -- some name was not known at the last read
+local function NameOf(info, keyInfo, itemID)
+	local name = info.itemLink and info.itemLink:match("|h%[(.-)%]|h")
+	if name and name ~= "" then
+		return name
+	end
+	if keyInfo and keyInfo.itemName and keyInfo.itemName ~= "" then
+		return keyInfo.itemName
+	end
+	local byID = itemID and C_Item and C_Item.GetItemNameByID and C_Item.GetItemNameByID(itemID)
+	if byID and byID ~= "" then
+		return byID
+	end
+	missing = true
+	if itemID and C_Item and C_Item.RequestLoadItemDataByID then
+		pcall(C_Item.RequestLoadItemDataByID, itemID)
+	end
+	return nil
+end
+
 local function Read()
+	missing = false
 	local auctions = {}
 	local ok, list = pcall(C_AuctionHouse.GetOwnedAuctions)
 	for _, info in ipairs(ok and list or {}) do
@@ -18,7 +43,7 @@ local function Read()
 		auctions[#auctions + 1] = {
 			auctionID = info.auctionID,
 			itemID = info.itemKey and info.itemKey.itemID,
-			name = (info.itemLink and info.itemLink:match("|h%[(.-)%]|h")) or (keyInfo and keyInfo.itemName) or "?",
+			name = NameOf(info, keyInfo, info.itemKey and info.itemKey.itemID) or ns.L.AUCTIONS_NAME_LOADING,
 			icon = keyInfo and keyInfo.iconFileID,
 			quality = keyInfo and keyInfo.quality,
 			link = info.itemLink,
@@ -51,11 +76,30 @@ function Owned:Request()
 	return (pcall(C_AuctionHouse.QueryOwnedAuctions, sorts))
 end
 
+-- Item data arriving for many items at once reads the list again once, a
+-- moment later, and only while a name is still missing.
+local rereading = false
+local function NamesArrived()
+	if not missing or rereading then
+		return
+	end
+	rereading = true
+	C_Timer.After(0.3, function()
+		rereading = false
+		Read()
+	end)
+end
+
 local frame = CreateFrame("Frame")
 frame:RegisterEvent("OWNED_AUCTIONS_UPDATED")
 frame:RegisterEvent("AUCTION_HOUSE_THROTTLED_SYSTEM_READY")
+for _, event in ipairs({ "GET_ITEM_INFO_RECEIVED", "ITEM_KEY_ITEM_INFO_RECEIVED" }) do
+	pcall(frame.RegisterEvent, frame, event)
+end
 frame:SetScript("OnEvent", function(_, event)
-	if event == "OWNED_AUCTIONS_UPDATED" then
+	if event == "GET_ITEM_INFO_RECEIVED" or event == "ITEM_KEY_ITEM_INFO_RECEIVED" then
+		NamesArrived()
+	elseif event == "OWNED_AUCTIONS_UPDATED" then
 		-- The game's own window asks too. Any answer serves.
 		Owned.waiting = false
 		Read()

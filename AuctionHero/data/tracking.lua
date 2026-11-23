@@ -6,18 +6,11 @@
 local _, ns = ...
 local L = ns.L
 
-local function Megabytes(bytes)
-	return L.TRACK_MB:format(bytes / (1024 * 1024))
-end
+-- No line shows memory or sizes in megabytes: the game's memory figure
+-- counts memory used and not yet freed, so right after a scan it reads far
+-- above what is kept, and a size of part of the data invites the same misreading.
 
 ns.TrackingLines = {
-	{
-		label = L.TRACK_MEMORY,
-		tip = L.TRACK_MEMORY_TIP,
-		value = function(kept)
-			return kept.megabytes and L.TRACK_MB:format(kept.megabytes) or L.TRACK_UNKNOWN
-		end,
-	},
 	{
 		label = L.TRACK_SCAN,
 		tip = L.TRACK_SCAN_TIP,
@@ -50,7 +43,7 @@ ns.TrackingLines = {
 			if not journal then
 				return L.SETTING_OFF
 			end
-			return L.TRACK_JOURNAL_VALUE:format(ns.Comma(journal.scans), ns.Duration(journal.reach), Megabytes(journal.bytes))
+			return L.TRACK_JOURNAL_VALUE:format(ns.Comma(journal.scans), ns.Duration(journal.reach))
 		end,
 	},
 	{
@@ -59,13 +52,6 @@ ns.TrackingLines = {
 		value = function(kept)
 			local journal = kept.journal
 			return journal and L.TRACK_JOURNAL_CHANGES_VALUE:format(ns.Comma(journal.changes), ns.Comma(journal.variants), ns.Comma(journal.deltas - journal.scans)) or nil
-		end,
-	},
-	{
-		label = L.TRACK_SALES,
-		tip = L.TRACK_SALES_TIP,
-		value = function(kept)
-			return L.TRACK_SALES_VALUE:format(ns.Comma(kept.watched), ns.Comma(math.floor(kept.sold + 0.5)), ns.SellChanceRule.days)
 		end,
 	},
 	{

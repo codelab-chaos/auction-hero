@@ -43,6 +43,7 @@ activity.lua
 market\market.lua
 market\history.lua
 market\scan-journal.lua
+market\sale-odds.lua
 market\turnover.lua
 market\sell-chance.lua
 market\footprint.lua
