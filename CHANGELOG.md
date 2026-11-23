@@ -4,6 +4,33 @@ Features and fixes shipped in each release. Copy a version's section into
 CurseForge's changelog field using Markdown formatting, and into the GitHub
 release notes.
 
+## 0.1.7 - 2026-11-23
+
+### Fixed
+
+- **Gear in the mail:** the reminder clears once you collect it.
+- **Name columns:** drag a list's name column wider; columns no longer run off the right edge. Double-click its edge to reset.
+- **Live prices after a reload:** prices checked live still say so after a /reload, and the check mark fades once they are 5 minutes old.
+
+### New
+
+- **Craft tab:** what your recipes are worth making, with a verdict per recipe (worth making, sell raw goods, levels you), profit counting raw goods you hold, and filters by profession.
+- **Chance to sell** on the Sell tab, under the price buttons: likely, might or unlikely, from how many are listed at or under your price and how fast the item sells. Hover for the details.
+- **Sales between scans:** each scan is compared with the one before to see what likely sold, ran out or was taken down. Scanning a few hours apart says the most. Choose how many days to keep in Options, or turn it off.
+- **Ledger:** a chart of what you earned each day, a Last trade date per item, and Sold at, Now and Change columns to spot what is worth more than you sold it for.
+- **Progress tab:** what Auction Hero keeps, and the memory it uses.
+- **Your stack's worth** in item tooltips: "Your 20 is worth ~3s 40c".
+- **Live price mark** on Buy rows: being checked, checked live, or the check failed.
+- **Type the count** beside the Auctions and Quantity sliders on the Sell tab.
+- **Rising and Falling filters** on the Graphs tab.
+
+### Improved
+
+- **Much faster tabs:** switching tabs and live price checks no longer stall the game. "Refreshing..." shows beside your gold when a big redraw is coming.
+- **Graphs:** open on 7 days. The price axis fits the prices instead of starting at zero, and Change ignores scans with only a few for sale.
+- **Resell tab** is hidden by default; turn it on in Options.
+- Sortable column headings light up under the mouse.
+
 ## 0.1.6 - 2026-11-21
 
 ### Fixed
