@@ -13,6 +13,8 @@ for container, slots in pairs({ 10, 8, 12, 14 }) do
 	MOCK_BAG_SIZES[container] = slots
 	MOCK_ITEM_CLASS["bag:" .. container] = { 1, 0 }
 end
+FireEvent("BAG_CONTAINER_UPDATE") -- the game says the bags changed
+Tick(20)
 -- A level 20 rogue for whom the tunic is an upgrade.
 PLAYER.level, PLAYER.class = 20, "ROGUE"
 for _, item in pairs(ns.Analysis.market.byKey) do

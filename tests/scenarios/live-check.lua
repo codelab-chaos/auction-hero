@@ -7,6 +7,7 @@ local market = ns.Analysis.market
 local ore = market.byKey["2001:Copper Ore"]
 local before = #SEARCHES
 local scanned = ore.units
+local scannedListings = ns.ScanJournal:Listings(ns.Store:GetSourceSnapshot("replicate"))
 
 -- A fresh scan is trusted: nothing is asked.
 check("a fresh scan needs no check", ns.LiveCheck:Request(ore), false)
@@ -16,7 +17,9 @@ check("and no search is sent", #SEARCHES, before)
 -- Past the limit, choosing the item asks about it.
 SkipTime(ns.LiveCheckRule.staleMinutes * 60 + 1)
 MOCK.liveGoods = { { 150, 3 }, { 180, 10 } }
+check("a scanned row carries no freshness mark", ns.LiveCheck:Freshness(ore), nil)
 check("a stale scan is checked", ns.LiveCheck:Request(ore), true)
+check("while asking, the row says it is being checked", ns.LiveCheck:Freshness(ore), "checking")
 check("after a short wait, not at once", #SEARCHES, before)
 Tick(20)
 check("one search for the item", #SEARCHES, before + 1)
@@ -27,6 +30,7 @@ check("the market holds what is for sale now", ore.units, 13)
 checkTrue("which is not what the scan saw", scanned ~= 13)
 check("at the live lowest price", ore.min, 150)
 checkTrue("marked with when it was checked", ore.checkedAt ~= nil)
+check("and its row says its prices are live", ns.LiveCheck:Freshness(ore), "live")
 local points = ns.Market.PricePoints(ore)
 check("with the live price points", #points, 2)
 check("and their counts", points[2].units, 10)
@@ -46,6 +50,33 @@ check("other items are untouched", get(snapshot.rows[2], "itemID") ~= nil, true)
 check("the scan notes the patch", snapshot.meta.patched[1].id, 2001)
 checkTrue("and when", snapshot.meta.patched[1].time ~= nil)
 check("the same table is what is saved", AuctionHeroDB.snapshots.replicate, snapshot)
+
+-- The scan journal follows the patch, so the scan before it still rebuilds.
+local patch = AuctionHeroDB.scanJournal.deltas[1]
+check("the journal records the live check", patch and patch.kind, "patch")
+check("of the item", patch and patch.itemID, 2001)
+local rebuilt, same = ns.ScanJournal:Rebuild(1), true
+for key, copies in pairs(scannedListings) do
+	same = same and rebuilt[key] == copies
+end
+for key in pairs(rebuilt) do
+	same = same and scannedListings[key] ~= nil
+end
+checkTrue("walking it back gives the scan as it was", same)
+
+-- A reload builds the market from the saved scan and still knows the check.
+local rebuilt = ns.Market:Build(snapshot)
+local again
+for _, item in ipairs(rebuilt.items) do
+	if item.itemID == 2001 then
+		again = item
+	end
+end
+check("a rebuilt market keeps when the item was checked", again and again.checkedAt, ore.checkedAt)
+check("so its row still says live", again and ns.LiveCheck:Freshness(again), "live")
+local restored = again
+local other = rebuilt.items[1].itemID ~= 2001 and rebuilt.items[1] or rebuilt.items[2]
+check("items never checked are the scan's", other.checkedAt, nil)
 
 -- History is not given a scan it did not have, but a new low is a new low.
 local record = ns.History:Get("2001:Copper Ore")
@@ -240,3 +271,7 @@ if row then
 	end
 	checkTrue("and what changed when hovered", detail)
 end
+
+-- The live mark fades once the check itself is stale.
+SkipTime(ns.LiveCheckRule.staleMinutes * 60 + 1)
+check("a check gone stale no longer says live", ns.LiveCheck:Freshness(restored), nil)

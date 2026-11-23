@@ -33,8 +33,13 @@ local footprint -- the line at the foot of the panel saying how much is kept
 
 local function Paint()
 	local kept = ns.Footprint:Read()
-	local size = kept.megabytes and L.OPTIONS_DATA_MB:format(kept.megabytes) or L.OPTIONS_DATA_UNKNOWN
-	footprint:SetText(L.OPTIONS_DATA:format(size, ns.Comma(kept.auctions), ns.Comma(kept.items), ns.Comma(kept.points), kept.days))
+	if kept then
+		local size = kept.megabytes and L.OPTIONS_DATA_MB:format(kept.megabytes) or L.OPTIONS_DATA_UNKNOWN
+		local journal = kept.journal and L.OPTIONS_JOURNAL:format(ns.Comma(kept.journal.scans), ns.Duration(kept.journal.reach), ns.Comma(kept.journal.changes)) or L.OPTIONS_JOURNAL_OFF
+		footprint:SetText(L.OPTIONS_DATA:format(size, ns.Comma(kept.auctions), ns.Comma(kept.items), ns.Comma(kept.points), kept.days) .. " " .. journal)
+	else
+		footprint:SetText(L.TRACK_COUNTING)
+	end
 	for _, heading in ipairs(headings) do
 		heading:SetShown(not heading.section.shown or heading.section.shown())
 	end
@@ -95,7 +100,8 @@ local function BuildChoicesRow(row, setting)
 	local Tip = NumberText(row, setting)
 	local items = {}
 	for _, value in ipairs(setting.choices()) do
-		items[#items + 1] = { label = setting.format and setting.format:format(value) or tostring(value), value = value }
+		local label = type(setting.format) == "function" and setting.format(value) or setting.format and setting.format:format(value) or tostring(value)
+		items[#items + 1] = { label = label, value = value }
 	end
 	local choices = Kit.Choices(row, {
 		items = items,
@@ -226,11 +232,13 @@ local function Build()
 	footprint = Kit.Text(panel, "small", C.muted)
 	footprint:SetPoint("BOTTOMLEFT", 24, 12)
 	footprint:SetPoint("BOTTOMRIGHT", -24, 12)
+	footprint:SetJustifyH("LEFT")
+	footprint:SetWordWrap(true)
 
 	-- The settings scroll between the title and the line at the foot.
 	scroll = Kit.Scroll(panel, { bar = C.settingsBorder })
 	scroll:SetPoint("TOPLEFT", 0, -44)
-	scroll:SetPoint("BOTTOMRIGHT", -6, 34)
+	scroll:SetPoint("BOTTOMRIGHT", -6, 46)
 	local content = scroll.content
 	local function Place(frame, top, height)
 		placed[#placed + 1] = { frame = frame, foot = top + height }
@@ -276,8 +284,11 @@ function Options:Open()
 	Paint()
 end
 
-ns.Bus:On("SETTING_CHANGED", function()
-	if panel and panel:IsShown() then
-		Paint()
-	end
-end)
+-- A changed setting, or a new count of what is kept.
+for _, event in ipairs({ "SETTING_CHANGED", "FOOTPRINT_READY" }) do
+	ns.Bus:On(event, function()
+		if panel and panel:IsShown() then
+			Paint()
+		end
+	end)
+end

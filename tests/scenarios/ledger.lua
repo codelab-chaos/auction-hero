@@ -106,7 +106,29 @@ local held = row("item 2006")
 check("an unsold purchase is stock, not a loss", held.profit, 0)
 check("held at what it cost", held.heldCost, 400)
 check("a deposit with no sale yet is a cost", row("item 2003").profit, -30)
+local newest = 0
+for _, entry in ipairs(ns.Ledger:Entries()) do
+	if entry.name == "item 2001" then
+		newest = math.max(newest, entry.time)
+	end
+end
+check("an item row says when it was last traded", row("item 2001").last, newest)
 local _, totals = ns.Ledger:Summary()
+
+-- Each day's sales, for the chart over the ledger.
+local daily = ns.Ledger:Daily(ns.LedgerChart.days)
+check("one point a day", #daily, ns.LedgerChart.days)
+local paid, units, gross, sold = 0, 0, 0, 0
+for _, point in ipairs(daily) do
+	paid = paid + point.earned
+end
+for _, entry in ipairs(ns.Ledger:Entries()) do
+	if entry.kind == "sale" and entry.name == "item 2001" then
+		gross, sold = gross + (entry.price or entry.amount), sold + entry.quantity
+	end
+end
+check("the days add up to what sales paid", paid, totals.earned)
+check("an item's average sale price, before the cut", row("item 2001").soldUnit, math.floor(gross / sold + 0.5))
 check("total profit", totals.profit, 77)
 
 -- A sale is announced in the footer.

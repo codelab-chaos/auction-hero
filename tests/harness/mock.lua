@@ -223,8 +223,27 @@ end
 -- MOCK.repeats adds that many auctions to the end of the list, each an exact
 -- copy of one of the first few, the way a real auction house is full of
 -- identical auctions.
-local function Auction(i) return replicate[i < N and i or (i - N) % 7] end
-function C_AuctionHouse.GetNumReplicateItems() return MOCK.empty and 0 or N + (MOCK.repeats or 0) end
+-- MOCK.gone[i] = true takes auction i off the list, as if it sold.
+local function Listed()
+	local gone = MOCK.gone
+	if not gone or not next(gone) then return nil end
+	local view = {}
+	for i = 0, N + (MOCK.repeats or 0) - 1 do
+		if not gone[i] then view[#view + 1] = i end
+	end
+	return view
+end
+local function Auction(i)
+	local view = Listed()
+	if view then i = view[i + 1] end
+	return replicate[i < N and i or (i - N) % 7]
+end
+REPLICATE_REF = replicate
+function C_AuctionHouse.GetNumReplicateItems()
+	if MOCK.empty then return 0 end
+	local view = Listed()
+	return view and #view or N + (MOCK.repeats or 0)
+end
 function C_AuctionHouse.GetReplicateItemInfo(i)
 	local r = Auction(i)
 	if i % 9 == 0 and not firstRead[i] then
@@ -336,7 +355,8 @@ Enum.ItemCommodityStatus = { Unknown = 0, Item = 1, Commodity = 2 }
 Enum.AuctionHouseError = { NotEnoughMoney = 0, ItemNotFound = 4 }
 C_Item.DoesItemExist = function(loc) return loc ~= nil end
 -- How many of an item the bags hold: MOCK.bagCounts[itemID], or none.
-function GetItemCount(itemID) return (MOCK.bagCounts or {})[itemID] or 0 end
+-- As on the client: only C_Item.GetItemCount, no global GetItemCount.
+C_Item.GetItemCount = function(itemID) return (MOCK.bagCounts or {})[itemID] or 0 end
 INVTYPE_CHEST = "Chest"
 C_Item.GetItemID = function(loc) local info = C_Container.GetContainerItemInfo(loc.bag, loc.slot) return info and info.itemID end
 function C_AuctionHouse.GetItemCommodityStatus(loc) local id = C_Item.GetItemID(loc) return (id == 2003 or id == 2001) and 2 or 1 end

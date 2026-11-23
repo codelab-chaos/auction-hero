@@ -54,3 +54,38 @@ export function runScenario(scenarioFile, addonDir = ADDON_DIR) {
     "runner",
   );
 }
+
+// Runs a unit test: one module (or a few) on its own, with no mocked game and
+// none of the rest of the addon. The test's first line names what it loads:
+//   -- loads: ui/redraw-scheduler.lua, data/theme.lua
+// Each is called as the game would, with the addon's name and NS. The test
+// then calls the module directly, so it tests the logic, not a running addon.
+export function runUnit(unitFile, addonDir = ADDON_DIR) {
+  const L = lauxlib.luaL_newstate();
+  lualib.luaL_openlibs(L);
+  function run(source, name, addonArgs = false) {
+    if (lauxlib.luaL_loadbuffer(L, to_luastring(source), null, to_luastring("@" + name)) !== 0) {
+      throw new Error("syntax: " + to_jsstring(lua.lua_tostring(L, -1)));
+    }
+    if (addonArgs) {
+      lua.lua_pushstring(L, to_luastring("AuctionHero"));
+      lua.lua_getglobal(L, to_luastring("NS"));
+    }
+    if (lua.lua_pcall(L, addonArgs ? 2 : 0, 0, 0) !== 0) {
+      throw new Error(to_jsstring(lua.lua_tostring(L, -1)));
+    }
+  }
+  const source = readFileSync(unitFile, "utf8");
+  const loads = (source.match(/^-- loads: (.*)$/m) || [null, ""])[1].split(",").map((name) => name.trim()).filter(Boolean);
+  run(readFileSync(join(here, "helpers.lua"), "utf8"), "helpers.lua");
+  run("NS = { L = setmetatable({}, { __index = function(_, key) return key end }) }", "namespace");
+  for (const file of loads) run(readFileSync(join(addonDir, file), "utf8"), file, true);
+  lua.lua_pushstring(L, to_luastring(source));
+  lua.lua_setglobal(L, to_luastring("UNIT_SOURCE"));
+  run(
+    `local unit = assert(load(UNIT_SOURCE, "@unit"))
+     local ok, problem = xpcall(unit, debug.traceback)
+     if not ok then error(problem, 0) end`,
+    "runner",
+  );
+}

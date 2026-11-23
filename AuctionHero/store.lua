@@ -88,7 +88,8 @@ end
 -- Replaces a snapshot's rows for one item id with fresher ones, from a live
 -- check of that item. The snapshot is then no longer one moment in time, so
 -- it says which items were patched and when: meta.patched is a list of
--- { id, time }, one entry per item, for whoever reads the scan afterwards.
+-- { id, name, time }, one entry per item (name only for a single variant),
+-- for whoever reads the scan afterwards.
 function Store:PatchItem(sourceId, itemID, rows, time, name)
 	local snapshot = snapshots[sourceId]
 	local schema = snapshot and ns.Schemas[snapshot.meta.schema]
@@ -97,10 +98,12 @@ function Store:PatchItem(sourceId, itemID, rows, time, name)
 	end
 	-- With a name, only that variant of the item is replaced.
 	local get = ns.RowReader(snapshot)
-	local kept = {}
+	local kept, removed = {}, {}
 	for _, row in ipairs(snapshot.rows) do
 		if get(row, "itemID") ~= itemID or (name and get(row, "name") ~= name) then
 			kept[#kept + 1] = row
+		else
+			removed[#removed + 1] = row
 		end
 	end
 	for _, row in ipairs(rows) do
@@ -110,17 +113,19 @@ function Store:PatchItem(sourceId, itemID, rows, time, name)
 	local patched = snapshot.meta.patched or {}
 	local entry
 	for _, known in ipairs(patched) do
-		if known.id == itemID then
+		if known.id == itemID and known.name == name then
 			entry = known
 		end
 	end
 	if entry then
 		entry.time = time
 	else
-		patched[#patched + 1] = { id = itemID, time = time }
+		patched[#patched + 1] = { id = itemID, name = name, time = time }
 	end
 	snapshot.meta.patched = patched
 	Persist()
+	-- What went and what came, for the scan journal.
+	Bus:Fire("SNAPSHOT_PATCHED", sourceId, snapshot, removed, rows, time, itemID)
 	return true
 end
 
@@ -160,7 +165,10 @@ Bus:On("READY", function()
 end)
 
 Bus:On("DOWNLOAD_FINISHED", function(meta, rows, items, variants)
+	local previous = snapshots[meta.source]
 	snapshots[meta.source] = { meta = meta, rows = rows, items = items, variants = variants }
+	-- The scan it replaces, for whoever compares the two (the scan journal).
+	Bus:Fire("SNAPSHOT_REPLACED", meta.source, previous, snapshots[meta.source])
 	inMemoryOnly[meta.source] = true
 	activeId = meta.source
 	ns.db.lastFetch[meta.source] = meta.time

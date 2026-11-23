@@ -8,6 +8,9 @@
 --   now      the server time
 --   trades   the item's row of the ledger's summary, or nil
 --   live     the item in the scan now loaded, with its price ladder, or nil
+--   typicalLow  the middle of the lowest prices its history holds, or nil
+--   count    how many the player has, bags and bank
+-- A rule's label can be a function of the same info.
 local _, ns = ...
 local L = ns.L
 
@@ -29,6 +32,22 @@ end
 -- for: a scan sees asking prices only. The one confirmed sale price is the
 -- player's own, from the ledger.
 ns.TooltipLines = {
+	{
+		-- What the player's own stack would fetch, as an estimate (~): the
+		-- usual lowest price when history has one, else the lowest now or
+		-- the last one seen.
+		owned = true,
+		label = function(info)
+			return L.TIP_YOURS:format(ns.Comma(info.count))
+		end,
+		text = function(info)
+			if info.count < 1 then
+				return nil
+			end
+			local each = info.typicalLow or (info.live and info.live.min) or (info.last and info.last.low)
+			return each and L.TIP_YOURS_VALUE:format(ns.Money(each * info.count))
+		end,
+	},
 	{
 		label = L.TIP_LOWEST,
 		text = function(info)

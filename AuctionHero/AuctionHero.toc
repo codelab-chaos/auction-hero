@@ -12,6 +12,7 @@
 ## AddonCompartmentFunc: AuctionHero_OnAddonCompartmentClick
 
 core.lua
+versions.lua
 jobs.lua
 locales\en-us.lua
 data\settings.lua
@@ -30,6 +31,7 @@ data\facets.lua
 data\gear.lua
 data\scan-shield.lua
 data\rewards.lua
+data\tracking.lua
 feed\links.lua
 feed\item-names.lua
 feed\replicate.lua
@@ -40,12 +42,17 @@ store.lua
 activity.lua
 market\market.lua
 market\history.lua
+market\scan-journal.lua
+market\turnover.lua
+market\sell-chance.lua
 market\footprint.lua
 market\signals.lua
 market\orders.lua
 market\facets.lua
 market\resell.lua
 market\crafting.lua
+market\recipe-book.lua
+market\craft-plan.lua
 inventory\bags.lua
 inventory\gear.lua
 inventory\bag-size.lua
@@ -68,6 +75,8 @@ analyze\profile.lua
 analyze\derive.lua
 analyze\analyzer.lua
 ui\view-model.lua
+ui\redraw-scheduler.lua
+ui\list-fit.lua
 ui\kit.lua
 ui\chart.lua
 ui\window.lua
@@ -77,6 +86,7 @@ ui\tabs\buy.lua
 ui\tabs\sell.lua
 ui\tabs\auctions.lua
 ui\tabs\resell.lua
+ui\tabs\craft.lua
 ui\tabs\ledger.lua
 ui\tabs\history.lua
 ui\tabs\debug.lua

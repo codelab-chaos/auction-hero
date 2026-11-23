@@ -25,6 +25,7 @@ ns.Settings = {
 	{ id = "closeAuctionHouse", section = "general", default = false, label = L.SETTING_CLOSE_AH, tip = L.SETTING_CLOSE_AH_TIP },
 	{ id = "itemTooltips", section = "general", default = true, label = L.SETTING_ITEM_TOOLTIPS, tip = L.SETTING_ITEM_TOOLTIPS_TIP },
 	{ id = "railLarge", section = "general", default = false, label = L.SETTING_RAIL_LARGE, tip = L.SETTING_RAIL_LARGE_TIP },
+	{ id = "showResell", section = "general", default = false, label = L.SETTING_SHOW_RESELL, tip = L.SETTING_SHOW_RESELL_TIP },
 	{ id = "sellBagList", section = "general", default = false, label = L.SETTING_BAG_LIST, tip = L.SETTING_BAG_LIST_TIP },
 	{ id = "logEvents", section = "debug", default = true, label = L.SETTING_LOG_EVENTS, tip = L.SETTING_LOG_EVENTS_TIP },
 	{ id = "debug", section = "debug", default = false, label = L.SETTING_DEBUG, tip = L.SETTING_DEBUG_TIP },
@@ -53,6 +54,26 @@ ns.NumberSettings = {
 		warning = function()
 			local from, now = ns.History:PendingTrim(), ns.History:GraphDays()
 			return from and L.SETTING_HISTORY_TRIM:format(from - now, from)
+		end,
+	},
+	-- Off or a few lengths. The longer, the more memory: see the data line.
+	{
+		id = "journalDays",
+		section = "general",
+		control = "choices",
+		label = L.SETTING_JOURNAL_DAYS,
+		tip = L.SETTING_JOURNAL_DAYS_TIP,
+		choices = function()
+			return ns.JournalRule.dayChoices
+		end,
+		format = function(days)
+			return days == 0 and L.SETTING_OFF or L.SETTING_DAYS:format(days)
+		end,
+		get = function()
+			return ns.ScanJournal:Days()
+		end,
+		set = function(days)
+			ns.ScanJournal:SetDays(days)
 		end,
 	},
 	-- Two numbers on one row: how far under and over the character's level.

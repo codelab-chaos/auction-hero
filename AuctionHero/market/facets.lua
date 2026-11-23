@@ -73,12 +73,16 @@ end
 --                      most-listed item
 --   refineRead(item)   the item's refine value, or nil
 --   refineOptions      { value, label, icon }
+-- Runs as fast as it can outside a job; inside one it shares frames.
 function Facets:Build(items)
 	local facets = {}
 	for _, category in ipairs(ns.ItemCategories) do
 		local groups, order = {}, {}
 		local pictures = {} -- refine value -> { item, preferred }
-		for _, item in ipairs(items) do
+		for count, item in ipairs(items) do
+			if count % 200 == 0 then
+				ns.Breathe() -- inside a job, a few frames' work instead of one
+			end
 			local value, label, position, inRail = BoxOf(category, item)
 			if value then
 				local preferred = Contains(category.iconSlots, item.equipLoc)

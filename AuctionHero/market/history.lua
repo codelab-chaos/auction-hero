@@ -103,7 +103,9 @@ local function AddPoint(packed, time, median, low, units, lowUnits)
 	local point = time .. ":" .. median .. ":" .. low .. ":" .. units .. ":" .. (lowUnits or 0)
 	local settled = times[#times - 1] -- the point before the last
 	if settled and time - settled < spacing then
-		kept[#kept] = point
+		-- The sales counted on the point being replaced carry over to it.
+		local turnover = kept[#kept] and kept[#kept]:match("^%d+:%d+:%d+:%d+:%d+(:.+)$")
+		kept[#kept] = point .. (turnover or "")
 	else
 		kept[#kept + 1] = point
 	end
@@ -136,10 +138,14 @@ local function Update(record, median, low, units, day, time, lowUnits)
 	return record
 end
 
--- An item's graph points, oldest first: { time, day, median, low, units, lowUnits }.
+-- An item's graph points, oldest first: { time, day, median, low, units,
+-- lowUnits, sold, expired, pulled, watched, top }.
 -- time is the scan's server time. day is that time in days since 1970.
 -- lowUnits is how many were at the lowest price, nil for points saved before
--- that was kept.
+-- that was kept. sold, expired, pulled (likely units), watched (minutes) and
+-- top are what the scan
+-- journal counted going while the point's scans watched (market\turnover.lua),
+-- nil until it has counted any.
 function History:Points(key)
 	local record = self:Get(key)
 	local points = {}
@@ -148,6 +154,7 @@ function History:Points(key)
 			local stamp, median, low, units, lowUnits = chunk:match("^(%d+):(%d+):(%d+):(%d+):?(%d*)")
 			if stamp then
 				local time = PointTime(stamp)
+				local sold, expired, pulled, watched, top = chunk:match("^%d+:%d+:%d+:%d+:%d+:([%d%.]+):([%d%.]+):([%d%.]+):(%d+):(%d+)")
 				points[#points + 1] = {
 					time = time,
 					day = math.floor(time / SECONDS_PER_DAY),
@@ -155,6 +162,11 @@ function History:Points(key)
 					low = tonumber(low),
 					units = tonumber(units),
 					lowUnits = tonumber(lowUnits),
+					sold = tonumber(sold),
+					expired = tonumber(expired),
+					pulled = tonumber(pulled),
+					watched = tonumber(watched),
+					top = tonumber(top) ~= 0 and tonumber(top) or nil,
 				}
 			end
 		end
@@ -194,7 +206,8 @@ end
 -- The headline numbers for a run of points, or nil when there are none:
 --   usual (the newest median), lowest, highest,
 --   scans (how many points) and days (how many different days they fall on),
---   change: percent the usual price moved from the first point to the last
+--   change: percent the usual price moved from the first point to the last,
+--     counting only points with enough for sale (nil when fewer than two)
 function History:Summarize(points)
 	local first, last = points[1], points[#points]
 	if not first then
@@ -209,9 +222,16 @@ function History:Summarize(points)
 			days, lastDay = days + 1, point.day
 		end
 	end
+	local from, to
+	for _, point in ipairs(points) do
+		if point.units >= ns.HistoryRule.changeMinUnits then
+			from = from or point
+			to = point
+		end
+	end
 	local change
-	if #points > 1 and first.median > 0 then
-		change = math.floor((last.median - first.median) / first.median * 100 + 0.5)
+	if from and to ~= from and from.median > 0 then
+		change = math.floor((to.median - from.median) / from.median * 100 + 0.5)
 	end
 	return { usual = last.median, lowest = lowest, highest = highest, change = change, scans = #points, days = days }
 end
@@ -224,6 +244,61 @@ function History:SawLow(key, low, units, time)
 	if record and low and low < record.lo then
 		record.lo, record.lou, record.lot = low, units, time
 	end
+end
+
+-- A likely count as kept on a point: whole, or to a tenth.
+local function Tenths(value)
+	local text = ("%.1f"):format(value)
+	return (text:gsub("%.0$", ""))
+end
+
+-- Adds what a scan pair saw going (ns.Turnover:Read) to each item's newest
+-- point. Scans close together share a point, so their counts add up on it.
+-- Runs inside a job.
+function History:AddTurnover(place, facts)
+	if not facts then
+		return false
+	end
+	local records = Store(place).items
+	local count = 0
+	for key, fact in pairs(facts) do
+		local record = records[key]
+		if record and record.h then
+			local head, last = record.h:match("^(.-)([^;]+)$")
+			local base = last:match("^(%d+:%d+:%d+:%d+:%d+)") or (last:match("^(%d+:%d+:%d+:%d+)") .. ":0")
+			local sold, expired, pulled, watched, top = last:match("^%d+:%d+:%d+:%d+:%d+:([%d%.]+):([%d%.]+):([%d%.]+):(%d+):(%d+)")
+			last = base .. ":" .. Tenths((tonumber(sold) or 0) + fact.sold) .. ":" .. Tenths((tonumber(expired) or 0) + fact.expired)
+				.. ":" .. Tenths((tonumber(pulled) or 0) + fact.pulled) .. ":" .. ((tonumber(watched) or 0) + fact.watched)
+				.. ":" .. math.max(tonumber(top) or 0, fact.top or 0)
+			record.h = head .. last
+		end
+		count = count + 1
+		if count % 200 == 0 then
+			ns.Breathe()
+		end
+	end
+	return true
+end
+
+-- What an item has likely done over the last `days` days, or nil when no
+-- scan pair has watched it: { sold, expired, pulled, watched (minutes), top },
+-- the counts in units, likely ones so not always whole.
+function History:Turnover(key, days)
+	local since = GetServerTime() - days * SECONDS_PER_DAY
+	local total
+	for _, point in ipairs(self:Points(key)) do
+		if point.watched and point.time > since then
+			total = total or { sold = 0, expired = 0, pulled = 0, watched = 0 }
+			total.sold = total.sold + point.sold
+			total.expired = total.expired + point.expired
+			total.pulled = total.pulled + point.pulled
+			total.watched = total.watched + point.watched
+			if point.top then
+				total.top = math.max(total.top or 0, point.top)
+			end
+		end
+	end
+	return total
 end
 
 -- Folds one scan's market into the records. Runs inside a job.

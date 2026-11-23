@@ -24,3 +24,16 @@ local days = ns.ScanConfidence:Days()
 check("thirty days, oldest first", #days, 30)
 checkTrue("today scanned", days[30].scanned)
 checkTrue("yesterday not", not days[29].scanned)
+
+-- What is tracked, with the memory it takes, under the earnings.
+local function showing(pattern)
+	return #Frames(function(frame)
+		return type(frame.text) == "string" and strip(frame.text):find(pattern) ~= nil
+	end) > 0
+end
+checkTrue("a heading for what is tracked", showing("^What's tracked$"))
+for _, line in ipairs(NS.TrackingLines) do
+	checkTrue("lists " .. line.label, showing("^" .. line.label .. "$"))
+end
+checkTrue("the scan's size and age", showing("^[%d,]+ auctions, [%d,]+ items, "))
+checkTrue("the history's size", showing("^[%d,]+ items, [%d,]+ points, %d+ days$"))

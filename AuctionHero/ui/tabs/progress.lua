@@ -1,6 +1,6 @@
 -- Progress tab: the far right icon tab (only Debug, while on, sits after it). Left: today's scan, scan confidence
 -- and the Hero Coin balance (the same panel as the scan card), then the
--- latest earnings. Right: the last days with a scan, the streak bonuses and
+-- latest earnings and what is tracked, with the memory it takes. Right: the last days with a scan, the streak bonuses and
 -- every way to earn with today's count. The rules are data\rewards.lua.
 local _, ns = ...
 local L = ns.L
@@ -8,7 +8,7 @@ local Kit = ns.Kit
 local Theme = ns.Theme
 local C = Theme.color
 
-local panel, days, bonuses, nextBonus, ways, recent
+local panel, days, bonuses, nextBonus, ways, recent, tracked
 
 local LEFT_WIDTH = 420
 
@@ -65,12 +65,21 @@ local function PaintRecent()
 	end
 end
 
+-- What is kept and how much memory it takes (data\tracking.lua).
+local function PaintTracked()
+	local kept = ns.Footprint:Read()
+	for _, line in ipairs(tracked) do
+		line.value:SetText(kept and line.spec.value(kept) or L.TRACK_COUNTING)
+	end
+end
+
 local function Refresh()
 	if not panel then
 		return
 	end
 	panel:Paint()
 	PaintRecent()
+	PaintTracked()
 	PaintDays()
 	PaintBonuses()
 	PaintWays()
@@ -97,20 +106,44 @@ local function Create(parent)
 	local look = ns.RewardsLook
 	local inner = LEFT_WIDTH - pad * 4
 
-	-- Left: the progress panel, as on the scan card, then the latest earnings.
+	-- Left: the progress panel, as on the scan card, the latest earnings and
+	-- what is tracked. It scrolls when the window is too short for it all.
 	local left = Kit.Panel(parent)
 	left:SetPoint("TOPLEFT")
 	left:SetPoint("BOTTOMLEFT")
 	left:SetWidth(LEFT_WIDTH)
-	panel = ns.ProgressPanel.Create(left, inner)
+	local scroll = Kit.Scroll(left, { bar = C.line })
+	scroll:SetPoint("TOPLEFT", 1, -1)
+	scroll:SetPoint("BOTTOMRIGHT", -3, 1)
+	local column = scroll.content
+	panel = ns.ProgressPanel.Create(column, inner)
 	panel:SetPoint("TOPLEFT", pad * 2, -pad * 2)
 	local y = -pad * 2 - panel.height
-	Title(left, L.HERO_COINS_RECENT, pad * 2, y)
+	Title(column, L.HERO_COINS_RECENT, pad * 2, y)
 	recent = {}
 	for index = 1, look.recent do
-		local text, coins = Row(left, pad * 2, y - 20 - (index - 1) * look.rowHeight, inner)
+		local text, coins = Row(column, pad * 2, y - 20 - (index - 1) * look.rowHeight, inner)
 		recent[index] = { text = text, coins = coins }
 	end
+	y = y - 20 - look.recent * look.rowHeight - 16
+	Title(column, L.TRACK_TITLE, pad * 2, y)
+	tracked = {}
+	for index, spec in ipairs(ns.TrackingLines) do
+		local rowY = y - 20 - (index - 1) * look.rowHeight
+		local text, value = Row(column, pad * 2, rowY, inner)
+		text:SetText(spec.label)
+		value:SetTextColor(unpack(C.text))
+		-- The label carries the tip: what the line counts.
+		local hover = CreateFrame("Frame", nil, column)
+		hover:SetPoint("TOPLEFT", pad * 2, rowY + 2)
+		hover:SetSize(inner, look.rowHeight)
+		hover:EnableMouse(true)
+		Kit.Tip(hover, function()
+			return { spec.label, spec.tip }
+		end)
+		tracked[index] = { spec = spec, value = value }
+	end
+	scroll:SetContentHeight(-(y - 20 - #ns.TrackingLines * look.rowHeight) + pad * 2)
 
 	-- Right: the last days, the streak bonuses, the ways to earn.
 	local right = Kit.Panel(parent)
@@ -178,10 +211,10 @@ end
 ns.Window:RegisterTab({ id = "progress", label = L.TAB_PROGRESS, order = 9, align = "right", icon = ns.RewardsLook.tabIcon, Create = Create })
 
 -- Scans and coins change what the tab shows, so a shown tab follows them.
-for _, event in ipairs({ "HISTORY_CHANGED", "REWARDS_CHANGED" }) do
+for _, event in ipairs({ "HISTORY_CHANGED", "REWARDS_CHANGED", "ANALYSIS_READY", "SETTING_CHANGED", "FOOTPRINT_READY" }) do
 	ns.Bus:On(event, function()
 		if ns.charDb.tab == "progress" then
-			ns.Window:RefreshActive()
+			ns.Window:RequestRefresh()
 		end
 	end)
 end

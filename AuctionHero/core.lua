@@ -34,7 +34,16 @@ function Bus:On(message, handler)
 	list[#list + 1] = handler
 end
 
+-- Bus.watch, when set, hears every message first (see ui\window.lua, which
+-- uses it to catch a view firing messages while it draws).
 function Bus:Fire(message, ...)
+	local kind = ns.DataEvents and ns.DataEvents[message]
+	if kind then
+		ns.DataChanged(kind)
+	end
+	if self.watch then
+		self.watch(message)
+	end
 	local list = self.handlers[message]
 	if not list then
 		return
@@ -51,6 +60,21 @@ end
 -- once comes back as "68"), which would split one price into many cheap
 -- units. The count is held to the item's stack size; nil or junk reads as 1.
 -- Stack sizes are kept once known, since every scan row asks.
+-- How many of an item the player holds: the bags, and the bank too when
+-- asked (the game counts it once the bank was opened). This client has only
+-- C_Item.GetItemCount; the old global is used where C_Item lacks it.
+function ns.ItemCount(itemID, includeBank)
+	local count = C_Item and C_Item.GetItemCount
+	if not count then
+		count = GetItemCount
+	end
+	if not count or not itemID then
+		return 0
+	end
+	local ok, held = pcall(count, itemID, includeBank == true)
+	return ok and tonumber(held) or 0
+end
+
 local maxStack = {}
 -- How many of an item fit in one bag slot, or nil while the game cannot say.
 function ns.MaxStack(itemID)

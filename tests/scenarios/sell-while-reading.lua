@@ -22,6 +22,7 @@ checkTrue("not that nobody is selling", not has(ns.L.SELL_NOT_LISTED))
 ns.Analysis, ns.AnalysisStatus = market, status
 NS.Bus:Fire("ANALYSIS_STATE", false)
 NS.Bus:Fire("ANALYSIS_READY")
+Tick(1) -- the redraw it asks for comes on the next frame
 -- Once read, the competition is the market's again.
 checkTrue("the competition is back", #Frames(function(frame)
 	local text = type(frame.text) == "string" and strip(frame.text) or ""

@@ -32,7 +32,7 @@ local bagTiles = {}
 local gridEmpty -- says so when a filter leaves the grid empty
 local parts, ladderRows = {}, {}
 local stack
-local Refresh, PaintForm, PaintLadder, PaintSummary, PaintPostButton, PressPost
+local Refresh, PaintForm, PaintLadder, PaintSummary, PaintPostButton, PressPost, ChanceTip
 
 -- ========= What is being sold ===============================================
 local function Owned()
@@ -301,14 +301,42 @@ local function NamedRow(parent, name, height)
 	return row
 end
 
+-- A slider with a box beside it to type the number, and how many there are
+-- at most. Typing past the most posts the most; the box shows that once it
+-- loses focus. :SetLimit(most, value) updates all three.
 local function SliderRow(parent, name, onChange)
-	local row = NamedRow(parent, name, 22)
-	row.value = Kit.Text(row, "normal", C.muted, "RIGHT")
+	local row = NamedRow(parent, name, 26)
+	row.most, row.current = 1, 1
+	row.value = Kit.Text(row, "normal", C.muted, "LEFT")
 	row.value:SetPoint("RIGHT")
-	row.value:SetWidth(76)
-	row.slider = Kit.Slider(row, { onChange = onChange })
+	row.value:SetWidth(64)
+	local function Pick(number)
+		number = math.max(1, math.min(row.most, number))
+		row.current = number
+		row.slider:SetShownValue(number)
+		onChange(number)
+	end
+	row.input = Kit.Input(row, { width = 64, height = 26, numeric = true, justify = "RIGHT", maxLetters = 6, onNumber = Pick, onDone = function(box)
+		box:SetValue(tostring(row.current))
+	end })
+	row.input:SetPoint("RIGHT", row.value, "LEFT", -6, 0)
+	row.slider = Kit.Slider(row, { onChange = function(number)
+		row.current = number
+		row.input:SetValue(tostring(number))
+		onChange(number)
+	end })
 	row.slider:SetPoint("LEFT", LABEL_WIDTH, 0)
-	row.slider:SetPoint("RIGHT", row.value, "LEFT", -8, 0)
+	row.slider:SetPoint("RIGHT", row.input, "LEFT", -10, 0)
+
+	function row:SetLimit(most, value)
+		self.most, self.current = math.max(1, most), value
+		self.value:SetText(L.SELL_OF:format(ns.Comma(self.most)))
+		self.slider:SetRange(self.most)
+		self.slider:SetShownValue(value)
+		if not self.input:HasFocus() then
+			self.input:SetValue(tostring(value))
+		end
+	end
 	return row
 end
 
@@ -382,6 +410,13 @@ local function BuildForm(parent)
 		end,
 	})
 	parts.rules:SetPoint("LEFT")
+
+	-- How likely the price is to sell: the verdict, and what it is from.
+	parts.chance = Kit.Pair(parent, "small")
+	parts.chance:EnableMouse(true)
+	Kit.Tip(parts.chance, function()
+		return ChanceTip()
+	end)
 
 	-- With both a buy now price and bids, the starting bid gets its own entry.
 	parts.bidRow = NamedRow(parent, L.SELL_STARTING_BID)
@@ -525,6 +560,57 @@ PressPost = function()
 	end
 end
 
+-- ========= Chance to sell ===================================================
+local function Chance()
+	local listed = Listed()
+	return listed and ns.SellChance:Judge(listed, UnitPrice(), state.perAuction * state.auctions, state.duration)
+end
+
+local function PaintChance()
+	local reading = Chance()
+	if not reading then
+		return
+	end
+	local ahead = reading.ahead > 0 and L.CHANCE_AHEAD:format(ns.Comma(reading.ahead)) or L.CHANCE_NONE_AHEAD
+	local facts
+	if reading.perDay and reading.sold > 0 then
+		facts = L.CHANCE_RATE:format(ahead, ns.Comma(math.max(1, math.floor(reading.perDay + 0.5))))
+	elseif reading.perDay then
+		facts = L.CHANCE_NO_SALES:format(ahead)
+	else
+		facts = L.CHANCE_EARLY:format(ahead)
+	end
+	local level = reading.level
+	parts.chance:Set(level and level.label or L.CHANCE_UNKNOWN, facts)
+	parts.chance.left:SetTextColor(unpack(level and C[level.color] or C.muted))
+end
+
+ChanceTip = function()
+	local reading = Chance()
+	local lines = { L.CHANCE_TIP_HEAD }
+	if not reading then
+		return lines
+	end
+	lines[#lines + 1] = L.CHANCE_TIP_AHEAD:format(ns.Comma(reading.ahead))
+	if reading.perDay then
+		local function Units(value)
+			return ns.Comma(math.floor(value + 0.5))
+		end
+		lines[#lines + 1] = L.CHANCE_TIP_RATE:format(Units(reading.sold), ns.Duration(math.floor(reading.watched * 3600)), Units(reading.perDay))
+		lines[#lines + 1] = L.CHANCE_TIP_REST:format(Units(reading.expired), Units(reading.pulled))
+		if reading.top then
+			lines[#lines + 1] = L.CHANCE_TIP_TOP:format(ns.Money(reading.top))
+		end
+		if reading.over then
+			lines[#lines + 1] = L.CHANCE_TIP_OVER
+		end
+	else
+		lines[#lines + 1] = L.CHANCE_TIP_EARLY
+	end
+	lines[#lines + 1] = L.CHANCE_TIP_HOW
+	return lines
+end
+
 -- The numbers under the form. Redrawn alone while a slider moves.
 PaintSummary = function()
 	local owned = Owned()
@@ -537,8 +623,9 @@ PaintSummary = function()
 	local posting = state.perAuction * state.auctions
 	local unit = UnitPrice()
 
-	parts.quantityRow.value:SetText(ns.Comma(state.perAuction) .. " " .. L.SELL_OF:format(ns.Comma(total)))
-	parts.auctionsRow.value:SetText(ns.Comma(state.auctions) .. " " .. L.SELL_OF:format(ns.Comma(math.max(1, math.floor(total / state.perAuction)))))
+	parts.quantityRow:SetLimit(total, state.perAuction)
+	parts.auctionsRow:SetLimit(math.floor(total / state.perAuction), state.auctions)
+	PaintChance()
 	PaintPostButton()
 	local deposit = ns.Posting:Deposit(owned.key, commodity, state.duration, commodity and state.perAuction or state.auctions)
 	parts.deposit:Set(L.SELL_DEPOSIT, deposit and ns.Money(deposit) or "")
@@ -616,6 +703,9 @@ DrawForm = function()
 	stack:Add(parts.priceRow, 4)
 	parts.rules:Refresh()
 	stack:Add(parts.rulesRow, 6)
+	if listed then
+		stack:Add(parts.chance, 4)
+	end
 
 	if not commodity and type.buyout and type.bids then
 		parts.bid:SetAmount(StartingBid() or 0)
@@ -629,12 +719,8 @@ DrawForm = function()
 	stack:Add(parts.confidence, 8)
 
 	if commodity then
-		parts.quantityRow.slider:SetRange(total)
-		parts.quantityRow.slider:SetShownValue(state.perAuction)
 		stack:Add(parts.quantityRow, 8)
 	elseif total > 1 then
-		parts.auctionsRow.slider:SetRange(total)
-		parts.auctionsRow.slider:SetShownValue(state.auctions)
 		stack:Add(parts.auctionsRow, 8)
 	end
 
@@ -827,7 +913,7 @@ ns.Window:RegisterTab({ id = "sell", label = L.TAB_SELL, order = 2, Create = Cre
 -- The form follows a post as it goes: sending, confirm, done or refused.
 ns.Bus:On("POSTING_CHANGED", function()
 	if form and ns.charDb.tab == "sell" then
-		ns.Window:RefreshActive()
+		ns.Window:RequestRefresh()
 	end
 	-- The game is asked for the item's live listings, as its own sell form does.
 	ns.SellSearch:Request(state.key)
@@ -835,6 +921,6 @@ end)
 
 ns.Bus:On("SETTING_CHANGED", function(id)
 	if id == "sellBagList" then
-		ns.Window:RefreshActive()
+		ns.Window:RequestRefresh()
 	end
 end)

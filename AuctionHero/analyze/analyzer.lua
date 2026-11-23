@@ -1,7 +1,8 @@
 -- Analyzer: whenever the snapshot changes, runs the profile, derive and market
 -- steps as a job and publishes the result as ns.Analysis.
 --   ns.Analysis = { profile = <Profile:Run>, derived = <Derive:Run>, market = <Market:Build> }
--- A new scan's market is also folded into the price history.
+-- A new scan's market is also folded into the price history, and journaled
+-- as the change from the scan before it (market\scan-journal.lua).
 local _, ns = ...
 local Bus = ns.Bus
 
@@ -28,6 +29,12 @@ Bus:On("SNAPSHOT_CHANGED", function()
 		local market = full and ns.Market:Build(full)
 		if mine ~= generation then return end
 		local folded = ns.History:Fold(market)
+		-- A new scan is journaled as the change from the one before, and what
+		-- went between them is counted onto the item's history.
+		local delta, counts, old = ns.ScanJournal:RecordScan(full)
+		if delta and market then
+			ns.History:AddTurnover(market.place, ns.Turnover:Read(delta, counts, old))
+		end
 		-- With this scan in the history, say how each item's price compares.
 		for count, item in ipairs(market and market.items or {}) do
 			ns.Signals:Rate(item)

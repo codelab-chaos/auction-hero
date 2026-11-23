@@ -51,8 +51,8 @@ function Crafting:Quote(itemID, name)
 	-- An uncached name or random-suffix output can still have an estimate,
 	-- explicitly identified as a quote from other variants of that item ID.
 	local lowest, count
-	for _, item in ipairs(market and market.items or {}) do
-		if item.itemID == itemID and item.units > 0 and item.min and item.min > 0 then
+	for _, item in ipairs(market and ns.Market.WithItemID(market, itemID) or {}) do
+		if item.units > 0 and item.min and item.min > 0 then
 			count = (count or 0) + 1
 			if not lowest or item.min < lowest.min then lowest = item end
 		end

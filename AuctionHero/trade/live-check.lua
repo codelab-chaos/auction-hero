@@ -39,6 +39,38 @@ function LiveCheck:IsStale(item)
 	return GetServerTime() - seen >= ns.LiveCheckRule.staleMinutes * 60
 end
 
+-- Where an item's prices came from, as a key of ns.PriceFreshness, or nil
+-- when they are the scan's or a check that has since gone stale.
+function LiveCheck:Freshness(item)
+	local state = self.state
+	if state and state.itemID == item.itemID and (state.phase == "waiting" or state.phase == "sent") then
+		return "checking"
+	end
+	if item.checkedAt and not self:IsStale(item) then
+		return "live"
+	end
+	if self.problem and self.problem.itemID == item.itemID then
+		return "failed"
+	end
+end
+
+-- Whether any item has a mark at all: one being checked, one whose check
+-- failed, or one checked live and not yet stale. Asked instead of every row.
+function LiveCheck:AnyMarked()
+	local state = self.state
+	if self.problem or (state and (state.phase == "waiting" or state.phase == "sent")) then
+		return true
+	end
+	local snapshot = ns.Store:GetSourceSnapshot(SOURCE)
+	local fresh = GetServerTime() - ns.LiveCheckRule.staleMinutes * 60
+	for _, entry in ipairs(snapshot and snapshot.meta.patched or {}) do
+		if (entry.time or 0) > fresh then
+			return true
+		end
+	end
+	return false
+end
+
 -- Whether a check is recent enough to buy from without asking again.
 function LiveCheck:FreshForBuying(item)
 	return item.checkedAt ~= nil and GetServerTime() - item.checkedAt <= ns.LiveCheckRule.reuseSeconds

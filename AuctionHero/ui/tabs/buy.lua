@@ -29,6 +29,13 @@ local state = {
 }
 
 local market, facets, listable, makeFilter -- rebuilt when the market changes
+
+-- The kinds of data the list is drawn from (see ns.DataEvents): prices and
+-- deals, what gear and bags would gain, and gear in the mail.
+local READS = { "market", "history", "gear", "bags", "incoming", "settings" }
+-- What the list of rows is built from: the same, and items a live check
+-- replaced. (Their new rows are all the column fit has to measure.)
+local LIST_READS = { "market", "history", "gear", "bags", "incoming", "settings", "patch" }
 local rail, sidebar, toolbar, list, order, prompt, searchBox
 local railView, railContent, railFades -- the rail scrolls when it is taller than the window
 local railScroll = 0
@@ -39,6 +46,17 @@ local gainOf, valueOf -- gear gain and gain per gold, rebuilt each time the list
 local bagGainOf, bagValueOf -- the same for bags, in slots
 
 -- ========= Filtering ========================================================
+-- The market's items that are for sale.
+local function Listable()
+	local items = {}
+	for _, item in ipairs(market and market.items or {}) do
+		if item.units > 0 then
+			items[#items + 1] = item
+		end
+	end
+	return items
+end
+
 local function Prepare()
 	local current = ns.Window:Market()
 	if facets and current == market then
@@ -48,16 +66,42 @@ local function Prepare()
 		lastOrder = nil -- a new scan: nothing to hold the old order for
 	end
 	market = current
-	listable = {}
-	if market then
-		for _, item in ipairs(market.items) do
-			if item.units > 0 then
-				listable[#listable + 1] = item
-			end
-		end
-	end
+	listable = Listable()
 	facets = Facets:Build(listable)
 	makeFilter = Facets:Filter(facets)
+end
+
+-- After a live check replaced an item's rows in place, the list takes the new
+-- items at once, and the filter counts are counted again in the background
+-- (counting every item is felt as a hitch), then drawn. Checks that land
+-- while one count runs are taken in by one more count after it.
+local recount -- { market, again } while a count runs
+local function Recount()
+	if recount then
+		recount.again = true
+		return
+	end
+	local mine = { market = market }
+	recount = mine
+	ns.Window:SetBusy("buy filters", true)
+	local items = listable
+	ns.Jobs:Run(function()
+		return Facets:Build(items)
+	end, function(built)
+		recount = nil
+		ns.Window:SetBusy("buy filters", mine.again)
+		if market == mine.market and listable == items then
+			facets, makeFilter = built, Facets:Filter(built)
+			ns.Window:RequestRefresh()
+		end
+		if mine.again then
+			Recount()
+		end
+	end, function(message)
+		recount = nil
+		ns.Window:SetBusy("buy filters", false)
+		ns.EventLog:Note("filter count failed", message)
+	end)
 end
 
 -- Bag kinds ticked in the filters: a kind the player looks for counts even
@@ -589,7 +633,33 @@ end
 -- comes from elsewhere (a live check, a purchase) keeps every item where it
 -- stood, so what the player is looking at does not jump away: an item whose
 -- bargain has just sold stays put, with its new numbers, until the next sort.
+-- What the list was last built from: the data version and everything the
+-- player sets. Built from the same again, the rows last built are shown as
+-- they were, without reading all the items again (a tab reopened, a panel
+-- redrawn after a click elsewhere).
+local function Sorted(set)
+	local keys = {}
+	for key, value in pairs(set or {}) do
+		keys[#keys + 1] = tostring(key) .. (type(value) == "table" and ("{" .. Sorted(value) .. "}") or ("=" .. tostring(value)))
+	end
+	table.sort(keys)
+	return table.concat(keys, ",")
+end
+local function ListKey()
+	return table.concat({
+		ns.VersionOf(LIST_READS), tostring(market), state.search, Sorted(state.selection), Sorted(state.toggles),
+		state.sort.id, tostring(state.sort.descending), tostring(state.openKey), tostring(state.selectedKey),
+		state.toggles.affordableOnly and GetMoney() or "",
+	}, "|")
+end
+local builtKey, builtRows
+
 local function PaintList(keepScroll)
+	if keepScroll and builtRows and builtKey == ListKey() then
+		list:SetSort(state.sort.id, state.sort.descending)
+		list:SetRows(builtRows, true)
+		return
+	end
 	gainOf = ns.Gear:Gains()
 	valueOf = ns.Gear:ValuePerGold(ns.Orders.CheapestAuction)
 	local picked = PickedBagKinds()
@@ -608,9 +678,28 @@ local function PaintList(keepScroll)
 				items[#items + 1] = chosen
 			end
 		end
-		Kit.SortRows(items, function(item)
-			return lastOrder[item.key] or math.huge
-		end, false)
+		-- Back in the order last shown, each item at its old place, without
+		-- a sort: a sort of every item is felt as a hitch. Items new since
+		-- go after them.
+		local slots, newer, last = {}, {}, 0
+		for _, item in ipairs(items) do
+			local at = lastOrder[item.key]
+			if at then
+				slots[at] = item
+				last = math.max(last, at)
+			else
+				newer[#newer + 1] = item
+			end
+		end
+		items = {}
+		for at = 1, last do
+			if slots[at] then
+				items[#items + 1] = slots[at]
+			end
+		end
+		for _, item in ipairs(newer) do
+			items[#items + 1] = item
+		end
 	else
 		Kit.SortRows(items, SORT_VALUES[state.sort.id], state.sort.descending)
 	end
@@ -629,6 +718,7 @@ local function PaintList(keepScroll)
 	end
 	list:SetSort(state.sort.id, state.sort.descending)
 	list:SetRows(rows, keepScroll)
+	builtKey, builtRows = ListKey(), rows
 end
 
 -- ========= The order panel ==================================================
@@ -1198,7 +1288,7 @@ local function Create(parent)
 	order:SetPoint("BOTTOMRIGHT")
 	order:SetWidth(Theme.buy.order)
 	Kit.Split(order, { id = "buy.order", edge = "LEFT", min = Theme.buy.order, max = Theme.buy.order + Theme.panelGrow, onChange = function()
-		ns.Window:RefreshActive()
+		ns.Window:RequestRefresh()
 	end })
 	BuildOrder(order)
 
@@ -1240,6 +1330,7 @@ local function Create(parent)
 
 	list = Kit.List(parent, {
 		id = "buy",
+		reads = READS,
 		gap = 6, -- the number columns sit close, as thin as they can
 		columns = {
 			{
@@ -1275,6 +1366,17 @@ local function Create(parent)
 					return ""
 				end
 				return ns.Comma(row.point and row.point.units or row.units)
+			end },
+			-- Where the row's prices came from: being checked, checked live, or a
+			-- check that failed. Rows straight from the scan show nothing.
+			{ id = "fresh", label = "", width = 18, fixed = true, hideEmpty = true, live = true, anyValue = function()
+				return ns.LiveCheck:AnyMarked()
+			end, sortable = false, align = "CENTER", text = function(row)
+				local freshness = not row.item and ns.PriceFreshness[ns.LiveCheck:Freshness(row) or ""]
+				return freshness and freshness.mark or ""
+			end, color = function(row)
+				local freshness = not row.item and ns.PriceFreshness[ns.LiveCheck:Freshness(row) or ""]
+				return freshness and C[freshness.color]
 			end },
 			{ id = "min", label = L.BUY_COL_FROM, width = 96, fixed = true, fit = true, align = "RIGHT", text = function(row)
 				if row.more then
@@ -1381,21 +1483,24 @@ ns.Window:RegisterTab({ id = "buy", label = L.TAB_BUY, order = 1, Create = Creat
 -- The rail's icon size is a setting.
 ns.Bus:On("SETTING_CHANGED", function(id)
 	if id == "railLarge" and rail and ns.charDb.tab == "buy" then
-		ns.Window:RefreshActive()
+		ns.Window:RequestRefresh()
 	end
 end)
 
 -- What you wear, your level or the Near level range changed.
 ns.Bus:On("GEAR_CHANGED", function()
 	if list and ns.charDb.tab == "buy" then
-		ns.Window:RefreshActive()
+		ns.Window:RequestRefresh()
 	end
 end)
 
 -- A live check replaced an item's listings. The list is rebuilt from the
 -- market, and if what was chosen is no longer for sale the panel says so.
 ns.Bus:On("MARKET_PATCHED", function()
-	facets = nil
+	if facets and market then
+		listable = Listable()
+		Recount()
+	end
 	if state.selectedKey and market and not market.byKey[state.selectedKey] then
 		state.gone, state.selectedKey, state.selectedUnit = state.selectedName, nil, nil
 	end
@@ -1405,21 +1510,21 @@ ns.Bus:On("MARKET_PATCHED", function()
 		state.goneUnit, state.selectedUnit, state.seenUnit = state.seenUnit, nil, chosen.min
 	end
 	if order and ns.charDb.tab == "buy" then
-		ns.Window:RefreshActive()
+		ns.Window:RequestRefresh()
 	end
 end)
 
 -- The panel says when the chosen item is being checked.
 ns.Bus:On("LIVE_CHECK_CHANGED", function()
 	if order and ns.charDb.tab == "buy" then
-		ns.Window:RefreshActive()
+		ns.Window:RequestRefresh()
 	end
 end)
 
 -- Gear was bought: the panel names it beside gear for the same slot.
 ns.Bus:On("INCOMING_CHANGED", function()
 	if order and ns.charDb.tab == "buy" then
-		ns.Window:RefreshActive()
+		ns.Window:RequestRefresh()
 	end
 end)
 
@@ -1441,6 +1546,6 @@ ns.Bus:On("BUYING_CHANGED", function(buying)
 		end
 	end
 	if order and ns.charDb.tab == "buy" then
-		ns.Window:RefreshActive()
+		ns.Window:RequestRefresh()
 	end
 end)

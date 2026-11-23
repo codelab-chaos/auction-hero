@@ -469,4 +469,5 @@ local function Create(parent)
 	end }
 end
 
-ns.Window:RegisterTab({ id = "resell", label = L.TAB_RESELL, order = 3, Create = Create })
+-- Shown only while its setting is on (Options: Show the Resell tab).
+ns.Window:RegisterTab({ id = "resell", label = L.TAB_RESELL, order = 3, setting = "showResell", Create = Create })

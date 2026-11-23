@@ -195,7 +195,7 @@ ns.Bus:On("LOG_ADDED", function()
 	C_Timer.After(ns.LogRedrawSeconds, function()
 		redrawPending = false
 		if ShowingLog() then
-			ns.Window:RefreshActive()
+			ns.Window:RequestRefresh()
 		end
 	end)
 end)

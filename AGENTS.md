@@ -39,3 +39,9 @@ cd tests && npm test
 
 One scenario per file in `tests/scenarios`; the game is mocked in
 `tests/harness/mock.lua`.
+
+Unit tests live in `tests/unit`, one module per file. A unit test loads only
+the files its first line names (`-- loads: ui/list-fit.lua, data/theme.lua`),
+with no mocked game, and calls the module directly. Logic that decides
+something (when to redraw, what to re-measure, which version moved) belongs
+in a module that calls nothing of the game's, so it can be tested this way.

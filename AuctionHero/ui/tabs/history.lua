@@ -12,6 +12,7 @@ local CHART_WIDTH = 572
 local state = {
 	range = ns.HistoryDefaultRange,
 	search = "",
+	filter = nil,
 	selectedKey = nil,
 	sort = { id = "units", descending = true },
 }
@@ -49,9 +50,15 @@ end)
 
 local function Rows()
 	local search = state.search:lower()
+	local filter
+	for _, entry in ipairs(ns.HistoryFilters) do
+		if entry.id == state.filter then
+			filter = entry
+		end
+	end
 	local rows = {}
 	for _, row in ipairs(AllRows()) do
-		if search == "" or row.search:find(search, 1, true) then
+		if (search == "" or row.search:find(search, 1, true)) and (not filter or filter.when(row)) then
 			rows[#rows + 1] = row
 		end
 	end
@@ -73,11 +80,27 @@ local SORT_VALUES = {
 	end,
 }
 
+-- The kinds of data the list is drawn from (see ns.DataEvents).
+local READS = { "market", "history", "settings" }
+
+-- What the list was last built from. Built from the same again, the rows
+-- already filtered and sorted are shown as they were: sorting every item is
+-- felt as a hitch.
+local builtKey, builtRows
+local function ListKey(market)
+	return table.concat({ ns.VersionOf(READS), tostring(market), state.search, tostring(state.filter), state.range, state.sort.id, tostring(state.sort.descending) }, "|")
+end
+
 local function PaintList(keepScroll)
 	local market, reason = ns.Window:Market()
 	list:SetEmptyText(market and L.BUY_NOTHING or reason)
-	local rows = Rows()
-	Kit.SortRows(rows, SORT_VALUES[state.sort.id], state.sort.descending)
+	local key = ListKey(market)
+	local rows = builtKey == key and builtRows
+	if not rows then
+		rows = Rows()
+		Kit.SortRows(rows, SORT_VALUES[state.sort.id], state.sort.descending)
+		builtKey, builtRows = key, rows
+	end
 	list:SetSort(state.sort.id, state.sort.descending)
 	list:SetRows(rows, keepScroll)
 	return rows
@@ -184,6 +207,7 @@ local function BuildDetail(parent)
 		height = 190,
 		dates = true,
 		format = ns.Chart.AxisMoney,
+		fit = true,
 		onHover = SetReadout,
 	})
 	parts.priceChart:SetPoint("TOPLEFT")
@@ -303,8 +327,24 @@ local function Create(parent)
 	search:SetPoint("TOPLEFT", 8, -8)
 	search:SetPoint("TOPRIGHT", -8, -8)
 
+	local filters
+	filters = Kit.Choices(side, {
+		items = ns.HistoryFilters,
+		padding = 14,
+		isActive = function(filter)
+			return filter.id == state.filter
+		end,
+		onPick = function(filter)
+			state.filter = state.filter ~= filter.id and filter.id or nil
+			filters:Refresh()
+			PaintList()
+		end,
+	})
+	filters:SetPoint("TOPLEFT", search, "BOTTOMLEFT", 0, -6)
+
 	list = Kit.List(side, {
 		id = "history",
+		reads = READS,
 		columns = {
 			{
 				id = "name",
@@ -359,7 +399,7 @@ local function Create(parent)
 			PaintList()
 		end,
 	})
-	list:SetPoint("TOPLEFT", 8, -40)
+	list:SetPoint("TOPLEFT", 8, -72)
 	list:SetPoint("BOTTOMRIGHT", -8, 8)
 
 	detail = Kit.Panel(parent)

@@ -39,3 +39,18 @@ ns.LedgerTiles = {
 	{ value = "fees", label = L.LEDGER_COL_FEES, tip = L.LEDGER_TILE_FEES_TIP },
 	{ value = "heldCost", label = L.LEDGER_TILE_STOCK, tip = L.LEDGER_TILE_STOCK_TIP, count = "held", line = L.LEDGER_TILE_UNITS },
 }
+
+-- The chart over the Ledger: what sales paid out each day.
+--   days     how many days back it reaches
+--   height   its height in the tab
+--   stats    the lines beside it, each { label, days } summing that many days
+--            back, or { label, best = true } for the best day
+ns.LedgerChart = {
+	days = 30,
+	height = 120,
+	stats = {
+		{ label = L.LEDGER_CHART_WEEK, days = 7 },
+		{ label = L.LEDGER_CHART_MONTH, days = 30 },
+		{ label = L.LEDGER_CHART_BEST, best = true },
+	},
+}

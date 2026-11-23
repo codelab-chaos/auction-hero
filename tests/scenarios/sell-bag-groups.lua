@@ -38,6 +38,7 @@ allButton.scripts.OnClick(allButton)
 
 -- The list is an option.
 ns.SetEnabled("sellBagList", true)
+Tick(1) -- the redraw a changed setting asks for comes on the next frame
 check("with the list on, the grid is put away", tiles(), "")
 
 local labels = {}

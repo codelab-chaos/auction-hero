@@ -170,12 +170,18 @@ function Kit.Button(parent, options)
 	button.label:SetPoint("LEFT", options.inset or 6, 0)
 	button.label:SetPoint("RIGHT", -(options.inset or 6), 0)
 	-- An icon in place of the text, centred, as big as the button allows.
+	-- iconFill: an item or spell icon filling the button, its own bevel
+	-- trimmed off as the game's bags do.
 	if options.icon then
-		local size = (options.height or Theme.controlHeight) - 8
+		local inset = options.iconFill and 3 or 8
+		local size = (options.height or Theme.controlHeight) - inset
 		button.icon = button:CreateTexture(nil, "ARTWORK")
 		button.icon:SetSize(size, size)
 		button.icon:SetPoint("CENTER")
 		button.icon:SetTexture(options.icon)
+		if options.iconFill then
+			button.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+		end
 	end
 
 	local function Paint()
@@ -233,8 +239,9 @@ function Kit.Button(parent, options)
 end
 
 -- A row of buttons where one (or none) is lit. options: items (each with
--- label and tip), gap, joined (no gap, like one segmented control), isActive
--- (item), onPick(item). Returns the row frame with :Refresh().
+-- label and tip, and an icon to show in place of the label, which then
+-- leads the tooltip), gap, joined (no gap, like one segmented control),
+-- isActive (item), onPick(item). Returns the row frame with :Refresh().
 function Kit.Choices(parent, options)
 	local row = CreateFrame("Frame", nil, parent)
 	row:SetHeight(options.height or Theme.controlHeight)
@@ -242,12 +249,16 @@ function Kit.Choices(parent, options)
 	local buttons = {}
 	local x = 0
 	for index, item in ipairs(options.items) do
+		local height = options.height or Theme.controlHeight
 		local button = Kit.Button(row, {
-			text = item.label,
+			text = not item.icon and item.label or nil,
+			icon = item.icon,
+			iconFill = item.icon ~= nil,
+			width = item.icon and height or nil,
 			size = options.size or "normal",
 			height = options.height,
 			padding = options.padding or 16,
-			tip = item.tip and { item.label, item.tip } or nil,
+			tip = (item.tip or item.icon) and { item.label, item.tip } or nil,
 			onClick = function()
 				options.onPick(item)
 			end,
@@ -335,7 +346,7 @@ end
 -- options: width, height, numeric, placeholder, maxLetters, justify,
 -- onChange(text) for typing only, onNumber(n) for typing that reads as a
 -- whole number (an emptied box is mid-edit, so nothing is called until a
--- number is typed). Returns the edit box.
+-- number is typed), onDone(box) when it loses focus. Returns the edit box.
 function Kit.Input(parent, options)
 	local box = CreateFrame("EditBox", nil, parent)
 	box:SetSize(options.width or 80, options.height or Theme.controlHeight)
@@ -383,6 +394,9 @@ function Kit.Input(parent, options)
 	box:SetScript("OnEditFocusLost", function(self)
 		self.border:SetColor(C.inputBorder)
 		self:HighlightText(0, 0)
+		if options.onDone then
+			options.onDone(self)
+		end
 	end)
 
 	-- Sets the text without it counting as typing.
@@ -665,6 +679,7 @@ end
 --   direction   1 when dragging right makes it bigger, -1 for the opposite
 --   min, max    how small and how big it may go
 --   onDone()    called once when the drag ends
+--   onReset()   called on a double click instead of a drag
 -- Returns the frame. The caller places it and gives it a height.
 function Kit.Sizer(parent, options)
 	local sizer = CreateFrame("Frame", nil, parent)
@@ -698,7 +713,16 @@ function Kit.Sizer(parent, options)
 			mark:SetAlpha(Theme.sizerIdleAlpha)
 		end
 	end)
+	local lastDown = 0
 	sizer:SetScript("OnMouseDown", function(self)
+		-- A double click puts the widths back as they were designed.
+		local now = GetTime()
+		if options.onReset and now - lastDown < 0.35 then
+			lastDown = 0
+			options.onReset()
+			return
+		end
+		lastDown = now
 		startX = GetCursorPosition() / self:GetEffectiveScale()
 		startSize = options.get()
 		local last = startSize
@@ -839,18 +863,27 @@ end
 -- A table with a header and scrolling rows.
 --
 -- options:
+--   reads       the kinds of data (of ns.DataEvents) the rows' text comes
+--               from; a fit is kept while none of them changes. All, without
 --   columns     { id, label, width | flex, align, sortable,
 --                 fixed = true,                   the width cannot be dragged
 --                 fit = true,                     as wide as its widest text
 --                                                 (header or row), no wider
 --                 hideEmpty = true,               hide when every row is blank
+--                 live = true,                    its text changes without a data message (see
+--                                                 ns.DataEvents), so whether it is blank is read each draw
+--                 anyValue() -> boolean,          for a live column: whether any row has text, asked
+--                                                 instead of reading every row
 --                 labelColor,                     the header's color
 --                 text(row) -> string,            what the cell says
 --                 color(row) -> color | nil,      its text color
 --                 icon(row) -> fileID | nil,      an icon before the text
+--                                                 (centered when the column has
+--                                                 no text and align = "CENTER")
 --                 iconEdge(row) -> color | nil,   a 2px frame around it
 --                 meter(row) -> reading, pips,    draw a meter instead of text
---                 badge(row) -> string | nil }    draw a tinted badge instead
+--                 badge(row) -> string | nil,     draw a tinted badge instead
+--                 badgeColor(row) -> color }      its color (green unless given)
 --   rowHeight, empty (text when there are no rows), gap (between columns, 8)
 --   onClick(row), isSelected(row), tip(row) -> lines, link(row) -> item link
 --   onSort(columnId)
@@ -903,7 +936,20 @@ function Kit.List(parent, options)
 	measure:Hide()
 	local badgeMeasure = Kit.Text(list, "small", C.good)
 	badgeMeasure:Hide()
+	-- Measuring every row's text is the slow part of drawing a long list, so a
+	-- fit is kept and only redone as far as it must be, while the data the
+	-- list reads (options.reads, kinds of ns.DataEvents; all kinds without)
+	-- holds: see ui\list-fit.lua for the plan. A live column (its text
+	-- changes without a data message) has its emptiness read every time.
+	-- :Refit() measures everything again.
+	local fitState -- what ns.ListFit.Remember kept from the last fit
 	local function Fit(rows)
+		local version = ns.VersionOf(options.reads)
+		local plan, unseen = ns.ListFit.Plan(fitState, rows, version, ns.ListFitRule)
+		local valid = plan ~= "all" -- adding to the kept fit, not starting again
+		local fresh = plan == "all" and rows or unseen -- the rows to measure, nil for none
+		fitState = ns.ListFit.Remember(fitState, plan, rows, version, unseen)
+
 		local measured, badgeMeasured = {}, {}
 		local function TextWidth(text, badge)
 			text = tostring(text or "")
@@ -916,14 +962,19 @@ function Kit.List(parent, options)
 			return cache[text]
 		end
 		for _, column in ipairs(columns) do
-			if column.fit or column.hideEmpty then
-				local label = column.label or ""
-				local widest = TextWidth(label) + 2
-				if column.sortable ~= false then
-					widest = math.max(widest, TextWidth("v  " .. label) + 2, TextWidth("^  " .. label) + 2)
+			if fresh and (column.fit or column.hideEmpty) then
+				local widest, hasValue
+				if valid then
+					-- Adding to the kept fit.
+					widest, hasValue = fitted[column.id] or 0, not hidden[column.id]
+				else
+					local label = column.label or ""
+					widest, hasValue = TextWidth(label) + 2, false
+					if column.sortable ~= false then
+						widest = math.max(widest, TextWidth("v  " .. label) + 2, TextWidth("^  " .. label) + 2)
+					end
 				end
-				local hasValue = false
-				for _, row in ipairs(rows) do
+				for _, row in ipairs(fresh) do
 					local text = column.text and column.text(row)
 					local badge = column.badge and column.badge(row)
 					if text ~= nil and text ~= "" then
@@ -938,27 +989,70 @@ function Kit.List(parent, options)
 				fitted[column.id] = column.fit and widest or nil
 				hidden[column.id] = column.hideEmpty and not hasValue
 			end
+			if column.live and column.hideEmpty then
+				local hasValue = false
+				if column.anyValue then
+					hasValue = column.anyValue()
+				else
+					for _, row in ipairs(rows) do
+						local text = column.text and column.text(row)
+						if text ~= nil and text ~= "" then
+							hasValue = true
+							break
+						end
+					end
+				end
+				hidden[column.id] = not hasValue
+			end
 		end
 	end
 
 	-- Where each column sits, worked out from the list's width.
 	local left, width = {}, {}
+	-- The stretchy column takes what is left, but never less than its dragged
+	-- width (or Theme.flexMin). When the others do not fit beside it, the ones
+	-- that can be dragged give room back, rightmost first, down to columnMin;
+	-- fixed and fitted columns keep their width. Dragged widths are kept, so
+	-- a wider window gives them back.
+	local function Elastic(column)
+		return not column.flex and not column.fixed and not (column.fit and fitted[column.id])
+	end
 	local function Layout()
 		local available = (scrollBox:GetWidth() or 0)
-		local fixed, count, padding = 0, 0, options.gap or 8
+		local rigid, elastic, count, padding = 0, 0, 0, options.gap or 8
+		local flexColumn
 		for _, column in ipairs(columns) do
 			if not hidden[column.id] then
 				count = count + 1
-				if not column.flex then
-					fixed = fixed + WidthOf(column)
+				if column.flex then
+					flexColumn = column
+				elseif Elastic(column) then
+					elastic = elastic + WidthOf(column)
+				else
+					rigid = rigid + WidthOf(column)
 				end
 			end
 		end
-		local flex = math.max(60, available - fixed - padding * (count + 1))
+		local room = available - rigid - padding * (count + 1)
+		local wantedFlex = flexColumn and math.max(Theme.flexMin, dragged[flexColumn.id] or 0) or 0
+		-- Too wide: the rightmost columns give room first, each down to
+		-- columnMin, so a column being dragged keeps following the mouse.
+		local over = math.max(0, elastic - math.max(0, room - wantedFlex))
+		local sized, used = {}, 0
+		for index = #columns, 1, -1 do
+			local column = columns[index]
+			if not hidden[column.id] and Elastic(column) then
+				local give = math.min(over, math.max(0, WidthOf(column) - Theme.columnMin))
+				over = over - give
+				sized[column.id] = WidthOf(column) - give
+				used = used + sized[column.id]
+			end
+		end
+		local flex = math.max(Theme.flexMin, room - used)
 		local x = padding
 		for index, column in ipairs(columns) do
 			left[index] = x
-			width[index] = hidden[column.id] and 0 or (column.flex and flex or WidthOf(column))
+			width[index] = hidden[column.id] and 0 or (column.flex and flex or sized[column.id] or WidthOf(column))
 			if not hidden[column.id] then
 				x = x + width[index] + padding
 			end
@@ -988,6 +1082,28 @@ function Kit.List(parent, options)
 		local options = { min = Theme.columnMin, max = Theme.columnMax }
 		-- No grip on a line whose drag would have to resize a fixed column.
 		local resized = (not flexIndex or flexIndex > index) and before or after
+		if before.flex then
+			-- The stretchy column's own edge sets how wide it is; the columns to
+			-- its right make room (see Layout).
+			options.direction = 1
+			options.max = 2000
+			options.get = function()
+				return width[index]
+			end
+			options.set = function(size)
+				dragged[before.id] = math.min(size, math.floor(scrollBox:GetWidth() or size))
+				Repaint()
+			end
+			options.onReset = function()
+				for id in pairs(dragged) do
+					dragged[id] = nil
+				end
+				Repaint()
+			end
+			local grip = Kit.Sizer(header, options)
+			grip:SetHeight(Theme.headerHeight)
+			return grip
+		end
 		if resized.fixed or (resized == after and not before.flex and before.fixed) then
 			return nil
 		end
@@ -1041,6 +1157,13 @@ function Kit.List(parent, options)
 				cell:SetHeight(Theme.headerHeight)
 				cell.label = Kit.Text(cell, "normal", C.accent, column.align)
 				cell.label:SetAllPoints()
+				-- A sortable heading lights up under the mouse, so it reads as a button.
+				if column.sortable ~= false and options.onSort then
+					local glow = cell:CreateTexture(nil, "HIGHLIGHT")
+					glow:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 0.12)
+					glow:SetPoint("TOPLEFT", -3, 0)
+					glow:SetPoint("BOTTOMRIGHT", 3, 0)
+				end
 				cell:SetScript("OnClick", function()
 					if column.sortable ~= false and options.onSort then
 						options.onSort(column.id)
@@ -1111,7 +1234,7 @@ function Kit.List(parent, options)
 		if column.badge then
 			cell.badge = CreateFrame("Frame", nil, row)
 			cell.badge:SetHeight(15)
-			Kit.Fill(cell.badge, C.dealBadge)
+			cell.badgeFill = Kit.Fill(cell.badge, C.dealBadge)
 			cell.badgeText = Kit.Text(cell.badge, "small", C.good, "CENTER")
 			cell.badgeText:SetAllPoints()
 		end
@@ -1135,7 +1258,12 @@ function Kit.List(parent, options)
 			cell.text:SetShown(visible)
 			if cell.icon then
 				cell.icon:ClearAllPoints()
-				cell.icon:SetPoint("LEFT", x, 0)
+				-- An icon-only column (no text) centers its icon under the heading.
+				if not column.text and column.align == "CENTER" then
+					cell.icon:SetPoint("CENTER", row, "LEFT", x + w / 2, 0)
+				else
+					cell.icon:SetPoint("LEFT", x, 0)
+				end
 				-- No icon, no box: an empty square looks like something to click.
 				local art = column.icon(data)
 				cell.icon:SetIcon(art)
@@ -1165,6 +1293,11 @@ function Kit.List(parent, options)
 					cell.badge:SetPoint("RIGHT", row, "LEFT", x + w, 0)
 					cell.badge:SetWidth(w - 4)
 					cell.badgeText:SetText(label)
+					if column.badgeColor then
+						local color = column.badgeColor(data) or C.good
+						cell.badgeText:SetTextColor(color[1], color[2], color[3])
+						cell.badgeFill:SetColorTexture(color[1], color[2], color[3], 0.18)
+					end
 				end
 			end
 		end
@@ -1195,6 +1328,10 @@ function Kit.List(parent, options)
 	view:SetElementInitializer("Frame", PaintRow)
 	ScrollUtil.InitScrollBoxListWithScrollBar(scrollBox, scrollBar, view)
 
+	function list:Refit()
+		fitState = nil
+	end
+
 	function list:SetRows(rows, keepScroll)
 		Fit(rows)
 		Layout()
@@ -1214,11 +1351,23 @@ function Kit.List(parent, options)
 end
 
 -- Sorts rows in place by a value function. Empty values always go last.
+-- Each row's value is read once, not on every comparison: a sort of 20,000
+-- rows compares them some 300,000 times. Rows with the same value keep no
+-- particular order, as before.
 function Kit.SortRows(rows, read, descending)
+	local values = {}
+	local MISSING = values -- stands in for a missing value; no row value is this table
+	for _, row in ipairs(rows) do
+		local value = read(row)
+		if value == nil then
+			value = MISSING
+		end
+		values[row] = value
+	end
 	table.sort(rows, function(a, b)
-		local x, y = read(a), read(b)
-		if x == nil or y == nil then
-			return y == nil and x ~= nil
+		local x, y = values[a], values[b]
+		if x == MISSING or y == MISSING then
+			return y == MISSING and x ~= MISSING
 		end
 		if type(x) ~= type(y) then
 			x, y = tostring(x), tostring(y)

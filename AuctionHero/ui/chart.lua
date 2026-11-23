@@ -50,7 +50,29 @@ local function NiceCeiling(value)
 	return 10 * power
 end
 
+-- The value range a chart's axis covers and the gap between grid lines.
+-- Bars always start at zero: a bar's length is its amount. Lines fitted
+-- (options.fit) start at a tidy figure under the lowest value instead, so a
+-- move from 13c to 60c is not drawn as a climb out of nothing. A line that
+-- really reaches zero still starts at zero.
+local function Scale(lowest, highest, gridLines, fit)
+	if not fit then
+		local top = NiceCeiling(highest)
+		return 0, top / gridLines
+	end
+	local rule = ns.HistoryChartRule
+	local span = math.max(highest - lowest, highest * rule.minSpanShare, 1)
+	local step = NiceCeiling(span / gridLines)
+	local base = math.floor(lowest / step) * step
+	while base + step * gridLines < highest * (1 + rule.headroom) do
+		step = NiceCeiling(step * 1.01)
+		base = math.floor(lowest / step) * step
+	end
+	return base, step
+end
+
 -- options: width, height, gridLines, dates (show the dates under the plot),
+--   fit (lines start near their lowest value instead of at zero),
 --   format(value) for the axis labels,
 --   onHover(point | nil): called as the mouse moves over the plot
 -- Returns the frame, with :Draw(points, marks) where marks is either
@@ -132,13 +154,17 @@ function Chart.New(parent, options)
 			return
 		end
 		local series = marks.lines or { marks.bars }
-		local highest = 1
+		local highest, lowest = 1, math.huge
 		for _, point in ipairs(points) do
 			for _, entry in ipairs(series) do
-				highest = math.max(highest, entry.value(point))
+				local value = entry.value(point)
+				highest = math.max(highest, value)
+				lowest = math.min(lowest, value)
 			end
 		end
-		local top = NiceCeiling(marks.lines and highest * 1.05 or highest)
+		local gridLines = options.gridLines or 4
+		local base, step = Scale(lowest, highest, gridLines, marks.lines and options.fit)
+		local top = base + step * gridLines
 		-- The plot spans the time the points cover, so two scans an hour apart
 		-- fill it as two weeks of scans do. A single point sits in the middle.
 		local first, last = points[1].time, points[#points].time
@@ -151,13 +177,12 @@ function Chart.New(parent, options)
 			return LEFT + (time - first) / span * plotWidth
 		end
 		local function Y(value)
-			return bottom + value / top * plotHeight
+			return bottom + (value - base) / (top - base) * plotHeight
 		end
 
 		-- Quiet grid lines with their values, so the data carries the picture.
-		local gridLines = options.gridLines or 4
 		for index = 0, gridLines do
-			local value = top / gridLines * index
+			local value = base + step * index
 			local y = math.floor(Y(value) + 0.5)
 			local color = index == 0 and { C.muted[1], C.muted[2], C.muted[3], 0.7 } or { C.line[1], C.line[2], C.line[3], 0.6 }
 			Box(color, LEFT, y, plotWidth, 1, "BACKGROUND")

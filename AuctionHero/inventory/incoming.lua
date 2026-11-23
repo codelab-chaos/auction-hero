@@ -44,8 +44,7 @@ local function EquipLoc(itemID)
 end
 
 local function InBags(itemID)
-	local ok, count = pcall(GetItemCount, itemID)
-	return ok and count or 0
+	return ns.ItemCount(itemID)
 end
 
 function Incoming:Add(entry)

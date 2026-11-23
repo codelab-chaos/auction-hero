@@ -9,6 +9,17 @@ ns.Assumptions = {
 	-- Share of a sale the auction house keeps. 5% is the Classic rule, not yet
 	-- confirmed on Forever.
 	auctionCut = 0.05,
+	-- Hours each listing duration lasts, by the game's duration index. The
+	-- Classic lengths; Forever's are not confirmed yet.
+	durationHours = { 2, 8, 24 },
+	-- The game's time left bands, in seconds, for a scan that did not record
+	-- its own (see C_AuctionHouse.GetTimeLeftBandInfo).
+	timeLeftBands = {
+		["1"] = { min = 0, max = 1800 },
+		["2"] = { min = 1800, max = 7200 },
+		["3"] = { min = 7200, max = 43200 },
+		["4"] = { min = 43200, max = 86400 },
+	},
 }
 
 -- ========= Price rules ======================================================
@@ -148,7 +159,9 @@ ns.ConfidenceRule = {
 --   f   first day seen               l   last day seen (days since 1970)
 --   h   the points a price graph is drawn from, newest last, packed into
 --       one string as "time:median:lowest:units:unitsAtLowest" joined by
---       ";" (older points lack the last number). Points are
+--       ";" (older points lack the last number), then, once the scan
+--       journal has watched the item, ":sold:expired:pulled:watched:top"
+--       (likely units to a tenth, minutes, copper). Points are
 --       at least pointHours apart, and the newest scan is always the last
 ns.HistoryRule = {
 	-- How much a new scan moves the usual price. 0.3 means a new scan counts
@@ -170,6 +183,56 @@ ns.HistoryRule = {
 	-- The usual price comes from history once this many scans have seen the
 	-- item. Before that, it is the current scan's median.
 	trustAfterScans = 2,
+	-- A price change is measured between the first and last points that had
+	-- at least this many for sale. Thinner points move on one listing.
+	changeMinUnits = 5,
+}
+
+-- ========= Scan journal and turnover ========================================
+-- Every full scan after the first is kept as the change from the scan before
+-- it, and so is every live check, so any earlier scan can be rebuilt exactly
+-- (market\scan-journal.lua). From each change comes how much of an item went:
+-- auctions that vanished while they still had more time left than passed
+-- between the scans were bought (or taken down by their seller); the rest
+-- may simply have run out (market\turnover.lua).
+ns.JournalRule = {
+	-- How many days of changes are kept, as offered in the options. 0 keeps
+	-- none: the journal is off and no sales are counted.
+	dayChoices = { 0, 1, 3, 7, 14 },
+	defaultDays = 7,
+	-- A scan with fewer auctions than this share of the one before it is
+	-- taken to be cut short: comparing them would count the missing part as
+	-- sold. It is still journaled, but nothing is counted from it.
+	minScanShare = 0.5,
+}
+
+-- How an auction that vanished between two scans is split into what likely
+-- happened to it, each a share of its units (market\turnover.lua):
+--   ran out  the share of its time left band the time between the scans
+--            reaches past (time left is taken as even across the band)
+--   pulled   of the rest, taken down by its seller: rarely, so weighted low,
+--            unless a stack of the same item and size was freshly posted in
+--            the same gap, which is what taking one down to undercut looks like
+--   sold     everything else, and one that ran out with a bid on it
+ns.TurnoverRule = {
+	pullShare = 0.05,
+	repostPullShare = 0.5,
+}
+
+-- How likely an auction is to sell at a price, from how many units sit at or
+-- under it and how fast the item has been selling (market\sell-chance.lua).
+--   within  the most listing lengths the units ahead may take to clear
+--   color   a Theme color name
+ns.SellChanceLevels = {
+	{ id = "likely", label = L.CHANCE_LIKELY, within = 0.5, color = "good" },
+	{ id = "maybe", label = L.CHANCE_MAYBE, within = 1.5, color = "warn" },
+	{ id = "unlikely", label = L.CHANCE_UNLIKELY, color = "bad" },
+}
+ns.SellChanceRule = {
+	-- How far back sales are counted.
+	days = 7,
+	-- Scans must have watched the item for this long before it is judged.
+	minWatchedHours = 2,
 }
 
 -- How long each flow waits on the game before deciding by other evidence or
@@ -184,6 +247,17 @@ ns.AnswerSeconds = {
 -- ========= Live checks ======================================================
 -- A scan ages. Choosing an item to buy asks the auction house for that one
 -- item's listings as they are now, and patches them into the scan.
+-- The mark a Buy list row carries for where its prices came from. A row
+-- straight from the scan carries none. color is a Theme color name.
+--   checking  the auction house is being asked about it now
+--   live      its prices were read live, after the scan
+--   failed    asking did not work, so its prices are still the scan's
+ns.PriceFreshness = {
+	checking = { mark = "...", color = "accent" },
+	live = { mark = "|TInterface\\RaidFrame\\ReadyCheck-Ready:14:14|t", color = "good" },
+	failed = { mark = "!", color = "bad" },
+}
+
 ns.LiveCheckRule = {
 	-- A scan newer than this is trusted as it is, and so is an item checked
 	-- this recently. In minutes.
@@ -219,6 +293,57 @@ ns.BagFilters = {
 	{ id = "gear", label = L.SELL_FILTER_GEAR, tip = L.SELL_FILTER_GEAR_TIP, classes = { [2] = true, [4] = true } },
 	{ id = "trade", label = L.SELL_FILTER_TRADE, tip = L.SELL_FILTER_TRADE_TIP, classes = { [7] = true, [5] = true, [3] = true, [9] = true } },
 	{ id = "use", label = L.SELL_FILTER_USE, tip = L.SELL_FILTER_USE_TIP, classes = { [0] = true, [6] = true } },
+}
+
+-- Recipe book (market\recipe-book.lua): the profession window's events it
+-- reads on, and how long they must be quiet first (the list arrives in parts).
+ns.RecipeBookRule = {
+	events = { "TRADE_SKILL_SHOW", "TRADE_SKILL_LIST_UPDATE", "TRADE_SKILL_DATA_SOURCE_CHANGED" },
+	quietSeconds = 0.5,
+}
+
+-- Skill-up chance by the game's recipe color (Enum.TradeskillRelativeDifficulty),
+-- as the Craft tab names and colors it. sure: every craft gives a point.
+ns.CraftDifficulty = {
+	[0] = { label = L.CRAFT_SKILL_ALWAYS, color = { 1, 0.5, 0.25, 1 }, sure = true },
+	[1] = { label = L.CRAFT_SKILL_LIKELY, color = { 1, 1, 0, 1 } },
+	[2] = { label = L.CRAFT_SKILL_MAYBE, color = { 0.25, 0.75, 0.25, 1 } },
+	[3] = { label = "", color = { 0.5, 0.5, 0.5, 1 } },
+}
+
+-- The Craft tab's verdict on each recipe, the first rule that holds, top
+-- down. A row's fields are listed in market\craft-plan.lua. mark is what the
+-- list shows: a check, a no-sign, or words, which may take the price of a
+-- skill point (%s). label names the verdict in the tooltip.
+--   make     crafting beats selling the raw goods
+--   level    a sure skill-up, at a loss: the loss is the price of the point
+--   maybe    a skill-up is likely or possible, at a loss
+--   unknown  the product or a raw good has no price
+--   sell     selling the raw goods pays more, and no skill-up is left
+local color = ns.Theme.color
+ns.CraftVerdicts = {
+	{ id = "make", label = L.CRAFT_V_MAKE, mark = "|TInterface\\RaidFrame\\ReadyCheck-Ready:16:16|t", color = color.good, when = function(row)
+		return row.vsMats ~= nil and row.vsMats > 0
+	end },
+	{ id = "level", label = L.CRAFT_V_LEVEL, mark = L.CRAFT_V_LEVEL, color = ns.CraftDifficulty[0].color, when = function(row)
+		return row.difficulty == 0
+	end },
+	{ id = "maybe", label = L.CRAFT_V_MAYBE, mark = L.CRAFT_V_MAYBE, color = ns.CraftDifficulty[1].color, when = function(row)
+		return row.difficulty == 1 or row.difficulty == 2
+	end },
+	{ id = "unknown", label = L.CRAFT_V_UNKNOWN, mark = "?", color = color.muted, when = function(row)
+		return row.vsMats == nil
+	end },
+	{ id = "sell", label = L.CRAFT_V_SELL, mark = "\195\152", color = color.muted, when = function()
+		return true
+	end },
+}
+
+-- The Craft tab's quick filters: each shows the recipes with these verdicts.
+ns.CraftFilters = {
+	{ id = "make", label = L.CRAFT_F_MAKE, tip = L.CRAFT_F_MAKE_TIP, verdicts = { make = true } },
+	{ id = "level", label = L.CRAFT_F_LEVEL, tip = L.CRAFT_F_LEVEL_TIP, verdicts = { level = true, maybe = true } },
+	{ id = "sell", label = L.CRAFT_F_SELL, tip = L.CRAFT_F_SELL_TIP, verdicts = { sell = true } },
 }
 
 -- Quick quantities for goods bought by the unit, in whole stacks (a stack is
@@ -280,7 +405,20 @@ ns.ResellDefaultMinProfit = 5000 -- copper
 -- ========= History charts ===================================================
 -- How far back a chart can look, in days, and where it starts.
 ns.HistoryRanges = { 3, 7, 14, 30 }
-ns.HistoryDefaultRange = 30
+ns.HistoryDefaultRange = 7
+
+-- How the price chart's axis fits its lines:
+--   minSpanShare  the axis covers at least this share of the highest price,
+--                 so a 2% wobble is not blown up to fill the chart
+--   headroom      room left above the highest point
+ns.HistoryChartRule = { minSpanShare = 0.25, headroom = 0.05 }
+
+-- The list's filters. A change only counts once both ends of it had enough
+-- for sale (ns.HistoryRule.changeMinUnits), so one stray listing is not a trend.
+ns.HistoryFilters = {
+	{ id = "up", label = L.HISTORY_FILTER_UP, when = function(row) return row.change and row.change > 0 end },
+	{ id = "down", label = L.HISTORY_FILTER_DOWN, when = function(row) return row.change and row.change < 0 end },
+}
 
 -- The two price lines. The colors were checked as a pair on the window's dark
 -- panel for color-blind separation and contrast.

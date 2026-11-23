@@ -110,6 +110,16 @@ ns.ItemTooltip.OnItem(tip)
 checkMatch("what the unsold units cost", line(tip, "You paid"), "1s 0c each  %(3 unsold%)")
 checkMatch("what the last sale paid", line(tip, "You last sold at"), "1s 50c")
 
+-- What the player's own stack is worth, as an estimate.
+check("nothing held, no worth line", line(tip, "Your %d+ is worth"), nil)
+MOCK.bagCounts = { [tonumber(itemID)] = 20 }
+local held = tooltip(name, link)
+ns.ItemTooltip.OnItem(held)
+local worth = line(held, "Your 20 is worth")
+checkTrue("the worth of what you hold", worth ~= nil)
+checkTrue("marked as an estimate", worth and worth:find(": ~") ~= nil)
+MOCK.bagCounts = nil
+
 -- It can be switched off.
 ns.db.switches.itemTooltips = false
 tip = tooltip(name, link)

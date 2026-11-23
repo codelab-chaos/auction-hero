@@ -186,12 +186,12 @@ ns.Window:RegisterTab({ id = "auctions", label = L.TAB_AUCTIONS, order = 4, Crea
 
 ns.Bus:On("CANCEL_CHANGED", function()
 	if list and ns.charDb.tab == "auctions" then
-		ns.Window:RefreshActive()
+		ns.Window:RequestRefresh()
 	end
 end)
 
 ns.Bus:On("OWNED_CHANGED", function()
 	if list and ns.charDb.tab == "auctions" then
-		ns.Window:RefreshActive()
+		ns.Window:RequestRefresh()
 	end
 end)

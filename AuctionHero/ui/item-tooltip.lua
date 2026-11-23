@@ -10,7 +10,7 @@ ns.ItemTooltip = ItemTooltip
 
 -- The lines for an item, as { label, text } pairs. Empty when nothing is known.
 -- rules is the list to work through (ns.TooltipLines when left out). With
--- scansOnly, lines that come from the ledger are left out.
+-- scansOnly, lines that come from the ledger or the player's bags are left out.
 function ItemTooltip:Lines(itemID, name, rules, scansOnly)
 	local key = itemID .. ":" .. name
 	local points = ns.History:Points(key)
@@ -21,12 +21,14 @@ function ItemTooltip:Lines(itemID, name, rules, scansOnly)
 		typicalLow = ns.History:TypicalLow(key),
 		trades = ns.Ledger:Item(name),
 		live = ns.Analysis and ns.Analysis.market and ns.Analysis.market.byKey[key],
+		count = ns.ItemCount(itemID, true) or 0,
 	}
 	local lines = {}
 	for _, rule in ipairs(rules or ns.TooltipLines) do
-		local text = not (scansOnly and rule.trades) and rule.text(info)
+		local text = not (scansOnly and (rule.trades or rule.owned)) and rule.text(info)
 		if text then
-			lines[#lines + 1] = { rule.label, text }
+			local label = type(rule.label) == "function" and rule.label(info) or rule.label
+			lines[#lines + 1] = { label, text }
 		end
 	end
 	return lines

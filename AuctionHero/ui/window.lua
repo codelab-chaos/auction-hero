@@ -29,16 +29,18 @@ function Window:RegisterTab(tab)
 	end)
 end
 
--- The tabs to show right now: the debug ones only while the switch is on.
+-- The tabs to show right now: the debug ones only while the switch is on,
+-- and a tab with a setting (tab.setting) only while that setting is on.
 local function VisibleTabs()
 	local visible = {}
 	for _, tab in ipairs(Window.tabs) do
-		if not tab.debug or ns.IsEnabled("debug") then
+		if (not tab.debug or ns.IsEnabled("debug")) and (not tab.setting or ns.IsEnabled(tab.setting)) then
 			visible[#visible + 1] = tab
 		end
 	end
 	return visible
 end
+Window.VisibleTabs = VisibleTabs
 
 -- The market the trading tabs read, or nil with the reason why there is none.
 function Window:Market()
@@ -52,15 +54,134 @@ function Window:Market()
 	return nil, L.WIN_NO_MARKET
 end
 
+-- ========= Drawing ==========================================================
+-- Data flows one way: the data changes and says so on the Bus, and the view
+-- shown redraws from it. A view only reads. When to draw is decided by
+-- ns.RedrawScheduler (ui\redraw-scheduler.lua): asks merge into one draw, a
+-- slow draw gives notice first and comes at most every so often, a draw
+-- asked for while one runs comes after it, and draws that keep asking for
+-- more are stopped. One more guard: a data message fired while a view draws
+-- is written to the event log once (ns.DrawSafeEvents lists the ones that
+-- are fine), since a view changing data as it draws is how redraws start
+-- feeding themselves.
+local scheduler = ns.RedrawScheduler.New(ns.RedrawRule)
+local refreshNote -- "Refreshing..." beside the gold
+local warned = {}
+local busy = {} -- reason -> true while background work for the view runs
+
+-- Whether drawing a tab now is likely to hold the screen still: its last draw
+-- did, or one has before and data has changed since it last drew (a tab that
+-- keeps its work is only slow when it has to redo it).
+function Window.LikelySlow(id)
+	local timing = Window.timings[id] and Window.timings[id].draw
+	if not timing then
+		return false
+	end
+	return timing.last >= ns.SlowTabMs or (timing.worst >= ns.SlowTabMs and timing.version ~= ns.DataVersion)
+end
+
+-- "Refreshing..." shows while a slow draw waits, or work for the view runs
+-- in the background.
+local function PaintNote()
+	if refreshNote then
+		refreshNote:SetShown(scheduler:ShowsNotice() or next(busy) ~= nil)
+	end
+end
+
+-- Draws the shown tab now.
 function Window:RefreshActive()
 	if not frame or not frame:IsShown() then
 		return
 	end
+	if not scheduler:Begin() then
+		return -- a draw is running: this one comes after it
+	end
 	goldText:SetText(L.WIN_YOUR_GOLD:format(ns.Money(GetMoney())))
 	local tab = built[ns.charDb.tab]
 	if tab then
-		tab.Refresh()
+		Window.Run(ns.charDb.tab, tab.Refresh)
 	end
+	if scheduler:Finish(GetTime()) == "loop" then
+		ns.EventLog:Note("redraw loop stopped", ns.charDb.tab)
+	end
+	PaintNote()
+end
+
+-- Asks for the shown tab to be drawn on a coming frame (see the scheduler).
+function Window:RequestRefresh()
+	if not frame or not frame:IsShown() then
+		return
+	end
+	scheduler:Request(GetTime(), Window.LikelySlow(ns.charDb.tab))
+	PaintNote()
+end
+
+-- Work done in the background for what the player is looking at (a tab
+-- recounting its filters, say) shows "Refreshing..." until it is done.
+function Window:SetBusy(reason, on)
+	busy[reason] = on or nil
+	PaintNote()
+end
+
+-- Whether a draw is waiting for a coming frame.
+function Window:IsRefreshPending()
+	return scheduler:IsPending()
+end
+
+local drawDriver = CreateFrame("Frame")
+drawDriver:SetScript("OnUpdate", function()
+	if scheduler:Frame(GetTime()) then
+		Window:RefreshActive()
+	end
+end)
+
+Bus.watch = function(message)
+	if scheduler.drawing and ns.DataEvents[message] and not ns.DrawSafeEvents[message] and not warned[message] then
+		warned[message] = true
+		ns.EventLog:Note("data changed while drawing", ns.charDb.tab, message, debugstack and debugstack(3, 4, 0) or "")
+	end
+end
+
+-- Runs a tab's drawing. An error is written to the log and said once in
+-- chat, with where it happened, instead of leaving a blank tab and no word
+-- (the game hides Lua errors unless scriptErrors is on).
+--
+-- Each run is timed, per tab and phase ("build" the first time it is made,
+-- "draw" each refresh), as Window.timings[id][phase] = { last, worst, runs }
+-- in milliseconds. A run over ns.SlowTabMs is written to the event log, since
+-- the game draws nothing while it lasts (/ah timings lists them).
+local told = {}
+Window.timings = {}
+function Window.Run(id, fn, ...)
+	return Window.Timed(id, "draw", fn, ...)
+end
+function Window.Timed(id, phase, fn, ...)
+	local started = debugprofilestop()
+	local ok, err = Window.Guarded(id, fn, ...)
+	local spent = debugprofilestop() - started
+	local byPhase = Window.timings[id] or {}
+	Window.timings[id] = byPhase
+	local timing = byPhase[phase] or { worst = 0, runs = 0 }
+	byPhase[phase] = timing
+	timing.last, timing.worst, timing.runs = spent, math.max(timing.worst, spent), timing.runs + 1
+	timing.version = ns.DataVersion -- the data it was drawn from
+	if spent >= ns.SlowTabMs then
+		ns.EventLog:Note("slow tab", id, phase, math.floor(spent))
+	end
+	return ok, err
+end
+function Window.Guarded(id, fn, ...)
+	local ok, err = xpcall(fn, function(message)
+		return tostring(message) .. "\n" .. (debugstack and debugstack(2, 6, 0) or "")
+	end, ...)
+	if not ok then
+		ns.EventLog:Note("tab error", id, err)
+		if not told[id] then
+			told[id] = true
+			ns.Print(L.WIN_TAB_ERROR:format(id, (tostring(err):match("^[^\n]*"))))
+		end
+	end
+	return ok
 end
 
 -- Whether a tab can be opened right now: not while a scan runs, unless it
@@ -147,12 +268,19 @@ local function ShowTab(id)
 	if not built[chosen.id] then
 		local holder = CreateFrame("Frame", nil, body)
 		holder:SetAllPoints()
-		local tab = chosen.Create(holder)
-		tab.frame = holder
-		built[chosen.id] = tab
+		Window.Timed(chosen.id, "build", function()
+			local tab = chosen.Create(holder)
+			tab.frame = holder
+			built[chosen.id] = tab
+		end)
 	end
 	LockTabs()
-	Window:RefreshActive()
+	-- A tab likely to be slow shows "Refreshing..." first.
+	if Window.LikelySlow(chosen.id) then
+		Window:RequestRefresh()
+	else
+		Window:RefreshActive()
+	end
 	ns.Bus:Fire("TAB_SHOWN", chosen.id)
 end
 
@@ -362,6 +490,10 @@ local function Build()
 
 	goldText = Kit.Text(title, "normal", C.muted, "RIGHT")
 	goldText:SetPoint("RIGHT", optionsButton, "LEFT", -10, 0)
+	refreshNote = Kit.Text(title, "small", C.accent, "RIGHT")
+	refreshNote:SetPoint("RIGHT", goldText, "LEFT", -10, 0)
+	refreshNote:SetText(L.WIN_REFRESHING)
+	refreshNote:Hide()
 
 	scanButton = Kit.Button(title, {
 		text = L.WIN_SCAN,
@@ -473,7 +605,7 @@ local function Build()
 	end)
 	frame:RegisterEvent("PLAYER_MONEY")
 	frame:SetScript("OnEvent", function()
-		Window:RefreshActive()
+		Window:RequestRefresh()
 	end)
 
 	frame:Hide()
@@ -518,7 +650,7 @@ end)
 
 for _, message in ipairs({ "ANALYSIS_READY", "HISTORY_CHANGED", "BAGS_CHANGED" }) do
 	Bus:On(message, function()
-		Window:RefreshActive()
+		Window:RequestRefresh()
 	end)
 end
 
@@ -533,6 +665,11 @@ end)
 Bus:On("SETTING_CHANGED", function(id)
 	if id == "debug" then
 		Window:RebuildTabs()
+	end
+	for _, tab in ipairs(Window.tabs) do
+		if tab.setting == id then
+			Window:RebuildTabs()
+		end
 	end
 end)
 

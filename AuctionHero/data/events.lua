@@ -102,3 +102,38 @@ ns.LogLimit = 600
 -- The Log view redraws at most this often. A scan logs an event per item,
 -- thousands a second, and redrawing on each one froze the game.
 ns.LogRedrawSeconds = 0.5
+
+-- Messages that say data a view shows has changed, each with the kind of
+-- data it is about. Each moves that kind's version and ns.DataVersion
+-- (core.lua), so a view that reads that kind drops what it kept from before.
+-- Left out on purpose: messages only one small view reads, which keeps
+-- nothing (the Progress tab's counts and coins), and LIVE_CHECK_CHANGED,
+-- which only moves one row's live mark (a column marked live, read on every
+-- draw); a check that changes prices follows it with MARKET_PATCHED.
+-- "patch" is its own kind: a live check replaces one item's rows with new
+-- ones and leaves every other row as it was, so a list that reads market
+-- data still keeps its fit for the rows it already measured.
+ns.DataEvents = {
+	SNAPSHOT_CHANGED = "market",
+	SNAPSHOT_PATCHED = "patch",
+	ANALYSIS_READY = "market",
+	MARKET_PATCHED = "patch",
+	HISTORY_CHANGED = "history",
+	GEAR_CHANGED = "gear",
+	BAGS_CHANGED = "bags",
+	INCOMING_CHANGED = "incoming",
+	OWNED_CHANGED = "owned",
+	CANCEL_CHANGED = "owned",
+	LEDGER_CHANGED = "ledger",
+	POSTING_CHANGED = "trade",
+	BUYING_CHANGED = "trade",
+	RECIPE_BOOK_CHANGED = "recipes",
+	SETTING_CHANGED = "settings",
+}
+
+-- Messages a view may fire while it draws without it being a mistake: ones
+-- about the view itself, not the data under it.
+ns.DrawSafeEvents = {
+	TAB_SHOWN = true,
+	LOG_ADDED = true,
+}

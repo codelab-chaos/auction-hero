@@ -7,18 +7,18 @@ checkTrue("the scan became a market", ns.Analysis and ns.Analysis.market)
 
 local function tabs()
 	local ids = {}
-	for _, tab in ipairs(ns.Window.tabs) do
-		if not tab.debug or ns.IsEnabled("debug") then
-			ids[#ids + 1] = tab.id
-		end
+	for _, tab in ipairs(ns.Window.VisibleTabs()) do
+		ids[#ids + 1] = tab.id
 	end
 	return table.concat(ids, ",")
 end
-check("tabs without debug", tabs(), "buy,sell,resell,auctions,ledger,history,progress")
+check("tabs without debug, Resell hidden by default", tabs(), "buy,sell,craft,auctions,ledger,history,progress")
+ns.SetEnabled("showResell", true)
+check("Resell shows once its option is on", tabs(), "buy,sell,resell,craft,auctions,ledger,history,progress")
 SlashCmdList.AUCTIONHERO("debug on")
-check("tabs with debug", tabs(), "buy,sell,resell,auctions,ledger,history,progress,debug")
+check("tabs with debug", tabs(), "buy,sell,resell,craft,auctions,ledger,history,progress,debug")
 
-local all = { "buy", "sell", "auctions", "resell", "history", "debug", "progress" }
+local all = { "buy", "sell", "auctions", "resell", "craft", "history", "debug", "progress" }
 for _, id in ipairs(all) do
 	ns.charDb.tab = id
 	ns.Window:Toggle()

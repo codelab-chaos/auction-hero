@@ -28,6 +28,7 @@ scrollBox:SetWidth(420)
 ns.charDb.columnWidths.buy.units = 400
 ns.charDb.columnWidths.buy.min = 400
 ns.charDb.columnWidths.buy.deal = 400
+ns.DataChanged() -- the prices above were changed by hand
 ns.Window:RefreshActive()
 
 check("an empty Gain column disappears", gain:IsShown(), false)
@@ -67,16 +68,18 @@ readable()
 
 -- Gain returns when there is an upgrade, then gives its space back afterward.
 tunic.displayGain = 123.4
+ns.DataChanged() -- the prices above were changed by hand
 ns.Window:RefreshActive()
 check("Gain returns for an upgrade", gain:IsShown(), true)
 check("it takes only the space it needs", name.w, nameWidth - gain.w - 6)
 readable()
 tunic.displayGain = nil
+ns.DataChanged() -- the prices above were changed by hand
 ns.Window:RefreshActive()
 check("Gain hides again", gain:IsShown(), false)
 check("names get their room back", name.w, nameWidth)
 for _, row in ipairs(scrollBox.rowsDrawn) do
-	check("reused rows hide the old gain text", row.cells[5].text:IsShown(), false)
+	check("reused rows hide the old gain text", row.cells[6].text:IsShown(), false)
 end
 
 -- Resizing keeps headers and live row cells aligned.
@@ -84,6 +87,6 @@ scrollBox:SetWidth(580)
 panel.scripts.OnSizeChanged(panel, 580)
 check("only the name grows with the window", name.w - nameWidth, 160)
 for _, row in ipairs(scrollBox.rowsDrawn) do
-	check("row prices follow their heading", row.cells[4].text.lastPoint[2], price.lastPoint[2])
+	check("row prices follow their heading", row.cells[5].text.lastPoint[2], price.lastPoint[2])
 end
 readable()

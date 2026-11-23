@@ -72,6 +72,7 @@ local function history(price, stamp)
 end
 store[product.key] = history(18000, now - 86400)
 market.byKey[product.key], market.items = nil, { ore, cloth }
+market.byItemID = nil -- changed by hand: the item id index is built again
 quote = ns.Crafting:Recipe(123)
 check("an absent output can use its last observed price", quote.quote.price, 18000)
 check("history is always an estimate", quote.quote.estimated, true)

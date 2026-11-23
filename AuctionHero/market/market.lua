@@ -158,6 +158,21 @@ local function AddRow(items, byKey, row, at, get, catalog)
 	end
 end
 
+-- Items a live check patched into the saved scan keep when they were checked,
+-- so a reload still knows those prices are newer than the scan.
+local function MarkChecked(items, patched)
+	if not patched or #patched == 0 then
+		return
+	end
+	for _, item in ipairs(items) do
+		for _, entry in ipairs(patched) do
+			if entry.id == item.itemID and (not entry.name or entry.name == item.name) then
+				item.checkedAt = math.max(item.checkedAt or 0, entry.time)
+			end
+		end
+	end
+end
+
 -- Returns { items = {...}, byKey = {...} }, or nil when the snapshot's source
 -- has no individual auctions to build ladders from.
 function Market:Build(snapshot)
@@ -181,7 +196,26 @@ function Market:Build(snapshot)
 			ns.Breathe()
 		end
 	end
+	MarkChecked(items, snapshot.meta.patched)
 	return { items = items, byKey = byKey, time = snapshot.meta.time, place = snapshot.meta.place, listings = ns.AuctionCount(snapshot), stale = snapshot.meta.stale }
+end
+
+-- A market's items for one item id (every variant of it), from an index built
+-- the first time it is asked and dropped when the market is patched.
+function Market.WithItemID(market, itemID)
+	if not market.byItemID then
+		local index = {}
+		for _, item in ipairs(market.items) do
+			local list = index[item.itemID]
+			if not list then
+				list = {}
+				index[item.itemID] = list
+			end
+			list[#list + 1] = item
+		end
+		market.byItemID = index
+	end
+	return market.byItemID[itemID] or {}
 end
 
 -- Replaces everything a built market holds for one item id with what these
@@ -195,6 +229,7 @@ function Market:Patch(market, snapshot, itemID, rows, time, name)
 	if not at then
 		return {}
 	end
+	market.byItemID = nil -- the index is built again when next asked
 	local kept = {}
 	for _, item in ipairs(market.items) do
 		if item.itemID == itemID and (not name or item.name == name) then

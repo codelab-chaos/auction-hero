@@ -63,6 +63,8 @@ end
 --   profit           earned, less cost, less fees
 --   held, heldCost   units bought and not yet sold, at what they cost
 --   lastSale         what each unit of the newest sale paid out
+--   last             when the item was last traded
+--   soldUnit         the average price each unit sold at, before the cut
 function Ledger:Summary()
 	-- Oldest first. Trades in the same second keep the order they were written in.
 	local ordered, written = {}, {}
@@ -86,6 +88,7 @@ function Ledger:Summary()
 			rows[#rows + 1] = row
 		end
 		row.itemID = row.itemID or entry.itemID
+		row.last = entry.time -- oldest first, so the newest is kept
 		if entry.kind == "buy" then
 			row.bought = row.bought + entry.quantity
 			row.spent = row.spent + entry.amount
@@ -97,6 +100,7 @@ function Ledger:Summary()
 			row.earned = row.earned + entry.amount
 			row.cost = row.cost + Consume(row.lots, entry.quantity)
 			row.lastSale = math.floor(entry.amount / entry.quantity)
+			row.gross = (row.gross or 0) + (entry.price or entry.amount)
 		end
 	end
 
@@ -109,11 +113,34 @@ function Ledger:Summary()
 		row.cost = math.floor(row.cost + 0.5)
 		row.heldCost = math.floor(row.heldCost + 0.5)
 		row.profit = row.earned - row.cost - row.fees
+		row.soldUnit = row.sold > 0 and math.floor(row.gross / row.sold + 0.5) or nil
 		for _, field in ipairs({ "bought", "spent", "sold", "earned", "fees", "cost", "profit", "held", "heldCost" }) do
 			totals[field] = totals[field] + row[field]
 		end
 	end
 	return rows, totals
+end
+
+-- What sales paid out each day for the last `days` days, oldest first, one
+-- point per day (none sold is a point at 0): { time (the day's noon), earned,
+-- sales, units }.
+function Ledger:Daily(days)
+	local today = math.floor(GetServerTime() / 86400)
+	local first = today - days + 1
+	local points = {}
+	for day = first, today do
+		points[#points + 1] = { time = day * 86400 + 43200, earned = 0, sales = 0, units = 0 }
+	end
+	for _, entry in ipairs(self:Entries()) do
+		local day = math.floor(entry.time / 86400)
+		if entry.kind == "sale" and day >= first and day <= today then
+			local point = points[day - first + 1]
+			point.earned = point.earned + entry.amount
+			point.sales = point.sales + 1
+			point.units = point.units + entry.quantity
+		end
+	end
+	return points
 end
 
 -- One item's row of the summary, by name, or nil when it was never traded.

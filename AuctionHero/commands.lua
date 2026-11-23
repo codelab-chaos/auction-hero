@@ -41,6 +41,25 @@ local commands = {
 	cancel = function()
 		ns.Downloader:Cancel()
 	end,
+	-- How long each tab took to build and draw: the last time and the worst.
+	timings = function()
+		local ids = {}
+		for id in pairs(ns.Window.timings) do
+			ids[#ids + 1] = id
+		end
+		table.sort(ids)
+		if #ids == 0 then
+			ns.Print(L.CMD_TIMINGS_NONE)
+		end
+		for _, id in ipairs(ids) do
+			for _, phase in ipairs({ "build", "draw" }) do
+				local timing = ns.Window.timings[id][phase]
+				if timing then
+					ns.Print(L.CMD_TIMINGS_LINE:format(id, phase, timing.last, timing.worst, timing.runs))
+				end
+			end
+		end
+	end,
 	-- Shows or hides the Debug tab: /ah debug, or /ah debug on|off.
 	-- Marks this account as a developer's: the options panel then always lists
 	-- the Debug section, so the Debug tab can be switched on and off from there.
@@ -113,6 +132,23 @@ local commands = {
 	end,
 	options = function()
 		ns.Options:Open()
+	end,
+	-- Reads the open profession window into the recipe book now and says how
+	-- it went, then lists what the book holds.
+	recipes = function()
+		local done, detail, extra = ns.RecipeBook:SafeRead()
+		if done then
+			ns.Print(L.CMD_RECIPES_READ:format(detail, extra))
+		else
+			ns.Print(L.CMD_RECIPES_NOT_READ:format(tostring(detail), ns.EventLog.Describe(extra, 0)))
+		end
+		for name, book in pairs(ns.RecipeBook:All()) do
+			local count = 0
+			for _ in pairs(book.recipes) do
+				count = count + 1
+			end
+			ns.Print(L.CMD_RECIPES_BOOK:format(name, count))
+		end
 	end,
 	help = PrintHelp,
 }

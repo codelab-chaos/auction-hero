@@ -67,6 +67,7 @@ checkTrue("at an unchanged price the button says it needs another press", Button
 checkTrue("and says nothing of confirming", ButtonNamed("Confirm: buy 1 for " .. strip(ns.PlainMoney(wantedUnit))) == nil)
 checkMatch("its note says the price is unchanged", ns.L.BUY_CHECKED_SAME, "unchanged")
 ns.Buying:Cancel()
+Tick(1) -- the panel redraws on the next frame
 
 -- An item that cannot stack is one per auction, whatever count the live
 -- search reports, so its price is never split into cheap units.
@@ -77,6 +78,7 @@ Tick(20)
 check("a junk count is held to one", ns.Buying.state.quantity, 1)
 check("and the price is the auction's", ns.Buying.state.total, wantedUnit)
 ns.Buying:Cancel()
+Tick(1) -- the panel redraws on the next frame
 MOCK.liveCount = nil
 
 -- If nothing is at that price any more, it says so and names the cheapest.
@@ -114,6 +116,7 @@ Tick(20)
 check("the whole stack is offered", ns.Buying.state.quantity, 94)
 checkTrue("the confirm names it a stack", ButtonNamed("Confirm: buy a stack of 94 for " .. strip(ns.PlainMoney(clothUnit * 94)) .. " total") ~= nil)
 ns.Buying:Cancel()
+Tick(1) -- the panel redraws on the next frame
 MOCK.livePrice, MOCK.liveQuantity, MOCK.liveNames = nil, nil, nil
 click(itemRow(cloth.key))
 click(itemRow(tunic.key))
@@ -162,6 +165,7 @@ checkTrue("and says it can be checked again", shownText("Press Buy to check it a
 checkTrue("with the Buy button back", ButtonNamed("Buy 2 for " .. strip(ns.PlainMoney(two.cost)) .. " total") ~= nil)
 MOCK.quoteLeft, MOCK.quoteUnit, MONEY = nil, nil, savedMoney
 ns.Buying:Cancel()
+Tick(1) -- the panel redraws on the next frame
 
 -- A purchase that finds nothing listed by the item's name takes it off the
 -- list, with nothing spent and nothing more asked.

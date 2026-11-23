@@ -29,6 +29,7 @@ ns.Theme = {
 	sizerHoverAlpha = 0.8,
 	columnMin = 28, -- how narrow and how wide a list column can be dragged
 	columnMax = 420,
+	flexMin = 60, -- the narrowest a list's stretchy (name) column gets before others shrink
 	panelGrow = 260, -- how much wider than designed a side panel can be dragged
 	footerHeight = 22, -- the status bar under the tabs' body, added to the height
 	titleHeight = 30,
@@ -126,3 +127,24 @@ ns.Theme = {
 		good = Hex("#40c060"),
 	},
 }
+
+-- A tab that takes this long to build or draw, in milliseconds, is written
+-- to the event log: the game draws nothing while it runs, so it is felt as a
+-- hitch. About three frames at 60 a second.
+ns.SlowTabMs = 50
+
+-- When the shown tab is drawn (ui\redraw-scheduler.lua):
+--   noticeFrames    frames a slow draw waits, so "Refreshing..." is on screen
+--                   while it holds the screen still
+--   slowGapSeconds  a slow draw comes at most this often; changes in between
+--                   are drawn together at the end of the gap
+--   loopLimit       draws in a row that each ask for another while drawing
+--                   before asking stops: a view changing the data it draws
+--                   from would otherwise redraw forever
+ns.RedrawRule = { noticeFrames = 1, slowGapSeconds = 0.25, loopLimit = 3 }
+
+-- When a list's rows change but the data they read has not (rows replaced in
+-- place, such as an item a live search patched), only the new rows are
+-- measured, up to this many, or this share of the list. More than that, and
+-- every row is measured again.
+ns.ListFitRule = { fewRows = 200, fewShare = 0.1 }

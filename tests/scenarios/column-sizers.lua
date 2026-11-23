@@ -49,9 +49,26 @@ end
 -- A column cannot be squeezed under its minimum, however far the drag goes.
 drag(grips[#grips], -2000)
 drag(grips[1], 2000)
-for _, width in pairs(saved) do
-	checkTrue("still not under the minimum", width >= ns.Theme.columnMin and width <= ns.Theme.columnMax)
+for id, width in pairs(saved) do
+	if id ~= "name" then
+		checkTrue("still not under the minimum", width >= ns.Theme.columnMin and width <= ns.Theme.columnMax)
+	end
 end
+
+-- The name column's own edge widens it, the columns to its right making room,
+-- and nothing runs past the list's right edge.
+local list = SCROLLBOX
+checkTrue("the name column was dragged wide", (saved.name or 0) > 200)
+local rightmost = grips[#grips]
+checkTrue("the columns still fit inside the list", rightmost.lastPoint[2] <= list:GetWidth())
+
+-- A double click on the name column's edge puts every width back.
+local now = 100
+GetTime = function() return now end
+grips[1].scripts.OnMouseDown(grips[1])
+now = now + 0.2
+grips[1].scripts.OnMouseDown(grips[1])
+check("a double click forgets the dragged widths", next(saved), nil)
 
 -- The Buy list's number columns are fixed: only the item's name stretches.
 ShowTab("buy")

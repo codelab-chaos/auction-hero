@@ -51,6 +51,7 @@ end
 checkTrue("a stackable market counts fewer than its units", ns.Resell.MarketSize(ore) < ore.units)
 
 -- The plan's quantity buttons go dim when they cannot change the number.
+ns.SetEnabled("showResell", true)
 ShowTab("resell")
 local row
 for _, frame in ipairs(Frames(function(frame)
