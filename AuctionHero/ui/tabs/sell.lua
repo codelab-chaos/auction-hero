@@ -11,6 +11,9 @@ local Theme = ns.Theme
 local C = Theme.color
 
 local LADDER_ROWS = 9
+local HISTORY_LINES = 12 -- lines of price history under the competition, at most
+local HISTORY_ROW_HEIGHT = 16
+local HISTORY_GAP = 12
 local BAG_COLUMNS = 4
 local BAG_TOP = 56 -- below the title and the filters
 local LABEL_WIDTH = 86 -- the name column of the form's control rows
@@ -32,7 +35,7 @@ local bagTiles = {}
 local gridEmpty -- says so when a filter leaves the grid empty
 local parts, ladderRows = {}, {}
 local stack
-local Refresh, PaintForm, PaintLadder, PaintSummary, PaintPostButton, PressPost, ChanceTip
+local Refresh, PaintForm, PaintLadder, PaintHistory, PaintSummary, PaintPostButton, PressPost, ChanceTip
 
 -- ========= What is being sold ===============================================
 local function Owned()
@@ -72,13 +75,29 @@ local function IsCommodity()
 	return (listed or owned) ~= nil and ns.Orders.IsCommodity(listed or owned)
 end
 
+-- What past scans say the chosen item goes for (History:PastPrice), when
+-- nobody is selling it in the scan now loaded. Nil when it is listed now or
+-- no scan ever saw it.
+local function Past()
+	if not state.key or Listed() or not ns.Window:Market() then
+		return nil
+	end
+	return ns.History:PastPrice(state.key)
+end
+
 local function UnitPrice()
 	if state.customUnit then
 		return state.customUnit
 	end
 	local listed = Listed()
 	if not listed then
-		return nil
+		-- Nobody selling it now: the price rules have nothing to read, so
+		-- past scans go by (the warning under the form says so).
+		local past = Past()
+		if past and not IsCommodity() then
+			return math.max(past.price, ns.MinItemPrice)
+		end
+		return past and past.price
 	end
 	for _, rule in ipairs(ns.PriceRules) do
 		if rule.id == state.ruleId then
@@ -642,7 +661,12 @@ PaintSummary = function()
 	local bid = StartingBid()
 	local bidTooHigh = not commodity and type.buyout and type.bids and bid ~= nil and bid >= unit
 	local tooCheap = TooCheap()
-	parts.warning:SetShown(bidTooHigh or tooCheap)
+	local past = not state.customUnit and Past()
+	parts.warning:SetShown(bidTooHigh or tooCheap or past ~= nil)
+	if past then
+		local when = ns.Ago(math.max(0, GetServerTime() - past.time))
+		parts.warning:SetBody((past.typical and L.SELL_PAST_TYPICAL or L.SELL_PAST_LAST):format(when), C.muted)
+	end
 	if tooCheap then
 		parts.warning:SetBody(L.SELL_TOO_CHEAP:format(ns.Money(ns.MinItemPrice)), C.bad)
 	elseif bidTooHigh then
@@ -794,14 +818,54 @@ PaintLadder = function()
 	parts.ladderNote:ClearAllPoints()
 	parts.ladderNote:SetPoint("TOPLEFT", ladder, "TOPLEFT", 8, -(y + 6))
 	parts.ladderNote:SetPoint("TOPRIGHT", ladder, "TOPRIGHT", -8, -(y + 6))
-	parts.ladderNote:SetBody(note)
+	y = y + 6 + parts.ladderNote:SetBody(note)
 	parts.ladderNote:Show()
 	if listed then
 		parts.ladderMarket:ClearAllPoints()
 		parts.ladderMarket:SetPoint("TOPLEFT", parts.ladderNote, "BOTTOMLEFT", 0, -4)
 		parts.ladderMarket:SetPoint("TOPRIGHT", parts.ladderNote, "BOTTOMRIGHT", 0, -4)
-		parts.ladderMarket:SetBody(L.SELL_MARKET:format(ns.Comma(listed.listings), ns.Money(ns.History:Usual(listed))))
+		y = y + 4 + parts.ladderMarket:SetBody(L.SELL_MARKET:format(ns.Comma(listed.listings), ns.Money(ns.History:Usual(listed))))
 		parts.ladderMarket:Show()
+	end
+	PaintHistory(owned, y + HISTORY_GAP)
+end
+
+-- Under the competition: what past scans and the ledger know about the item,
+-- the same lines its tooltip and the Buy tab show (ns.TooltipLines and
+-- ns.ItemStatLines), so its price history and the player's own sales are
+-- there to price by. As many lines as fit above the bottom of the panel.
+PaintHistory = function(owned, y)
+	for _, row in ipairs(parts.history) do
+		row:Hide()
+	end
+	parts.historyHead:Hide()
+	local itemID, name = owned.key:match("^(%d+):(.+)$")
+	if not itemID then
+		return
+	end
+	local lines = {}
+	for _, rules in ipairs({ ns.TooltipLines, ns.ItemStatLines }) do
+		for _, line in ipairs(ns.ItemTooltip:Lines(tonumber(itemID), name, rules)) do
+			lines[#lines + 1] = line
+		end
+	end
+	if #lines == 0 then
+		return
+	end
+	local function Place(row)
+		row:ClearAllPoints()
+		row:SetPoint("TOPLEFT", ladder, "TOPLEFT", 8, -y)
+		row:SetPoint("TOPRIGHT", ladder, "TOPRIGHT", -8, -y)
+		row:Show()
+		y = y + HISTORY_ROW_HEIGHT
+	end
+	Place(parts.historyHead)
+	y = y + 4
+	local room = math.floor(((ladder:GetHeight() or 0) - y - 8) / HISTORY_ROW_HEIGHT)
+	for index = 1, math.min(#lines, #parts.history, math.max(0, room)) do
+		local row = parts.history[index]
+		Place(row)
+		row:Set(lines[index][1], lines[index][2])
 	end
 end
 
@@ -879,6 +943,13 @@ local function Create(parent)
 	parts.ladderNote:SetWidth(Theme.sell.competition - 16)
 	parts.ladderMarket = Kit.Note(ladder, "small", C.muted)
 	parts.ladderMarket:SetWidth(Theme.sell.competition - 16)
+	parts.historyHead = Kit.Pair(ladder, "normal", C.accent)
+	parts.historyHead:Set(L.STAT_HEADING, "")
+	parts.history = {}
+	for index = 1, HISTORY_LINES do
+		parts.history[index] = Kit.Pair(ladder, "small")
+		parts.history[index]:SetHeight(HISTORY_ROW_HEIGHT)
+	end
 
 	form = Kit.Panel(parent)
 	form:SetPoint("TOPLEFT", bags, "TOPRIGHT", pad, 0)

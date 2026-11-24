@@ -4,6 +4,16 @@ Features and fixes shipped in each release. Copy a version's section into
 CurseForge's changelog field using Markdown formatting, and into the GitHub
 release notes.
 
+## 0.1.9 - Unreleased
+
+### Fixed
+
+- **Sell tab:** an item nobody is selling right now gets its price from past scans, and says so, instead of "no price to go by".
+
+### Improved
+
+- **Sell tab:** the right panel shows the item's price history and your past sales under the listings, like the Buy tab.
+
 ## 0.1.8 - 2026-11-23
 
 ### Fixed

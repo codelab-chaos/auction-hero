@@ -189,6 +189,20 @@ function History:TypicalLow(key)
 	return lows[math.ceil(#lows / 2)]
 end
 
+-- What past scans say an item goes for, for when nobody is selling it now:
+-- its typical lowest price when enough points are in, else the lowest the
+-- newest point saw. The same order the tooltip's "worth" line uses, so the
+-- two agree. Returns { price, typical, time (of the newest point) } or nil.
+function History:PastPrice(key)
+	local points = self:Points(key)
+	local newest = points[#points]
+	if not newest then
+		return nil
+	end
+	local typical = self:TypicalLow(key)
+	return { price = typical or newest.low, typical = typical ~= nil, time = newest.time }
+end
+
 -- The points inside the last `days` days, counted back from the newest point.
 function History:InRange(points, days)
 	local newest = points[#points]
