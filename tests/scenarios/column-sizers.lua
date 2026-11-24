@@ -1,24 +1,43 @@
--- Dragging the line between two list columns moves that line and no other.
+-- List columns: dragging a line moves that line and no other, wherever the
+-- stretchy column is; near the width its text needs, a column snaps to it; a
+-- double click fits it to its text; a right click on a heading resets all.
+-- Widths kept by the earlier way of sizing are dropped once.
+AuctionHeroCharDB = { columnWidths = { auctions = { name = 2000, buyout = 400 } } }
 local ns = Boot()
 OpenAuctionHouse()
 Scan()
 ShowTab("auctions")
 
-local grips = Frames(function(frame)
-	return frame.scripts.OnMouseDown and frame.scripts.OnEnter and frame.w == ns.Theme.sizerWidth and frame.h ~= nil
+local saved = ns.charDb.columnWidths.auctions
+check("widths from the earlier way are dropped", next(saved), nil)
+
+local function Grips()
+	local grips = Frames(function(frame)
+		return frame.scripts.OnMouseDown and frame.scripts.OnEnter and frame.w == ns.Theme.sizerWidth and frame.h ~= nil
+	end)
+	table.sort(grips, function(a, b)
+		return a.lastPoint[2] < b.lastPoint[2]
+	end)
+	return grips
+end
+local grips = Grips()
+local header = grips[1]:GetParent()
+local headings = Frames(function(frame)
+	return frame.label ~= nil and frame.scripts.OnClick ~= nil and frame:GetParent() == header and frame:IsShown()
 end)
-table.sort(grips, function(a, b)
-	return a.lastPoint[2] < b.lastPoint[2]
-end)
-checkTrue("there is a grip between the columns", #grips >= 3)
-local function positions()
+checkTrue("a grip on every line between columns", #grips == #headings - 1 and #grips >= 4)
+
+local function Positions()
 	local at = {}
 	for index, grip in ipairs(grips) do
 		at[index] = grip.lastPoint[2]
 	end
 	return at
 end
-local function drag(grip, pixels)
+local now = 100
+GetTime = function() return now end
+local function Drag(grip, pixels)
+	now = now + 1 -- no double click
 	CURSOR_X = 500
 	MOUSE_DOWN = true
 	grip.scripts.OnMouseDown(grip)
@@ -28,55 +47,63 @@ local function drag(grip, pixels)
 	grip.scripts.OnUpdate(grip)
 end
 
-for index = 2, 3 do
-	local before = positions()
-	drag(grips[index], 20)
-	local after = positions()
-	check("separator " .. index .. " follows the mouse", after[index] - before[index], 20)
+-- Every line, the name's own included, follows the mouse; no other moves.
+-- (Snapping is tested on its own below.)
+local snap = ns.Theme.columnSnap
+ns.Theme.columnSnap = 0
+for index = 1, #grips - 1 do
+	local before = Positions()
+	Drag(grips[index], 4) -- within what the squeezed 400 pixel list has to give
+	local after = Positions()
+	check("line " .. index .. " follows the mouse", after[index] - before[index], 4)
 	for other = 1, #grips do
 		if other ~= index then
-			check("separator " .. other .. " stays put", after[other], before[other])
+			check("line " .. other .. " stays put while " .. index .. " moves", after[other], before[other])
 		end
 	end
 end
+ns.Theme.columnSnap = snap
+checkTrue("the widths set are remembered for the character", next(saved) ~= nil)
 
-local saved = ns.charDb.columnWidths.auctions
-checkTrue("dragged widths are remembered for the character", next(saved) ~= nil)
+-- However far a drag goes, no column goes under its minimum and the row
+-- stays inside the list.
+Drag(grips[2], 3000)
+Drag(grips[3], -3000)
 for _, width in pairs(saved) do
-	checkTrue("no column goes under the minimum", width >= ns.Theme.columnMin)
+	checkTrue("no column under the minimum", width >= ns.Theme.columnMin)
 end
+grips = Grips()
+checkTrue("the row stays inside the list", grips[#grips].lastPoint[2] <= SCROLLBOX:GetWidth())
 
--- A column cannot be squeezed under its minimum, however far the drag goes.
-drag(grips[#grips], -2000)
-drag(grips[1], 2000)
-for id, width in pairs(saved) do
-	if id ~= "name" then
-		checkTrue("still not under the minimum", width >= ns.Theme.columnMin and width <= ns.Theme.columnMax)
+-- A right click on a heading puts every width back.
+headings[1].scripts.OnClick(headings[1], "RightButton")
+check("a right click on a heading resets every width", next(saved), nil)
+
+-- Dragging near the width the text needs snaps to it.
+grips = Grips()
+local quantity
+for _, heading in ipairs(headings) do
+	if heading.label.text == ns.L.AUCTIONS_COL_QUANTITY then
+		quantity = heading
 	end
 end
-
--- The name column's own edge widens it, the columns to its right making room,
--- and nothing runs past the list's right edge.
-local list = SCROLLBOX
-checkTrue("the name column was dragged wide", (saved.name or 0) > 200)
-local rightmost = grips[#grips]
-checkTrue("the columns still fit inside the list", rightmost.lastPoint[2] <= list:GetWidth())
-
--- A double click on the name column's edge puts every width back.
-local now = 100
-GetTime = function() return now end
-grips[1].scripts.OnMouseDown(grips[1])
+local start = quantity.w
+-- Find the text's width by fitting first, then come back and drag near it.
+local function GripAfter(heading)
+	for _, grip in ipairs(Grips()) do
+		if math.abs(grip.lastPoint[2] - (heading.lastPoint[2] + heading.w)) <= ns.Theme.sizerWidth then
+			return grip
+		end
+	end
+end
+local grip = GripAfter(quantity)
+now = now + 1
+grip.scripts.OnMouseDown(grip)
 now = now + 0.2
-grips[1].scripts.OnMouseDown(grips[1])
-check("a double click forgets the dragged widths", next(saved), nil)
-
--- The Buy list's number columns are fixed: only the item's name stretches.
-ShowTab("buy")
-ns.charDb.columnWidths.buy.deal = 400 -- a width dragged before the column was fixed
-ns.Window:RefreshActive()
-Tick(2)
-local dollar = Frames(function(frame)
-	return frame.label and frame.label.text == "$"
-end)
-check("the deals column is headed with a dollar sign", #dollar, 1)
-check("and stays compact despite an old dragged width", dollar[1].w, 32)
+grip.scripts.OnMouseDown(grip)
+local fits = quantity.w
+checkTrue("a double click fits the column to its text", fits ~= start and saved.quantity == fits)
+headings[1].scripts.OnClick(headings[1], "RightButton")
+grip = GripAfter(quantity)
+Drag(grip, fits - quantity.w - (ns.Theme.columnSnap - 2))
+check("a drag that ends near the text's width snaps to it", quantity.w, fits)

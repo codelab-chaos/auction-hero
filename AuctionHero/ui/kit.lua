@@ -679,7 +679,7 @@ end
 --   direction   1 when dragging right makes it bigger, -1 for the opposite
 --   min, max    how small and how big it may go
 --   onDone()    called once when the drag ends
---   onReset()   called on a double click instead of a drag
+--   onDoubleClick()  called on a double click instead of a drag
 -- Returns the frame. The caller places it and gives it a height.
 function Kit.Sizer(parent, options)
 	local sizer = CreateFrame("Frame", nil, parent)
@@ -715,11 +715,10 @@ function Kit.Sizer(parent, options)
 	end)
 	local lastDown = 0
 	sizer:SetScript("OnMouseDown", function(self)
-		-- A double click puts the widths back as they were designed.
 		local now = GetTime()
-		if options.onReset and now - lastDown < 0.35 then
+		if options.onDoubleClick and now - lastDown < 0.35 then
 			lastDown = 0
-			options.onReset()
+			options.onDoubleClick()
 			return
 		end
 		lastDown = now
@@ -915,6 +914,10 @@ end
 --                 badgeColor(row) -> color,       its color (green unless given)
 --                 drip(row) -> boolean,           a coin drip in place of the text while true
 --                                                 (something is being fetched for the row)
+--                 priority = number,              when the list is too narrow for every column,
+--                                                 the lowest steps aside first; none: always shown
+--                 resizable = false,              no grip (fixed columns that do not fit their
+--                                                 text are not resizable either)
 --                 tip(row) -> lines | nil }       a tooltip while the mouse is over this
 --                                                 column's cell, in place of the row's
 --   rowHeight, empty (text when there are no rows), gap (between columns, 8)
@@ -945,22 +948,30 @@ function Kit.List(parent, options)
 	empty:SetPoint("TOP", scrollBox, "TOP", 0, -30)
 	empty:SetText(options.empty or "")
 
-	-- Widths the player dragged, by column id. A list with an id keeps them
-	-- for the character; one without keeps them until the next reload.
-	local dragged = {}
+	-- Widths the player set, by column id (pinned by a drag or a double
+	-- click). A list with an id keeps them for the character; one without
+	-- keeps them until the next reload. Widths kept by the earlier way of
+	-- sizing meant something else, so they are dropped once.
+	local pinned = {}
 	if options.id and ns.charDb then
-		ns.charDb.columnWidths = ns.charDb.columnWidths or {}
-		ns.charDb.columnWidths[options.id] = ns.charDb.columnWidths[options.id] or {}
-		dragged = ns.charDb.columnWidths[options.id]
-	end
-	-- A fixed column keeps the width it was given: it cannot be dragged, and a
-	-- width dragged before it became fixed is ignored.
-	local fitted, hidden = {}, {} -- worked out from the rows last set
-	local function WidthOf(column)
-		if column.fit and fitted[column.id] then
-			return fitted[column.id]
+		local saved = ns.charDb.columnWidths or {}
+		if ns.charDb.columnLayout ~= ns.ColumnLayoutVersion then
+			saved = {}
+			ns.charDb.columnLayout = ns.ColumnLayoutVersion
 		end
-		return (not column.fixed and dragged[column.id]) or column.width or 0
+		ns.charDb.columnWidths = saved
+		saved[options.id] = saved[options.id] or {}
+		pinned = saved[options.id]
+	end
+	local fitted, hidden = {}, {} -- worked out from the rows last set
+	local squeezed = {} -- columns that left the row for lack of room
+	local function Out(column)
+		return hidden[column.id] or squeezed[column.id]
+	end
+	-- A column can be resized unless it is a fixed one that does not fit its
+	-- text (an icon column, say).
+	local function Resizable(column)
+		return column.resizable ~= false and not (column.fixed and not column.fit)
 	end
 
 	-- Fit the rendered text, including money colors and the smaller badge font.
@@ -1040,145 +1051,172 @@ function Kit.List(parent, options)
 		end
 	end
 
-	-- Where each column sits, worked out from the list's width.
+	-- Where each column sits, worked out from the list's width by the column
+	-- layout (ui\column-layout.lua) from what each column is:
+	--   flex      grows into the room left (the name column)
+	--   fit       as wide as its text, and keeps it
+	--   fixed     its width, not resizable (unless it fits its text)
+	--   others    their width, shrinking when short
+	-- A width the player set replaces all that: it stays as set, and gives
+	-- way only when the others cannot.
 	local left, width = {}, {}
-	-- The stretchy column takes what is left, but never less than its dragged
-	-- width (or Theme.flexMin). When the others do not fit beside it, the ones
-	-- that can be dragged give room back, rightmost first, down to columnMin;
-	-- fixed and fitted columns keep their width. Dragged widths are kept, so
-	-- a wider window gives them back.
-	local function Elastic(column)
-		return not column.flex and not column.fixed and not (column.fit and fitted[column.id])
+	local specs = {}
+	local function Spec(column)
+		local spec = { hidden = hidden[column.id] == true, priority = column.priority }
+		local set = Resizable(column) and pinned[column.id]
+		if not Resizable(column) then
+			local fixed = column.fit and fitted[column.id] or column.width or 0
+			spec.basis, spec.min, spec.max, spec.fixed = fixed, fixed, fixed, true
+		elseif set then
+			spec.basis, spec.min, spec.shrink, spec.shrinkLast = set, Theme.columnMin, 1, true
+		elseif column.flex then
+			spec.basis = column.width or Theme.flexMin
+			spec.min = column.min or Theme.flexMin
+			spec.grow, spec.shrink = column.grow or 1, 1
+		elseif column.fit then
+			local fits = fitted[column.id] or column.width or 0
+			spec.basis, spec.min = fits, fits
+		else
+			spec.basis = column.width or 0
+			spec.min, spec.max, spec.shrink = column.min or Theme.columnMin, column.max or Theme.columnMax, 1
+		end
+		return spec
+	end
+	local function Specs()
+		for index, column in ipairs(columns) do
+			specs[index] = Spec(column)
+		end
+		return specs
 	end
 	local function Layout()
-		local available = (scrollBox:GetWidth() or 0)
-		local rigid, elastic, count, padding = 0, 0, 0, options.gap or 8
-		local flexColumn
-		for _, column in ipairs(columns) do
-			if not hidden[column.id] then
-				count = count + 1
-				if column.flex then
-					flexColumn = column
-				elseif Elastic(column) then
-					elastic = elastic + WidthOf(column)
-				else
-					rigid = rigid + WidthOf(column)
-				end
-			end
-		end
-		local room = available - rigid - padding * (count + 1)
-		local wantedFlex = flexColumn and math.max(Theme.flexMin, dragged[flexColumn.id] or 0) or 0
-		-- Too wide: the rightmost columns give room first, each down to
-		-- columnMin, so a column being dragged keeps following the mouse.
-		local over = math.max(0, elastic - math.max(0, room - wantedFlex))
-		local sized, used = {}, 0
-		for index = #columns, 1, -1 do
-			local column = columns[index]
-			if not hidden[column.id] and Elastic(column) then
-				local give = math.min(over, math.max(0, WidthOf(column) - Theme.columnMin))
-				over = over - give
-				sized[column.id] = WidthOf(column) - give
-				used = used + sized[column.id]
-			end
-		end
-		local flex = math.max(Theme.flexMin, room - used)
-		local x = padding
+		local gap = options.gap or 8
+		local widths, dropped = ns.ColumnLayout.Solve(Specs(), scrollBox:GetWidth() or 0, gap)
+		local x = gap
 		for index, column in ipairs(columns) do
+			squeezed[column.id] = dropped[index] or nil
 			left[index] = x
-			width[index] = hidden[column.id] and 0 or (column.flex and flex or sized[column.id] or WidthOf(column))
-			if not hidden[column.id] then
-				x = x + width[index] + padding
+			width[index] = widths[index]
+			if widths[index] > 0 then
+				x = x + widths[index] + gap
 			end
 		end
 	end
 
 	local headers, grips = {}, {}
 	local PaintHeaders, Repaint
+	local shownRows = {} -- the rows last set, for fitting a column to its text
 
-	-- A grip sits on the line between two columns, and the line follows the
-	-- mouse. Which widths change to make that happen depends on where the
-	-- stretchy column is:
-	--   stretchy column to the right of the line: the column on the left of
-	--     the line grows, and the stretchy one gives up the room.
-	--   stretchy column on the left of the line, or is the left one: the column
-	--     on the right shrinks, and what it gives up goes to the column on the
-	--     left (by itself when that one is the stretchy column).
-	local flexIndex
-	for index, column in ipairs(columns) do
-		if column.flex then
-			flexIndex = index
+	-- The width a column's text needs: its heading (with room for the sort
+	-- marker) and every row's text, plus its icon. Measured when asked (a
+	-- grip is pressed or double clicked), kept until the rows or data change.
+	local needs, needsKey = {}, nil
+	local function TextNeeds(index)
+		local key = tostring(shownRows) .. ":" .. tostring(ns.VersionOf(options.reads))
+		if key ~= needsKey then
+			needs, needsKey = {}, key
 		end
+		if needs[index] then
+			return needs[index]
+		end
+		local column = columns[index]
+		local widest = 0
+		local function Measure(text)
+			measure:SetText(tostring(text or ""))
+			widest = math.max(widest, math.ceil(measure:GetStringWidth() or 0))
+		end
+		Measure("v  " .. (column.label or ""))
+		local seen = {}
+		for _, row in ipairs(shownRows) do
+			local text = column.text and column.text(row)
+			if text and text ~= "" and not seen[text] then
+				seen[text] = true
+				Measure(text)
+			end
+		end
+		if column.icon then
+			widest = widest + rowHeight - 1
+		end
+		needs[index] = widest + 4
+		return needs[index]
 	end
 
+	-- A grip on each line between two columns. Dragging it moves that line
+	-- and no other: the column on its left takes the change, and the one on
+	-- its right gives it (the stretchy column when it is on that side), so
+	-- the line follows the mouse (ns.ColumnLayout.MoveEdge). Near the width
+	-- its text needs, the left column snaps to it; a double click sizes it to
+	-- its text. A right click on any heading puts every width back.
+	-- Sets the widths a move gives. Every other column keeps the width it had
+	-- when the move began (`from`), so only the two at the line change; the
+	-- stretchy column stays stretchy unless it was one of them.
+	local function Pin(set, from)
+		if not set then
+			return
+		end
+		for index, column in ipairs(columns) do
+			local spec = specs[index]
+			if from[index] and from[index] > 0 and Resizable(column) and not ((spec.grow or 0) > 0) then
+				pinned[column.id] = pinned[column.id] or from[index]
+			end
+		end
+		for index, size in pairs(set) do
+			pinned[columns[index].id] = size
+		end
+		Repaint()
+	end
 	local function BuildGrip(index)
-		local before, after = columns[index], columns[index + 1]
-		local options = { min = Theme.columnMin, max = Theme.columnMax }
-		-- No grip on a line whose drag would have to resize a fixed column.
-		local resized = (not flexIndex or flexIndex > index) and before or after
-		if before.flex then
-			-- The stretchy column's own edge sets how wide it is; the columns to
-			-- its right make room (see Layout).
-			options.direction = 1
-			options.max = 2000
-			options.get = function()
-				return width[index]
-			end
-			options.set = function(size)
-				dragged[before.id] = math.min(size, math.floor(scrollBox:GetWidth() or size))
-				Repaint()
-			end
-			options.onReset = function()
-				for id in pairs(dragged) do
-					dragged[id] = nil
+		local start, fits -- the widths when the grip was pressed, and the text's
+		local grip = Kit.Sizer(header, {
+			min = -4000,
+			max = 4000,
+			get = function()
+				start = {}
+				for at = 1, #columns do
+					start[at] = width[at]
 				end
-				Repaint()
-			end
-			local grip = Kit.Sizer(header, options)
-			grip:SetHeight(Theme.headerHeight)
-			return grip
-		end
-		if resized.fixed or (resized == after and not before.flex and before.fixed) then
-			return nil
-		end
-		if not flexIndex or flexIndex > index then
-			options.direction = 1
-			options.get = function()
-				return WidthOf(before)
-			end
-			options.set = function(size)
-				dragged[before.id] = size
-				Repaint()
-			end
-		else
-			options.direction = -1
-			options.get = function()
-				return WidthOf(after)
-			end
-			options.set = function(size)
-				local given = WidthOf(after) - size
-				if not before.flex then
-					-- Hand the room to the left column, as far as it can take it.
-					local grown = math.max(Theme.columnMin, math.min(Theme.columnMax, WidthOf(before) + given))
-					given = grown - WidthOf(before)
-					dragged[before.id] = grown
+				fits = TextNeeds(index)
+				return 0 -- the drag is measured as a change from here
+			end,
+			set = function(moved)
+				Pin((ns.ColumnLayout.MoveEdge(specs, start, index, moved, fits, Theme.columnSnap)), start)
+			end,
+			onDoubleClick = function()
+				local now = {}
+				for at = 1, #columns do
+					now[at] = width[at]
 				end
-				dragged[after.id] = WidthOf(after) - given
-				Repaint()
-			end
-		end
-		local grip = Kit.Sizer(header, options)
+				local set = ns.ColumnLayout.MoveEdge(specs, now, index, TextNeeds(index) - now[index])
+				Pin(set, now)
+			end,
+		})
 		grip:SetHeight(Theme.headerHeight)
+		Kit.Tip(grip, { ns.L.LIST_GRIP, ns.L.LIST_GRIP_TIP })
 		return grip
 	end
 
+	-- Every width back to how the list was made.
+	local function ResetWidths()
+		for id in pairs(pinned) do
+			pinned[id] = nil
+		end
+		Repaint()
+	end
+
 	function PaintHeaders()
-		for index = 1, #columns - 1 do
+		-- A grip after every column in the row but the last.
+		local lastInRow = 0
+		for index, column in ipairs(columns) do
+			if not Out(column) then
+				lastInRow = index
+			end
+		end
+		for index = 1, #columns do
 			if grips[index] == nil then
 				grips[index] = BuildGrip(index) or false
 			end
 			local grip = grips[index]
 			if grip then
-				grip:SetShown(not hidden[columns[index].id] and not hidden[columns[index + 1].id])
+				grip:SetShown(not Out(columns[index]) and index < lastInRow)
 				grip:ClearAllPoints()
 				grip:SetPoint("LEFT", left[index] + width[index] + (options.gap or 8) / 2 - Theme.sizerWidth / 2, 0)
 			end
@@ -1197,14 +1235,18 @@ function Kit.List(parent, options)
 					glow:SetPoint("TOPLEFT", -3, 0)
 					glow:SetPoint("BOTTOMRIGHT", 3, 0)
 				end
-				cell:SetScript("OnClick", function()
+				cell:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+				cell:SetScript("OnClick", function(_, button)
+					if button == "RightButton" then
+						return ResetWidths() -- every width back as it was made
+					end
 					if column.sortable ~= false and options.onSort then
 						options.onSort(column.id)
 					end
 				end)
 				headers[index] = cell
 			end
-			cell:SetShown(not hidden[column.id])
+			cell:SetShown(not Out(column))
 			cell:ClearAllPoints()
 			cell:SetPoint("LEFT", left[index], 0)
 			cell:SetWidth(width[index])
@@ -1330,7 +1372,7 @@ function Kit.List(parent, options)
 				row.cells[index] = cell
 			end
 			local x, w = left[index], width[index]
-			local visible = not hidden[column.id]
+			local visible = not Out(column)
 			cell.text:SetShown(visible)
 			if cell.icon then
 				cell.icon:ClearAllPoints()
@@ -1419,6 +1461,7 @@ function Kit.List(parent, options)
 	end
 
 	function list:SetRows(rows, keepScroll)
+		shownRows = rows
 		Fit(rows)
 		Layout()
 		PaintHeaders()

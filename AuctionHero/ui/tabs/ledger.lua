@@ -21,8 +21,10 @@ local function Count(units)
 end
 
 -- A column for one number of a row, sorted by that number.
-local function Number(id, label, width, text, color)
-	return { id = id, label = label, width = width, align = "RIGHT", color = color, text = function(row)
+-- priority: when the window is too narrow for every column, the lowest
+-- steps aside first (see ui\column-layout.lua); nil stays always.
+local function Number(id, label, width, text, color, priority)
+	return { id = id, label = label, width = width, align = "RIGHT", color = color, priority = priority, text = function(row)
 		return text(row[id])
 	end }
 end
@@ -83,13 +85,13 @@ local VIEWS = {
 			{ id = "name", label = L.BUY_COL_ITEM, flex = true, text = function(row)
 				return row.name
 			end },
-			Number("bought", L.LEDGER_COL_BOUGHT, 60, Count),
-			Number("spent", L.LEDGER_COL_SPENT, 110, Coins),
+			Number("bought", L.LEDGER_COL_BOUGHT, 60, Count, nil, 2),
+			Number("spent", L.LEDGER_COL_SPENT, 110, Coins, nil, 4),
 			Number("sold", L.LEDGER_COL_SOLD, 60, Count),
 			Number("earned", L.LEDGER_COL_EARNED, 110, Coins),
-			Number("fees", L.LEDGER_COL_FEES, 90, Coins),
+			Number("fees", L.LEDGER_COL_FEES, 90, Coins, nil, 1),
 			Number("profit", L.LEDGER_COL_PROFIT, 110, Signed, ProfitColor),
-			Number("held", L.LEDGER_COL_HELD, 60, Count),
+			Number("held", L.LEDGER_COL_HELD, 60, Count, nil, 3),
 			Number("soldUnit", L.LEDGER_COL_SOLD_AT, 90, MaybeCoins),
 			Number("now", L.LEDGER_COL_NOW, 90, MaybeCoins),
 			{ id = "change", label = L.LEDGER_COL_CHANGE, width = 64, align = "RIGHT", text = function(row)

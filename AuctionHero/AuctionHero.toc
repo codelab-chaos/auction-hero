@@ -79,6 +79,7 @@ analyze\analyzer.lua
 ui\view-model.lua
 ui\redraw-scheduler.lua
 ui\list-fit.lua
+ui\column-layout.lua
 ui\coin-motion.lua
 ui\kit.lua
 ui\chart.lua

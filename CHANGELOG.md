@@ -19,6 +19,8 @@ release notes.
 - **Coins drop** on a Buy row while its price is being checked live.
 - **The version** shows in the title bar, beside your gold.
 - **Craft tab:** shorter names: Worth it, Level Up, Sell raw and Can Make.
+- **Column widths, redone:** drag the line between any two columns and only that line moves; it snaps to fit the text as you pass. Double-click a line to fit the column to its text. Right-click a heading to reset. Widths you set before are reset once.
+- **Narrow windows:** the Ledger's least needed columns step aside instead of squashing every number.
 
 ## 0.1.7 - 2026-11-23
 

@@ -25,15 +25,12 @@ local name, level, units, price, gain, deal = header("Item"), header("Lvl"), hea
 local scrollBox = SCROLLBOX
 local panel = scrollBox:GetParent()
 scrollBox:SetWidth(420)
-ns.charDb.columnWidths.buy.units = 400
-ns.charDb.columnWidths.buy.min = 400
-ns.charDb.columnWidths.buy.deal = 400
 ns.DataChanged() -- the prices above were changed by hand
 ns.Window:RefreshActive()
 
 check("an empty Gain column disappears", gain:IsShown(), false)
 check("without leaving a gap before deals", deal.lastPoint[2], price.lastPoint[2] + price.w + 6)
-checkTrue("old dragged widths do not squeeze out item names", name.w >= 100)
+checkTrue("item names keep their room", name.w >= 100)
 local nameWidth = name.w
 
 local function readable()

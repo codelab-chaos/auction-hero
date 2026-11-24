@@ -192,3 +192,20 @@ Tick(15)
 checkTrue("read again once it ends", reads > 0)
 check("with nothing entered twice", #entries(), before + 1)
 GetInboxInvoiceInfo = realInvoice
+
+-- Too narrow for every column: the least needed step aside, lowest first.
+ShowTab("ledger")
+ButtonNamed("By item").scripts.OnClick(ButtonNamed("By item"))
+local function Heading(label)
+	return Frames(function(frame)
+		return frame.label and type(frame.label.text) == "string" and frame.label.text:gsub("^[v%^]  ", "") == label and frame:IsShown()
+	end)[1]
+end
+local list = Heading(ns.L.LEDGER_COL_PROFIT):GetParent():GetParent()
+local box = Frames(function(frame)
+	return frame.rowsDrawn ~= nil and frame:GetParent() == list
+end)[1] or SCROLLBOX
+box:SetWidth(520)
+list.scripts.OnSizeChanged(list, 520)
+checkTrue("deposits step aside first", Heading(ns.L.LEDGER_COL_FEES) == nil)
+checkTrue("profit always stays", Heading(ns.L.LEDGER_COL_PROFIT) ~= nil)

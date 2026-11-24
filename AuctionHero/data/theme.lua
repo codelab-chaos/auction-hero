@@ -27,9 +27,10 @@ ns.Theme = {
 	sizerWidth = 8, -- the drag area
 	sizerIdleAlpha = 0.15, -- how visible its line is at rest, and under the mouse
 	sizerHoverAlpha = 0.8,
-	columnMin = 28, -- how narrow and how wide a list column can be dragged
-	columnMax = 420,
+	columnMin = 28, -- how narrow a list column can be dragged
+	columnMax = 420, -- how wide a column grows on its own (a dragged one may go wider)
 	flexMin = 60, -- the narrowest a list's stretchy (name) column gets before others shrink
+	columnSnap = 6, -- a dragged column edge snaps to the width its text needs within this
 	panelGrow = 260, -- how much wider than designed a side panel can be dragged
 	footerHeight = 22, -- the status bar under the tabs' body, added to the height
 	titleHeight = 30,
@@ -175,3 +176,7 @@ ns.CoinDrip = {
 -- asking prices. The goblin head is achievement_goblinhead, a file the Forever
 -- client ships (checked in the Codex of Azeroth).
 ns.CraftDisclaimerLook = { icon = 463874, iconSize = 18, outline = "OUTLINE" }
+
+-- The way list column widths are worked out (ui\column-layout.lua). Widths
+-- the player set under an earlier way are dropped once when it changes.
+ns.ColumnLayoutVersion = 2
