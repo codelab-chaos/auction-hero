@@ -4,7 +4,7 @@ Features and fixes shipped in each release. Copy a version's section into
 CurseForge's changelog field using Markdown formatting, and into the GitHub
 release notes.
 
-## 0.1.8 - Unreleased
+## 0.1.8 - 2026-11-23
 
 ### Fixed
 
@@ -18,7 +18,7 @@ release notes.
 - **Buying asks you to confirm** every purchase. To buy gear in one press when the price has not changed, turn it on in Options. A changed price always asks.
 - **Coins drop** on a Buy row while its price is being checked live.
 - **The version** shows in the title bar, beside your gold.
-- **Craft tab:** shorter names: Worth it, Level Up, Sell raw and Can Make.
+- **Craft tab:** shorter names (Worth it, Level Up, Sell raw and Can Make), and a word of caution from gnome science.
 - **Column widths, redone:** drag the line between any two columns and only that line moves; it snaps to fit the text as you pass. Double-click a line to fit the column to its text. Right-click a heading to reset. Widths you set before are reset once.
 - **Narrow windows:** the Ledger's least needed columns step aside instead of squashing every number.
 
