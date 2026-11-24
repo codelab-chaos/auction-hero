@@ -165,7 +165,7 @@ local function Create(parent)
 		state.ready = not state.ready
 		ns.Window:RefreshActive()
 	end })
-	-- Worth making, Levels me, Sell raw goods: one at a time, pressed again to clear.
+	-- Worth it, Level Up, Sell raw: one at a time, pressed again to clear.
 	filterBar = Kit.Choices(bar, {
 		items = ns.CraftFilters,
 		padding = 14,
@@ -245,8 +245,28 @@ local function Create(parent)
 			ns.Window:RefreshActive()
 		end,
 	})
+	-- Verdicts are read from asking prices, not sales: a light word to say so.
+	local look = ns.CraftDisclaimerLook
+	local disclaimer = CreateFrame("Frame", nil, parent)
+	disclaimer:SetPoint("BOTTOMRIGHT", -4, 0)
+	disclaimer:SetHeight(look.iconSize)
+	local words = Kit.Text(disclaimer, "normal", C.gold, "RIGHT")
+	local font, size = words:GetFont()
+	if font then
+		words:SetFont(font, size, look.outline) -- bold, as far as the game's fonts go
+	end
+	words:SetPoint("RIGHT")
+	words:SetText(L.CRAFT_DISCLAIMER)
+	local goblin = disclaimer:CreateTexture(nil, "ARTWORK")
+	goblin:SetSize(look.iconSize, look.iconSize)
+	goblin:SetTexture(look.icon)
+	goblin:SetPoint("RIGHT", words, "LEFT", -6, 0)
+	disclaimer:SetWidth((words:GetStringWidth() or 240) + look.iconSize + 8)
+	disclaimer:EnableMouse(true)
+	Kit.Tip(disclaimer, { L.CRAFT_DISCLAIMER, L.CRAFT_DISCLAIMER_TIP })
+
 	list:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 0, -6)
-	list:SetPoint("BOTTOMRIGHT")
+	list:SetPoint("BOTTOMRIGHT", 0, ns.CraftDisclaimerLook.iconSize + 4)
 	return { Refresh = Refresh }
 end
 

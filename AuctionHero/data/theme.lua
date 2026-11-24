@@ -156,3 +156,22 @@ ns.AgeSteps = {
 	{ under = 48 * 3600, unit = 3600, suffix = "h" }, -- 1h to 47h
 	{ unit = 86400, suffix = "d" }, -- 2d on
 }
+
+-- The coin drip: a few gold coins dropping in a small box, the scan card's
+-- coin rain (data\scan-shield.lua) in little, shown where something is being
+-- fetched, such as a Buy row whose price is being checked live
+-- (ui\coin-motion.lua for the motion, Kit.CoinDrip to draw it).
+ns.CoinDrip = {
+	width = 14, height = 16, -- the box the coins fall in
+	count = 3,
+	size = 7, -- each coin
+	fallSeconds = 0.9, -- one fall, top to bottom
+	gravity = 2, -- 1 falls at a steady speed, 2 like a dropped coin
+	fadeIn = 0.1, fadeOut = 0.25, -- shares of the fall spent fading
+	icon = "Interface\\MoneyFrame\\UI-GoldIcon",
+}
+
+-- The Craft tab's disclaimer, a joke with a point: verdicts are read from
+-- asking prices. The goblin head is achievement_goblinhead, a file the Forever
+-- client ships (checked in the Codex of Azeroth).
+ns.CraftDisclaimerLook = { icon = 463874, iconSize = 18, outline = "OUTLINE" }

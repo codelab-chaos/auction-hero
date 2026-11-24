@@ -1377,6 +1377,9 @@ local function Create(parent)
 			end, color = function(row)
 				local freshness = not row.item and ns.PriceFreshness[ns.LiveCheck:Freshness(row) or ""]
 				return freshness and C[freshness.color]
+			end, drip = function(row)
+				local freshness = not row.item and ns.PriceFreshness[ns.LiveCheck:Freshness(row) or ""]
+				return freshness and freshness.drip == true or false
 			end },
 			{ id = "min", label = L.BUY_COL_FROM, width = 96, fixed = true, fit = true, align = "RIGHT", text = function(row)
 				if row.more then

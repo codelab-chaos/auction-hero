@@ -4,6 +4,9 @@
 -- game's own window asks for:
 --   1. Start asks the server for the live price.
 --   2. Confirm, pressed after reading that price, spends the gold.
+-- With the buyOnePress setting on, a single item just checked live at the
+-- price pressed is bought on the first press. Goods always take two (the
+-- game quotes them only after the press), and so does any changed price.
 -- Scan prices are never spent on: only what the server says right now is.
 --
 -- The two kinds of thing are bought in different ways (see `ways` below):
@@ -420,9 +423,10 @@ function Buying:Start(request)
 		return Fail(tostring(problem))
 	end
 	if ready then
-		-- The live price is already known. At the price pressed, buy it in
-		-- this same press; otherwise it waits for a confirm.
-		local now = ready.now and ready.total <= GetMoney()
+		-- The live price is already known. Every purchase is confirmed, unless
+		-- the player chose one press (the buyOnePress setting) and the price
+		-- is the one pressed; a changed price is always confirmed.
+		local now = ready.now and ready.total <= GetMoney() and ns.IsEnabled("buyOnePress")
 		ready.now = nil
 		if now then
 			-- The game takes a purchase only as part of the player's press, so

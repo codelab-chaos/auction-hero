@@ -72,10 +72,10 @@ ShowTab("craft")
 checkTrue("the tab lists the recipes", #Frames(function(frame)
 	return frame.data ~= nil and frame.data.recipeID ~= nil
 end) == 3)
-local ready = ButtonNamed("Ready to make")
+local ready = ButtonNamed("Can Make")
 MOCK.bagCounts = {}
 ready.scripts.OnClick(ready)
-check("ready to make hides what the bags cannot make", #Frames(function(frame)
+check("Can Make hides what the bags cannot make", #Frames(function(frame)
 	return frame.data ~= nil and frame.data.recipeID ~= nil
 end), 0)
 
@@ -90,12 +90,12 @@ local function shown()
 	table.sort(names)
 	return table.concat(names, ",")
 end
-local levels = ButtonNamed("Levels me")
+local levels = ButtonNamed("Level Up")
 levels.scripts.OnClick(levels)
-check("Levels me shows the recipes that still raise the skill", shown(), "Skill Thing")
-local make = ButtonNamed("Worth making")
+check("Level Up shows the recipes that still raise the skill", shown(), "Skill Thing")
+local make = ButtonNamed("Worth it")
 make.scripts.OnClick(make)
-check("Worth making shows the ones that beat selling the raw goods", shown(), "Make It")
+check("Worth it shows the ones that beat selling the raw goods", shown(), "Make It")
 make.scripts.OnClick(make)
 check("pressed again, the filter clears", shown(), "Make It,Skill Thing,Vendor Thing")
 
@@ -107,6 +107,12 @@ checkTrue("a profession shows as its icon", #icons >= 1)
 checkTrue("All is still a word", ButtonNamed("All") ~= nil)
 checkTrue("no profession name is a button any more", ButtonNamed("Leatherworking") == nil)
 
--- Make is a green check, Sell raw goods a no-sign.
+-- Make is a green check, Sell raw a no-sign.
 check("Make shows as a check", ns.CraftVerdicts[1].mark:find("ReadyCheck%-Ready") ~= nil, true)
-check("Sell raw goods shows as a no-sign", ns.CraftVerdicts[#ns.CraftVerdicts].mark, "\195\152")
+check("Sell raw shows as a no-sign", ns.CraftVerdicts[#ns.CraftVerdicts].mark, "\195\152")
+
+-- A light word that verdicts are estimates.
+ShowTab("craft")
+checkTrue("the craft tab says it is for entertainment purposes only", #Frames(function(frame)
+	return frame.text == ns.L.CRAFT_DISCLAIMER
+end) == 1)

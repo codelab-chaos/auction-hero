@@ -124,13 +124,23 @@ Tick(6)
 check("bought", ns.Buying.state.phase, "done")
 Tick(20) -- buying an item checks it again
 
--- At the price pressed, a fresh check is all it takes: one press buys.
+-- At the price pressed, a fresh check: still confirmed, unless the player
+-- chose one press.
 bear = market.byKey["2006:Tunic of the Bear"]
 local bought = #BUYS
 local cheapest = bear.liveAuctions[1]
 for _, auction in ipairs(bear.liveAuctions) do
 	if auction.buyout < cheapest.buyout then cheapest = auction end
 end
+check("one press is off unless chosen", ns.IsEnabled("buyOnePress"), false)
+ns.Buying:Start({ key = bear.key, itemID = 2006, name = bear.name, single = true, live = bear.liveAuctions, checkedAt = bear.checkedAt, price = cheapest.buyout })
+check("by default an unchanged price still asks to confirm", ns.Buying.state.phase, "confirm")
+check("and nothing is bought yet", #BUYS, bought)
+ns.Buying:Cancel()
+Tick(1)
+
+-- Chosen: at an unchanged price one press buys.
+ns.SetEnabled("buyOnePress", true)
 local sentFirst
 ns.Bus:On("BUYING_CHANGED", function()
 	if sentFirst == nil then sentFirst = #BUYS == bought + 1 end

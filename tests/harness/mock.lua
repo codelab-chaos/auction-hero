@@ -14,6 +14,7 @@ function GetTime() return clock end
 function GetServerTime() return 1794500000 + math.floor(clock) end
 function debugprofilestop() prof = prof + 1.5; return prof end
 function GetBuildInfo() return "1.60.1", "70888", "Nov 10 2026", 16001 end
+function GetAddOnMetadata(name, field) if name == "AuctionHero" and field == "Version" then return MOCK_VERSION or "0.0.0" end end
 function GetRealmName() return "TestRealm" end
 function UnitFactionGroup() return "Alliance" end
 -- The character, what it wears and the stats of items by link. Scenarios set these.

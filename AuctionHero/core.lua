@@ -34,6 +34,13 @@ function Bus:On(message, handler)
 	list[#list + 1] = handler
 end
 
+-- The addon's version as its TOC says, "?" when the game will not say.
+function ns.AddonVersion()
+	local read = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
+	local ok, version = pcall(read, "AuctionHero", "Version")
+	return ok and version or "?"
+end
+
 -- Bus.watch, when set, hears every message first (see ui\window.lua, which
 -- uses it to catch a view firing messages while it draws).
 function Bus:Fire(message, ...)

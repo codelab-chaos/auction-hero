@@ -27,6 +27,7 @@ ns.Settings = {
 	{ id = "railLarge", section = "general", default = false, label = L.SETTING_RAIL_LARGE, tip = L.SETTING_RAIL_LARGE_TIP },
 	{ id = "showResell", section = "general", default = false, label = L.SETTING_SHOW_RESELL, tip = L.SETTING_SHOW_RESELL_TIP },
 	{ id = "sellBagList", section = "general", default = false, label = L.SETTING_BAG_LIST, tip = L.SETTING_BAG_LIST_TIP },
+	{ id = "buyOnePress", section = "general", default = false, label = L.SETTING_BUY_ONE_PRESS, tip = L.SETTING_BUY_ONE_PRESS_TIP },
 	{ id = "logEvents", section = "debug", default = true, label = L.SETTING_LOG_EVENTS, tip = L.SETTING_LOG_EVENTS_TIP },
 	{ id = "debug", section = "debug", default = false, label = L.SETTING_DEBUG, tip = L.SETTING_DEBUG_TIP },
 }

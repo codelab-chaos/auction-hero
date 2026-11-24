@@ -264,11 +264,12 @@ ns.AnswerSeconds = {
 -- item's listings as they are now, and patches them into the scan.
 -- The mark a Buy list row carries for where its prices came from. A row
 -- straight from the scan carries none. color is a Theme color name.
---   checking  the auction house is being asked about it now
+--   checking  the auction house is being asked about it now: a coin drip
+--             (ns.CoinDrip) instead of a mark
 --   live      its prices were read live, after the scan
 --   failed    asking did not work, so its prices are still the scan's
 ns.PriceFreshness = {
-	checking = { mark = "...", color = "accent" },
+	checking = { mark = "...", color = "accent", drip = true },
 	live = { mark = "|TInterface\\RaidFrame\\ReadyCheck-Ready:14:14|t", color = "good" },
 	failed = { mark = "!", color = "bad" },
 }

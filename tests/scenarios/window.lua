@@ -130,3 +130,8 @@ end)[1]
 checkTrue("with a feedback link", feedback ~= nil)
 feedback.scripts.OnClick(feedback)
 checkTrue("that shows the project page to copy", titleText("https://www.curseforge.com/wow/addons/auction-hero") ~= nil)
+
+-- The title bar says which version is running, from the TOC.
+checkTrue("the version is in the title bar", #Frames(function(frame)
+	return frame.text == ns.L.WIN_VERSION:format("0.0.0")
+end) == 1)

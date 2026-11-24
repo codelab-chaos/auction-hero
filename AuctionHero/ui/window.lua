@@ -490,8 +490,12 @@ local function Build()
 
 	goldText = Kit.Text(title, "normal", C.muted, "RIGHT")
 	goldText:SetPoint("RIGHT", optionsButton, "LEFT", -10, 0)
+	-- The addon's version, from its TOC, so a screenshot says which one.
+	local versionText = Kit.Text(title, "small", C.muted, "RIGHT")
+	versionText:SetPoint("RIGHT", goldText, "LEFT", -12, 0)
+	versionText:SetText(L.WIN_VERSION:format(ns.AddonVersion()))
 	refreshNote = Kit.Text(title, "small", C.accent, "RIGHT")
-	refreshNote:SetPoint("RIGHT", goldText, "LEFT", -10, 0)
+	refreshNote:SetPoint("RIGHT", versionText, "LEFT", -10, 0)
 	refreshNote:SetText(L.WIN_REFRESHING)
 	refreshNote:Hide()
 
@@ -511,7 +515,7 @@ local function Build()
 
 	statusText = Kit.Text(title, "small", C.muted)
 	statusText:SetPoint("LEFT", scanButton, "RIGHT", 8, 0)
-	statusText:SetPoint("RIGHT", goldText, "LEFT", -12, 0)
+	statusText:SetPoint("RIGHT", versionText, "LEFT", -12, 0)
 
 	-- The line the tabs sit on, and the body under it.
 	local tabLine = Kit.Rule(frame, C.line)

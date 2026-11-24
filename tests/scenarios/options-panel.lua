@@ -39,7 +39,7 @@ end
 local options = ButtonNamed("Options")
 options.scripts.OnClick(options)
 Tick(2)
-check("a player sees the everyday switches only", ids(), "closeAuctionHouse,itemTooltips,openWithAuctionHouse,railLarge,sellBagList,showResell")
+check("a player sees the everyday switches only", ids(), "buyOnePress,closeAuctionHouse,itemTooltips,openWithAuctionHouse,railLarge,sellBagList,showResell")
 -- The settings sit in a scroll, as tall as the rows showing, with a bar
 -- saying where the view is when they do not all fit.
 local scroll = Frames(function(frame)
@@ -59,7 +59,7 @@ local order = {}
 for index, setting in ipairs(ns.Settings) do
 	order[index] = setting.id
 end
-check("in the agreed order", table.concat(order, ","), "openWithAuctionHouse,closeAuctionHouse,itemTooltips,railLarge,showResell,sellBagList,logEvents,debug")
+check("in the agreed order", table.concat(order, ","), "openWithAuctionHouse,closeAuctionHouse,itemTooltips,railLarge,showResell,sellBagList,buyOnePress,logEvents,debug")
 
 -- The days of history kept is one of a few lengths.
 local function numberRow(id)
@@ -120,7 +120,7 @@ check("and back", ns.IsEnabled("itemTooltips"), true)
 -- Turning debug on brings the Debug section in, under its own heading.
 SlashCmdList.AUCTIONHERO("debug")
 Tick(2)
-check("debug on lists the debug switches too", ids(), "closeAuctionHouse,debug,itemTooltips,logEvents,openWithAuctionHouse,railLarge,sellBagList,showResell")
+check("debug on lists the debug switches too", ids(), "buyOnePress,closeAuctionHouse,debug,itemTooltips,logEvents,openWithAuctionHouse,railLarge,sellBagList,showResell")
 check("under a Debug heading", debugHeading(), 1)
 local debugRow
 for _, row in ipairs(rows()) do
@@ -131,7 +131,7 @@ end
 debugRow.scripts.OnClick(debugRow)
 check("switching debug off from there", ns.IsEnabled("debug"), false)
 check("puts the section away again", debugHeading(), 0)
-check("with its switches", ids(), "closeAuctionHouse,itemTooltips,openWithAuctionHouse,railLarge,sellBagList,showResell")
+check("with its switches", ids(), "buyOnePress,closeAuctionHouse,itemTooltips,openWithAuctionHouse,railLarge,sellBagList,showResell")
 
 -- A developer's account keeps the section, whether the Debug tab is on or off.
 SlashCmdList.AUCTIONHERO("dev")

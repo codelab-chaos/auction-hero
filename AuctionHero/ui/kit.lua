@@ -859,6 +859,35 @@ function Kit.CopyBox(parent)
 	return cover
 end
 
+-- ========= Coin drip =======================================================
+-- A few gold coins dropping in a small box (ns.CoinDrip), moving only while
+-- shown. Used where something is being fetched.
+function Kit.CoinDrip(parent)
+	local rule = ns.CoinDrip
+	local drip = CreateFrame("Frame", nil, parent)
+	drip:SetSize(rule.width, rule.height)
+	drip:SetClipsChildren(true)
+	drip.coins = {}
+	for index = 1, rule.count do
+		local coin = drip:CreateTexture(nil, "ARTWORK")
+		coin:SetTexture(rule.icon)
+		coin:SetSize(rule.size, rule.size)
+		drip.coins[index] = coin
+	end
+	local function Place()
+		local now = GetTime()
+		for index, coin in ipairs(drip.coins) do
+			local left, top, bright = ns.CoinMotion.At(rule, index, now)
+			coin:ClearAllPoints()
+			coin:SetPoint("TOPLEFT", drip, "TOPLEFT", left, -top)
+			coin:SetAlpha(bright)
+		end
+	end
+	drip:SetScript("OnUpdate", Place)
+	Place()
+	return drip
+end
+
 -- ========= List ============================================================
 -- A table with a header and scrolling rows.
 --
@@ -884,6 +913,8 @@ end
 --                 meter(row) -> reading, pips,    draw a meter instead of text
 --                 badge(row) -> string | nil,     draw a tinted badge instead
 --                 badgeColor(row) -> color,       its color (green unless given)
+--                 drip(row) -> boolean,           a coin drip in place of the text while true
+--                                                 (something is being fetched for the row)
 --                 tip(row) -> lines | nil }       a tooltip while the mouse is over this
 --                                                 column's cell, in place of the row's
 --   rowHeight, empty (text when there are no rows), gap (between columns, 8)
@@ -1269,6 +1300,10 @@ function Kit.List(parent, options)
 		if column.icon then
 			cell.icon = Kit.Icon(row, rowHeight - 7, column.iconEdge and 2 or 1)
 		end
+		if column.drip then
+			cell.drip = Kit.CoinDrip(row)
+			cell.drip:Hide()
+		end
 		if column.meter then
 			cell.meter = Kit.Meter(row, column.pips or 5)
 		end
@@ -1319,6 +1354,16 @@ function Kit.List(parent, options)
 			cell.text:SetPoint("LEFT", x, 0)
 			cell.text:SetWidth(math.max(1, w))
 			cell.text:SetText(column.text and column.text(data) or "")
+			if cell.drip then
+				-- Being fetched: coins drop where the text would be.
+				local dripping = visible and column.drip(data) == true
+				cell.drip:SetShown(dripping)
+				if dripping then
+					cell.drip:ClearAllPoints()
+					cell.drip:SetPoint("CENTER", row, "LEFT", x + w / 2, 0)
+					cell.text:SetText("")
+				end
+			end
 			cell.text:SetTextColor(unpack(column.color and column.color(data) or C.text))
 			if cell.meter then
 				cell.meter:SetShown(visible)

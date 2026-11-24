@@ -13,6 +13,13 @@ release notes.
 - **Ledger:** Last trade shows how long ago, such as 45m, 5h or 3d, so it is easy to compare and sort. Hover it for the date.
 - **No memory figure:** the Progress tab and Options no longer show memory used. The game's number counts memory not yet freed and read far too high right after a scan.
 
+### Improved
+
+- **Buying asks you to confirm** every purchase. To buy gear in one press when the price has not changed, turn it on in Options. A changed price always asks.
+- **Coins drop** on a Buy row while its price is being checked live.
+- **The version** shows in the title bar, beside your gold.
+- **Craft tab:** shorter names: Worth it, Level Up, Sell raw and Can Make.
+
 ## 0.1.7 - 2026-11-23
 
 ### Fixed
