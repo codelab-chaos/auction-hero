@@ -322,7 +322,7 @@ end
 local function IdleStatus()
 	local age, snapshot = ScanAge()
 	if not snapshot then
-		return L.WIN_NEEDS_SCAN
+		return ns.savedLost and (ns.savedProblem == "trades" and L.WIN_SAVED_LOST_BEFORE or L.WIN_SAVED_LOST) or L.WIN_NEEDS_SCAN
 	end
 	local scans = ns.History:ScanCount()
 	local text

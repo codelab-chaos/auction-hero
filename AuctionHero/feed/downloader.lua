@@ -75,7 +75,7 @@ function Downloader:Start(sourceId)
 			time = GetServerTime(),
 			elapsed = GetTime() - startedAt,
 			count = info.count or #rows, -- auctions, however many rows they are kept as
-			place = ("%s / %s"):format(GetRealmName() or "?", UnitFactionGroup("player") or "?"),
+			place = ns.Place:Current(),
 			build = BuildInfoText(),
 			returns = info.returns,
 			incomplete = info.incomplete or 0,

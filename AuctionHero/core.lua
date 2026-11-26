@@ -216,10 +216,84 @@ function ns.SetEnabled(id, value)
 	return true
 end
 
+-- ========= Saved data, in and out ===========================================
+-- The large tables are saved packed (saved.lua, ns.SavedRule). They are
+-- unpacked before anything reads them, and packed again when the game is
+-- about to write them: on logout, exit and /reload.
+local function OpenSaved()
+	local failed = ns.Saved.Open(ns.db, ns.SavedRule.packed)
+	local empty = true
+	for _, snapshot in pairs(ns.db.snapshots or {}) do
+		empty = empty and next(snapshot.rows or {}) == nil
+	end
+	for _, market in pairs(ns.db.historyByMarket or {}) do
+		empty = empty and next(market.items or {}) == nil
+	end
+	local trades = type(ns.charDb.ledger) == "table" and next(ns.charDb.ledger) ~= nil
+	local problem = ns.Saved.Problem(ns.db, ns.charDb, failed, empty, trades)
+	-- Scans that did not come back stay lost until there is a scan again,
+	-- however many times the game is loaded in between.
+	if not empty then
+		ns.db.savedLost = nil
+	elseif problem then
+		ns.db.savedLost = problem
+	end
+	ns.savedProblem = problem or ns.db.savedLost
+	ns.savedLost = ns.savedProblem == "unpack" or (empty and ns.savedProblem ~= nil)
+	ns.savedFailed = failed
+end
+
+local function CloseSaved()
+	local rule = ns.SavedRule
+	local packed, problem = pcall(ns.Saved.Close, ns.db, rule.packed)
+	ns.db.savedProblem = not packed and tostring(problem) or nil
+	-- Packed or not, what is written has to fit.
+	local counted, count, dropped = pcall(ns.Saved.Fit, ns.db, rule)
+	ns.db.savedCount = counted and count or nil
+	if counted and #dropped > 0 then
+		ns.db.savedDropped = dropped
+	end
+	ns.Saved.Stamp(ns.db, ns.charDb)
+end
+
+-- Said once the player can read it: that the addon loaded and which version,
+-- then what went wrong with the saved data, if anything did.
+local function TellSaved()
+	ns.Print(ns.L.LOADED:format(ns.AddonVersion()))
+	if ns.savedProblem then
+		ns.Print(ns.L["SAVED_PROBLEM_" .. ns.savedProblem])
+		ns.EventLog:Note("saved data arrived wrong", ns.savedProblem)
+		for _, failure in ipairs(ns.savedFailed or {}) do
+			ns.EventLog:Note("saved data did not unpack", failure.path, failure.problem)
+		end
+	end
+	if ns.db.savedProblem then
+		ns.Print(ns.L.SAVED_NOT_PACKED)
+		ns.EventLog:Note("saved data was not packed", ns.db.savedProblem)
+		ns.db.savedProblem = nil
+	end
+	if ns.db.savedDropped then
+		local names = {}
+		for index, id in ipairs(ns.db.savedDropped) do
+			names[index] = ns.L["SAVED_DROP_" .. id] or id
+		end
+		ns.Print(ns.L.SAVED_DROPPED:format(table.concat(names, ", ")))
+		ns.db.savedDropped = nil
+	end
+end
+
+Bus:On("SNAPSHOT_CHANGED", function()
+	if ns.Store and ns.Store:GetSnapshot() then
+		ns.savedLost = false
+		ns.db.savedLost = nil
+	end
+end)
+
 -- ========= Startup ==========================================================
 local frame = CreateFrame("Frame")
 frame:RegisterEvent("ADDON_LOADED")
 frame:RegisterEvent("PLAYER_LOGIN")
+frame:RegisterEvent("PLAYER_LOGOUT")
 frame:RegisterEvent("AUCTION_HOUSE_SHOW")
 frame:RegisterEvent("AUCTION_HOUSE_CLOSED")
 frame:SetScript("OnEvent", function(_, event, arg1)
@@ -236,9 +310,13 @@ frame:SetScript("OnEvent", function(_, event, arg1)
 		ApplyDefaults(AuctionHeroCharDB, CHARACTER_DEFAULTS)
 		ns.db = AuctionHeroDB
 		ns.charDb = AuctionHeroCharDB
+		OpenSaved()
 		Bus:Fire("INIT")
 	elseif event == "PLAYER_LOGIN" then
 		Bus:Fire("READY")
+		C_Timer.After(ns.SavedRule.tellSeconds, TellSaved)
+	elseif event == "PLAYER_LOGOUT" then
+		CloseSaved()
 	elseif event == "AUCTION_HOUSE_SHOW" then
 		ns.auctionHouseOpen = true
 		Bus:Fire("AH_OPENED")

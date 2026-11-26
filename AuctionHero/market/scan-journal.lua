@@ -251,19 +251,8 @@ end)
 -- ========= Keeping it in bounds =============================================
 -- Drops changes older than the days kept, and the variants nothing points to
 -- any more. The oldest go first, so the chain back from the saved scan holds.
-function ScanJournal:Trim(now)
-	local journal = ns.db.scanJournal
-	if not journal then
-		return
-	end
-	local oldest = now - self:Days() * SECONDS_PER_DAY
-	local first = 1
-	while journal.deltas[first] and journal.deltas[first].time < oldest do
-		first = first + 1
-	end
-	if first == 1 then
-		return
-	end
+-- Keeps the changes from `first` on, and the variants they point to.
+local function KeepFrom(journal, first)
 	local kept = {}
 	for index = first, #journal.deltas do
 		kept[#kept + 1] = journal.deltas[index]
@@ -285,6 +274,46 @@ function ScanJournal:Trim(now)
 	journal.deltas, journal.variants = kept, variants
 	byIdentity = nil
 end
+
+function ScanJournal:Trim(now)
+	local journal = ns.db.scanJournal
+	if not journal then
+		return
+	end
+	local oldest = now - self:Days() * SECONDS_PER_DAY
+	local first = 1
+	while journal.deltas[first] and journal.deltas[first].time < oldest do
+		first = first + 1
+	end
+	if first > 1 then
+		KeepFrom(journal, first)
+	end
+end
+
+-- When the saved data is too much to save (ns.SavedRule): the older half of
+-- the changes goes, and with the last of them the journal itself.
+ns.Saved.purgers.journal = function(db)
+	local journal = db.scanJournal
+	if not journal then
+		return false
+	end
+	local count = #(journal.deltas or {})
+	if count <= 1 then
+		db.scanJournal = nil
+		byIdentity = nil
+		return true
+	end
+	KeepFrom(journal, math.floor(count / 2) + 1)
+	return true
+end
+
+-- The market was kept under another name: its journal is this one's.
+Bus:On("PLACE_RENAMED", function(from, to)
+	local journal = ns.db.scanJournal
+	if journal and journal.place == from then
+		journal.place = to
+	end
+end)
 
 -- ========= Reading it back ==================================================
 -- How many changes are kept (scans, and deltas counting live checks), how far

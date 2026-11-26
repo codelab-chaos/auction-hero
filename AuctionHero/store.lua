@@ -158,6 +158,15 @@ Bus:On("INIT", function()
 	activeId = snapshots[db.active] and db.active or Newest()
 end)
 
+-- The market was kept under another name: its scans are this one's.
+Bus:On("PLACE_RENAMED", function(from, to)
+	for _, snapshot in pairs(snapshots) do
+		if snapshot.meta.place == from then
+			snapshot.meta.place = to
+		end
+	end
+end)
+
 Bus:On("READY", function()
 	if activeId then
 		Bus:Fire("SNAPSHOT_CHANGED")

@@ -101,6 +101,15 @@ function EventLog:Clear()
 	Bus:Fire("LOG_ADDED")
 end
 
+-- When the saved data is too much to save (ns.SavedRule), the log goes first.
+ns.Saved.purgers.log = function(db)
+	if not db.log or #db.log == 0 then
+		return false
+	end
+	db.log = {}
+	return true
+end
+
 local frame = CreateFrame("Frame")
 frame:SetScript("OnEvent", function(_, event, ...)
 	Record(event, ...)

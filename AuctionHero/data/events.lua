@@ -122,6 +122,7 @@ ns.DataEvents = {
 	GEAR_CHANGED = "gear",
 	BAGS_CHANGED = "bags",
 	INCOMING_CHANGED = "incoming",
+	PLACE_RENAMED = "market",
 	OWNED_CHANGED = "owned",
 	CANCEL_CHANGED = "owned",
 	LEDGER_CHANGED = "ledger",

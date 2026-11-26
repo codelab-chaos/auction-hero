@@ -15,6 +15,8 @@ core.lua
 versions.lua
 age.lua
 jobs.lua
+pack.lua
+saved.lua
 locales\en-us.lua
 data\settings.lua
 data\schemas.lua
@@ -33,15 +35,18 @@ data\gear.lua
 data\scan-shield.lua
 data\rewards.lua
 data\tracking.lua
+data\saved.lua
 feed\links.lua
 feed\item-names.lua
 feed\replicate.lua
 feed\browse.lua
 feed\downloader.lua
 feed\event-log.lua
+market\place.lua
 store.lua
 activity.lua
 market\market.lua
+market\history-merge.lua
 market\history.lua
 market\scan-journal.lua
 market\sale-odds.lua

@@ -10,7 +10,7 @@ ns.History = History
 local SECONDS_PER_DAY = 86400
 
 local function Scope()
-	return (GetRealmName() or "?") .. " / " .. (UnitFactionGroup("player") or "?")
+	return ns.Place:Current()
 end
 local function Store(scope)
 	scope = scope or Scope()
@@ -399,6 +399,60 @@ end
 Bus:On("READY", function()
 	History:ClearOldTurnover()
 end)
+
+-- The market was kept under another name: its history is this one's.
+Bus:On("PLACE_RENAMED", function(from, to)
+	local stores = ns.db.historyByMarket
+	if not stores[from] or from == to then
+		return
+	end
+	stores[to] = ns.HistoryMerge.Markets(stores[to] or { items = {}, folded = {}, scans = 0 }, stores[from])
+	stores[from] = nil
+	Bus:Fire("HISTORY_CHANGED")
+end)
+
+-- When the saved data is too much to save (ns.SavedRule): the markets this
+-- character is not in go first, the one scanned longest ago before the rest.
+ns.Saved.purgers.otherMarkets = function(db)
+	local current = Scope()
+	local oldest, oldestTime
+	for place, store in pairs(db.historyByMarket or {}) do
+		if place ~= current then
+			local last = 0
+			for time in pairs(store.folded or {}) do
+				last = math.max(last, time)
+			end
+			if not oldest or last < oldestTime then
+				oldest, oldestTime = place, last
+			end
+		end
+	end
+	if not oldest then
+		return false
+	end
+	db.historyByMarket[oldest] = nil
+	return true
+end
+
+-- Then this market's own, the half of its items not seen for longest.
+ns.Saved.purgers.history = function(db)
+	local store = db.historyByMarket and db.historyByMarket[Scope()]
+	local days = {}
+	for _, record in pairs(store and store.items or {}) do
+		days[#days + 1] = record.l or 0
+	end
+	if #days == 0 then
+		return false
+	end
+	table.sort(days)
+	local cutoff = days[math.ceil(#days / 2)]
+	for key, record in pairs(store.items) do
+		if (record.l or 0) <= cutoff then
+			store.items[key] = nil
+		end
+	end
+	return true
+end
 
 function History:Clear()
 	ns.db.historyByMarket[Scope()] = { items = {}, folded = {}, scans = 0 }
