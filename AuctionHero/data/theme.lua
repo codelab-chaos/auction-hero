@@ -54,6 +54,7 @@ ns.Theme = {
 
 	rowHeight = 25, -- list rows
 	headerHeight = 22, -- list headers
+	fadedIconAlpha = 0.6, -- an icon for something not at hand, grayed as well
 	controlHeight = 24, -- buttons and inputs
 	tile = 26, -- rail tiles
 	tileLargeScale = 1.25, -- how much bigger they get when the rail is widened

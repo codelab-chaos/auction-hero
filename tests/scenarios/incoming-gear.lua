@@ -60,15 +60,48 @@ end
 MOCK_ITEM_CLASS[2003] = { 7, 0 }
 check("a trade good is not gear", ns.Incoming:Add({ name = "Not gear", itemID = 2003, amount = 5 }), nil)
 
--- The list marks gear for that slot, and with nothing picked, the panel names
--- everything on its way.
-local function shown(pattern)
-	return Frames(function(frame)
-		local text = type(frame.text) == "table" and frame.text.text or frame.text
-		return type(text) == "string" and text:find(pattern, 1, true) ~= nil
-	end)[1]
+-- The list shows what was bought beside gear for that slot, grayed, and
+-- hovering it compares the two.
+local function incomingCell(key)
+	local row = itemRow(key)
+	for index, cell in pairs(row.cells) do
+		if cell.icon and cell.icon.art.desaturated then
+			return row, cell.icon
+		end
+	end
+	return row
 end
-checkTrue("gear for the slot is marked in the list", shown(ns.IncomingRule.icon) ~= nil)
+local BESIDE
+ShoppingTooltip1 = CreateFrame("GameTooltip")
+rawset(ShoppingTooltip1, "SetHyperlink", function(_, link) BESIDE = { "LINK " .. link } end)
+rawset(ShoppingTooltip1, "AddLine", function(_, text) BESIDE[#BESIDE + 1] = text end)
+rawset(ShoppingTooltip1, "Hide", function() BESIDE = nil end)
+if other then
+	local row, icon = incomingCell(other.key)
+	checkTrue("gear for the slot shows what was bought, grayed", icon ~= nil and icon.art.shown ~= false)
+	local seen
+	for x = 100, 900, 4 do
+		CURSOR_X = x
+		row.scripts.OnEnter(row)
+		if BESIDE then
+			seen = { tip = TIP, beside = BESIDE }
+			break
+		end
+		row.scripts.OnLeave(row)
+	end
+	CURSOR_X = nil
+	checkTrue("hovering it compares the two", seen ~= nil)
+	if seen then
+		check("the gear in the row", seen.tip[1], "LINK " .. (other.link or ("item:" .. other.itemID)))
+		check("beside what was bought", seen.beside[1], "LINK " .. (tunic.link or ("item:" .. tunic.itemID)))
+		checkMatch("with what it cost", seen.beside[2] or "", "^In your mail. Paid ")
+		row.scripts.OnLeave(row)
+		check("leaving puts both away", BESIDE, nil)
+	end
+end
+local _, own = incomingCell(tunic.key)
+checkTrue("the bought gear's own row shows it too", own ~= nil)
+ShoppingTooltip1 = nil
 ns.Window:RefreshActive()
 checkTrue("it is kept with the character, through a reload", ns.charDb.incoming[1] and ns.charDb.incoming[1].name == "Tunic of the Bear")
 

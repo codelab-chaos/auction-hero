@@ -10,7 +10,8 @@
 -- (inventory\gear.lua).
 --
 -- An entry: name, itemID, equipLoc, amount (copper paid), time, had (how many
--- the bags held when it was bought)
+-- the bags held when it was bought), and once the scan has named them, link
+-- (the exact variant) and icon
 local _, ns = ...
 local Bus = ns.Bus
 
@@ -60,9 +61,43 @@ function Incoming:Add(entry)
 		time = entry.time or GetServerTime(),
 		had = InBags(entry.itemID),
 	}
+	self:Link(incoming)
+	self:Icon(incoming)
 	self.entries[#self.entries + 1] = incoming
 	Bus:Fire("INCOMING_CHANGED", incoming)
 	return incoming
+end
+
+-- What the scan lists under an entry's id and name: the exact variant, with
+-- its link and icon. nil when it is in no scan at hand.
+local function Listed(entry)
+	local market = ns.Analysis and ns.Analysis.market
+	return market and market.byKey[tostring(entry.itemID) .. ":" .. tostring(entry.name)]
+end
+
+-- The link to show an entry by, and whether it names the exact variant
+-- bought ("of the Bear", not the plain tunic). Kept once it is exact.
+function Incoming:Link(entry)
+	if not entry.link then
+		local listed = Listed(entry)
+		entry.link = listed and listed.link or nil
+	end
+	if entry.link then
+		return entry.link, true
+	end
+	return "item:" .. entry.itemID, false
+end
+
+function Incoming:Icon(entry)
+	if not entry.icon then
+		local listed = Listed(entry)
+		entry.icon = listed and listed.icon or nil
+	end
+	if not entry.icon and C_Item and C_Item.GetItemInfoInstant then
+		local ok, _, _, _, _, icon = pcall(C_Item.GetItemInfoInstant, entry.itemID)
+		entry.icon = ok and icon or nil
+	end
+	return entry.icon
 end
 
 -- Drops what has reached the bags, and what the mail would have returned.

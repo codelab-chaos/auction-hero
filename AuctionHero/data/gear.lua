@@ -129,9 +129,11 @@ ns.GearCopperPerGold = 10000
 ns.BagGainSortOffset = 100000
 
 -- Gear bought and still in the mail (inventory\incoming.lua). Mail is
--- returned after 30 days, so nothing is incoming for longer. The icon marks
--- gear in the Buy list for a slot with something incoming.
+-- returned after 30 days, so nothing is incoming for longer. The icon heads
+-- the Buy list's column for it, where gear for a slot with something
+-- incoming shows what was bought, iconSize wide.
 ns.IncomingRule = {
 	keepDays = 30,
 	icon = "|TInterface\\Icons\\INV_Letter_15:14:14|t",
+	iconSize = 16,
 }

@@ -327,6 +327,11 @@ function Kit.Icon(parent, size, edge)
 	function icon:SetEdge(color)
 		self.back:SetColorTexture(unpack(color or C.black))
 	end
+	-- Grayed and dimmed: the thing is known of, not at hand.
+	function icon:SetFaded(faded)
+		self.art:SetDesaturated(faded == true)
+		self.art:SetAlpha(faded and Theme.fadedIconAlpha or 1)
+	end
 	return icon
 end
 
@@ -909,6 +914,9 @@ end
 --                                                 (centered when the column has
 --                                                 no text and align = "CENTER")
 --                 iconEdge(row) -> color | nil,   a 2px frame around it
+--                 iconSize = number,              its size, the row's height less 7 unless given
+--                 iconFaded(row) -> boolean,      gray and dim it
+--                 headerTip = lines,              a tooltip on the heading
 --                 meter(row) -> reading, pips,    draw a meter instead of text
 --                 badge(row) -> string | nil,     draw a tinted badge instead
 --                 badgeColor(row) -> color,       its color (green unless given)
@@ -919,7 +927,10 @@ end
 --                 resizable = false,              no grip (fixed columns that do not fit their
 --                                                 text are not resizable either)
 --                 tip(row) -> lines | nil }       a tooltip while the mouse is over this
---                                                 column's cell, in place of the row's
+--                                                 column's cell, in place of the row's.
+--                                                 Or { link, lines, compare = { link, lines } }:
+--                                                 that item's tooltip with the lines under
+--                                                 it, and a second item beside it
 --   rowHeight, empty (text when there are no rows), gap (between columns, 8)
 --   onClick(row), isSelected(row), tip(row) -> lines, link(row) -> item link
 --   onSort(columnId)
@@ -1028,6 +1039,10 @@ function Kit.List(parent, options)
 					if badge ~= nil and badge ~= "" then
 						hasValue = true
 						widest = math.max(widest, TextWidth(badge, true) + 8)
+					end
+					-- A column of icons alone is blank when no row has one.
+					if not hasValue and column.icon and not column.text and column.icon(row) ~= nil then
+						hasValue = true
 					end
 				end
 				fitted[column.id] = column.fit and widest or nil
@@ -1244,6 +1259,9 @@ function Kit.List(parent, options)
 						options.onSort(column.id)
 					end
 				end)
+				if column.headerTip then
+					Kit.Tip(cell, column.headerTip)
+				end
 				headers[index] = cell
 			end
 			cell:SetShown(not Out(column))
@@ -1259,6 +1277,40 @@ function Kit.List(parent, options)
 			-- with the values underneath in number columns.
 			cell.label:SetText(arrow .. (column.label or ""))
 		end
+	end
+
+	-- The game's second tooltip, the one it compares gear in.
+	local function HideTips()
+		GameTooltip:Hide()
+		if ShoppingTooltip1 then
+			ShoppingTooltip1:Hide()
+		end
+	end
+	local function AddLines(tooltip, lines)
+		for _, line in ipairs(lines or {}) do
+			tooltip:AddLine(line, 0.95, 0.91, 0.84, true)
+		end
+	end
+	-- An item's own tooltip with lines under it, and another item beside it
+	-- when tip.compare names one. False when the game cannot show the item.
+	local function ShowItemTip(owner, tip)
+		GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+		if not pcall(GameTooltip.SetHyperlink, GameTooltip, tip.link) then
+			return false
+		end
+		AddLines(GameTooltip, tip.lines)
+		GameTooltip:Show()
+		local other, beside = tip.compare, ShoppingTooltip1
+		if other and beside then
+			beside:SetOwner(GameTooltip, "ANCHOR_NONE")
+			beside:ClearAllPoints()
+			beside:SetPoint("TOPLEFT", GameTooltip, "TOPRIGHT", 0, 0)
+			if pcall(beside.SetHyperlink, beside, other.link) then
+				AddLines(beside, other.lines)
+				beside:Show()
+			end
+		end
+		return true
 	end
 
 	local function BuildRow(row)
@@ -1281,8 +1333,14 @@ function Kit.List(parent, options)
 			end
 		end
 		local function ShowTip(self, column)
-			GameTooltip:Hide()
+			HideTips()
 			local lines = column and column.tip(self.data)
+			if lines and lines.link then
+				if ShowItemTip(self, lines) then
+					return
+				end
+				lines = nil
+			end
 			if lines then
 				GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
 				GameTooltip:SetText(lines[1], 1, 0.82, 0)
@@ -1327,7 +1385,7 @@ function Kit.List(parent, options)
 		row:SetScript("OnLeave", function(self)
 			self.hover:Hide()
 			self:SetScript("OnUpdate", nil)
-			GameTooltip:Hide()
+			HideTips()
 		end)
 		row:SetScript("OnMouseUp", function(self)
 			if options.onClick then
@@ -1340,7 +1398,7 @@ function Kit.List(parent, options)
 	local function BuildCell(row, column)
 		local cell = { text = Kit.Text(row, "normal", C.text, column.align) }
 		if column.icon then
-			cell.icon = Kit.Icon(row, rowHeight - 7, column.iconEdge and 2 or 1)
+			cell.icon = Kit.Icon(row, column.iconSize or rowHeight - 7, column.iconEdge and 2 or 1)
 		end
 		if column.drip then
 			cell.drip = Kit.CoinDrip(row)
@@ -1387,6 +1445,9 @@ function Kit.List(parent, options)
 				cell.icon:SetIcon(art)
 				if column.iconEdge then
 					cell.icon:SetEdge(column.iconEdge(data))
+				end
+				if column.iconFaded then
+					cell.icon:SetFaded(column.iconFaded(data) == true)
 				end
 				cell.icon:SetShown(visible and art ~= nil)
 				x = x + rowHeight - 1

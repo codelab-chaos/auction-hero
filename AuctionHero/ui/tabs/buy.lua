@@ -743,6 +743,50 @@ local function IncomingText(bought, now)
 	return L.BUY_INCOMING_ITEM:format(bought.name, ns.PlainMoney(bought.amount or 0), ns.Ago(math.max(0, now - bought.time)))
 end
 
+-- The newest purchase still in the mail for a list row's slot, or nil. Price
+-- rows under an item have none.
+local function IncomingFor(row)
+	if row.item or not row.equipLoc then
+		return nil
+	end
+	return ns.Incoming:ForSlot(row.equipLoc)[1]
+end
+
+-- How a row's gear measures against what was bought, in the Gain column's
+-- stat points. nil unless both are the exact variants and their stats read:
+-- no line beats a wrong one.
+local function IncomingGainLine(row, boughtLink, exact)
+	local mine = exact and row.link and ns.Gear:Score(row.link)
+	local theirs = mine and ns.Gear:Score(boughtLink)
+	if not theirs then
+		return nil
+	end
+	local gain = mine - theirs
+	if math.abs(gain) < 0.05 then
+		return L.BUY_INCOMING_EVEN
+	end
+	return (gain > 0 and L.BUY_INCOMING_OVER or L.BUY_INCOMING_UNDER):format(("%.1f"):format(math.abs(gain)))
+end
+
+-- The tooltip over a row's incoming icon: the row's item, with what was
+-- bought beside it. The bought item's own row shows it alone.
+local function IncomingTip(row)
+	local bought = IncomingFor(row)
+	if not bought then
+		return nil
+	end
+	local link, exact = ns.Incoming:Link(bought)
+	if bought.itemID == row.itemID and bought.name == row.name then
+		return { link = link, lines = { L.BUY_INCOMING_THIS } }
+	end
+	local paid = L.BUY_INCOMING_PAID:format(ns.PlainMoney(bought.amount or 0), ns.Ago(math.max(0, GetServerTime() - bought.time)))
+	return {
+		link = row.link or ("item:" .. row.itemID),
+		lines = { IncomingGainLine(row, link, exact) },
+		compare = { link = link, lines = { paid } },
+	}
+end
+
 -- With nothing picked: what to do, and the gear already on its way.
 local function PickPrompt()
 	local all = ns.Incoming:All()
@@ -1400,14 +1444,22 @@ local function Create(parent)
 				local gain = SORT_VALUES.gain(row)
 				return gain and ("+%.1f"):format(gain) or ""
 			end },
-			-- A letter beside gear for a slot you already bought for, still in
-			-- the mail. The column only shows while something is incoming.
-			{ id = "incoming", label = ns.IncomingRule.icon, width = 18, fixed = true, hideEmpty = true, sortable = false, align = "CENTER", text = function(row)
-				if row.item or not row.equipLoc then
-					return ""
-				end
-				return #ns.Incoming:ForSlot(row.equipLoc) > 0 and ns.IncomingRule.icon or ""
-			end },
+			-- Beside gear for a slot you already bought for: what you bought,
+			-- grayed because it is still in the mail. Hovering compares the
+			-- two. The column only shows while something is incoming.
+			{
+				id = "incoming", label = ns.IncomingRule.icon, width = 18, fixed = true, hideEmpty = true, sortable = false, align = "CENTER",
+				headerTip = { L.BUY_COL_INCOMING, L.BUY_COL_INCOMING_TIP },
+				iconSize = ns.IncomingRule.iconSize,
+				icon = function(row)
+					local bought = IncomingFor(row)
+					return bought and ns.Incoming:Icon(bought) or nil
+				end,
+				iconFaded = function()
+					return true
+				end,
+				tip = IncomingTip,
+			},
 			-- Four characters (-99%) and a little padding, independent of the header.
 			{ id = "deal", label = L.BUY_COL_DEAL, labelColor = C.good, width = 32, fixed = true, align = "RIGHT", badge = function(row)
 				local deal = row.deal
