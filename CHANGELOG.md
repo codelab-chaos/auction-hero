@@ -4,7 +4,7 @@ Features and fixes shipped in each release. Copy a version's section into
 CurseForge's changelog field using Markdown formatting, and into the GitHub
 release notes.
 
-## 0.2.0 - Unreleased
+## 0.2.0 - 2026-11-25
 
 Your scans and price history are converted the first time you log out. Versions before 0.2.0 cannot read them afterwards, so going back starts with none.
 
