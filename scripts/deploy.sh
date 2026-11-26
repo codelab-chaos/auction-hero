@@ -40,10 +40,16 @@ addons_dir="${addons_dir%/}"
 [[ -d "$addons_dir" ]] || fail "target folder does not exist: $addons_dir"
 [[ -f "$SOURCE_DIR/$ADDON_NAME.toc" ]] || fail "addon not found at $SOURCE_DIR"
 
+# A version that is already released must not go into the game with changes
+# on top: what is on screen would name a build it is not. The next version's
+# section of the changelog reads "Unreleased" until its release.
+version="$(sed -n 's/^## Version: *//p' "$SOURCE_DIR/$ADDON_NAME.toc" | tr -d '\r')"
+grep -q "^## $version - Unreleased" "$REPO_ROOT/CHANGELOG.md" \
+	|| fail "version $version is released (CHANGELOG.md). Set the next version in $ADDON_NAME.toc before deploying"
+
 # --delete only removes stale files inside the addon's own folder.
 # Saved variables live in the WTF folder and are never touched.
 rsync "${rsync_flags[@]}" "$SOURCE_DIR/" "$addons_dir/$ADDON_NAME/"
 
-version="$(sed -n 's/^## Version: *//p' "$SOURCE_DIR/$ADDON_NAME.toc" | tr -d '\r')"
 echo "deploy: $ADDON_NAME $version -> $addons_dir/$ADDON_NAME"
 echo "deploy: type /reload in game (restart the client if files were added or the TOC changed)"

@@ -4,15 +4,22 @@ Features and fixes shipped in each release. Copy a version's section into
 CurseForge's changelog field using Markdown formatting, and into the GitHub
 release notes.
 
-## 0.1.9 - Unreleased
+## 0.2.0 - Unreleased
+
+Your scans and price history are converted the first time you log out. Versions before 0.2.0 cannot read them afterwards, so going back starts with none.
 
 ### Fixed
 
 - **Sell tab:** an item nobody is selling right now gets its price from past scans, and says so, instead of "no price to go by".
+- **Saved data:** a busy auction house could grow the saved file past what the game can load, and Auction Hero then started with no scans or price history. Scans and history are now saved packed, so the file loads however much it holds.
+- **Price history:** a market is no longer kept twice when the game gives no realm name.
 
 ### Improved
 
 - **Sell tab:** the right panel shows the item's price history and your past sales under the listings, like the Buy tab.
+- **Saved data:** if saved scans ever fail to load, the window says so and how to keep the copy from before, instead of "No scan yet".
+- **Chat:** says which version loaded when you log in.
+- **Buy tab:** gear for a slot you already bought for shows the item you bought, grayed, in place of the letter. Hover it to compare the two. The column heading says what it is.
 
 ## 0.1.8 - 2026-11-23
 
