@@ -42,8 +42,11 @@ Tick(2)
 check("a player sees the everyday switches only", ids(), "buyOnePress,closeAuctionHouse,itemTooltips,openWithAuctionHouse,railLarge,sellBagList,showResell")
 -- The settings sit in a scroll, as tall as the rows showing, with a bar
 -- saying where the view is when they do not all fit.
+local row = Frames(function(frame)
+	return frame.setting ~= nil
+end)[1]
 local scroll = Frames(function(frame)
-	return frame.content ~= nil and frame.contentHeight ~= nil and frame.bar ~= nil
+	return frame.content ~= nil and frame.content == row.parentFrame and frame.bar ~= nil
 end)[1]
 checkTrue("the settings scroll", scroll ~= nil)
 checkTrue("as tall as the rows", scroll.contentHeight > 4 * 40)

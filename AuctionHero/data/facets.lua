@@ -157,3 +157,11 @@ ns.BuyToggles = {
 	{ id = "nearLevel", label = L.BUY_NEAR_LEVEL, tip = L.BUY_NEAR_LEVEL_TIP },
 	{ id = "dealsOnly", label = L.BUY_DEALS, tip = L.BUY_DEALS_TIP },
 }
+
+-- The price boxes between the search box and the quick toggles, left to
+-- right: the list keeps the items whose cheapest auction is no less than
+-- min and no more than max. An empty box is no limit.
+ns.BuyPrice = {
+	{ id = "min", label = L.BUY_PRICE_MIN, tip = L.BUY_PRICE_MIN_TIP },
+	{ id = "max", label = L.BUY_PRICE_MAX, tip = L.BUY_PRICE_MAX_TIP },
+}

@@ -23,6 +23,7 @@ local state = {
 	open = {}, -- facet id -> expanded
 	search = "",
 	toggles = {}, -- quick toggle id -> on
+	price = {}, -- "min" and "max" -> copper, see ns.BuyPrice
 	sort = { id = "units", descending = true },
 	selectedKey = nil,
 	wanted = 1,
@@ -36,7 +37,7 @@ local READS = { "market", "history", "gear", "bags", "incoming", "settings" }
 -- What the list of rows is built from: the same, and items a live check
 -- replaced. (Their new rows are all the column fit has to measure.)
 local LIST_READS = { "market", "history", "gear", "bags", "incoming", "settings", "patch" }
-local rail, sidebar, toolbar, list, order, prompt, searchBox
+local rail, sidebar, toolbar, list, order, orderView, prompt, searchBox
 local railView, railContent, railFades -- the rail scrolls when it is taller than the window
 local railScroll = 0
 local railTiles, sideTiles, sideRows, toggleButtons = {}, {}, {}, {}
@@ -136,9 +137,14 @@ local function FilteredItems()
 	local suggested = state.toggles.suggested and function(item)
 		return valueOf(item) or bagValueOf(item)
 	end
+	local low, high = state.price.min, state.price.max
+	local priced = (low or high) and function(item)
+		return ns.PriceText.Within(ns.Orders.CheapestAuction(item), low, high)
+	end
 	local rows = {}
 	for _, item in ipairs(listable) do
 		local keep = (search == "" or item.name:lower():find(search, 1, true) ~= nil)
+			and (not priced or priced(item))
 			and (not state.toggles.usableOnly or item.usable)
 			and (not state.toggles.dealsOnly or (item.deal ~= nil and item.deal >= dealFrom))
 			and (not state.toggles.affordableOnly or (ns.Orders.CheapestAuction(item) or math.huge) <= gold)
@@ -650,6 +656,7 @@ local function ListKey()
 		ns.VersionOf(LIST_READS), tostring(market), state.search, Sorted(state.selection), Sorted(state.toggles),
 		state.sort.id, tostring(state.sort.descending), tostring(state.openKey), tostring(state.selectedKey),
 		state.toggles.affordableOnly and GetMoney() or "",
+		tostring(state.price.min), tostring(state.price.max),
 	}, "|")
 end
 local builtKey, builtRows
@@ -823,6 +830,8 @@ end
 local DrawOrder
 local function PaintOrder()
 	stack:Paint(DrawOrder)
+	-- What does not fit the panel scrolls inside it.
+	orderView:SetContentHeight(stack.y + 8)
 end
 DrawOrder = function()
 	local item = market and state.selectedKey and market.byKey[state.selectedKey]
@@ -1334,7 +1343,10 @@ local function Create(parent)
 	Kit.Split(order, { id = "buy.order", edge = "LEFT", min = Theme.buy.order, max = Theme.buy.order + Theme.panelGrow, onChange = function()
 		ns.Window:RequestRefresh()
 	end })
-	BuildOrder(order)
+	orderView = Kit.Scroll(order, { bar = C.line })
+	orderView:SetPoint("TOPLEFT")
+	orderView:SetPoint("BOTTOMRIGHT")
+	BuildOrder(orderView.content)
 
 	-- The search box and the quick toggles share one row.
 	toolbar = CreateFrame("Frame", nil, parent)
@@ -1364,6 +1376,17 @@ local function Create(parent)
 		end
 		right = button
 		toggleButtons[toggle.id] = button
+	end
+	-- The price boxes sit between the search box and the toggles.
+	for index = #ns.BuyPrice, 1, -1 do
+		local limit = ns.BuyPrice[index]
+		local box = Kit.Input(toolbar, { width = Theme.buy.price, height = 26, placeholder = limit.label, onChange = function(text)
+			state.price[limit.id] = ns.PriceText.Parse(text, ns.PriceUnits)
+			PaintList()
+		end })
+		Kit.Tip(box, { limit.label, limit.tip, L.BUY_PRICE_HOW })
+		box:SetPoint("RIGHT", right, "LEFT", -5, 0)
+		right = box
 	end
 	searchBox = Kit.Input(toolbar, { height = 26, placeholder = L.BUY_SEARCH, onChange = function(text)
 		state.search = text
@@ -1474,6 +1497,10 @@ local function Create(parent)
 			end },
 		},
 		empty = L.BUY_NOTHING,
+		menu = function(row)
+			local item = row.point and row.item or row
+			return not row.more and ns.Window:ItemMenu(item.key) or nil
+		end,
 		onClick = function(row)
 			if row.more then
 				return

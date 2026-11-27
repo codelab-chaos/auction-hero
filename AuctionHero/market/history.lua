@@ -220,6 +220,7 @@ end
 -- The headline numbers for a run of points, or nil when there are none:
 --   usual (the newest median), lowest, highest,
 --   scans (how many points) and days (how many different days they fall on),
+--   most (the most for sale at any one point),
 --   change: percent the usual price moved from the first point to the last,
 --     counting only points with enough for sale (nil when fewer than two)
 function History:Summarize(points)
@@ -227,9 +228,10 @@ function History:Summarize(points)
 	if not first then
 		return nil
 	end
-	local lowest, highest = first.low, first.median
+	local lowest, highest, most = first.low, first.median, first.units
 	local days, lastDay = 0, nil
 	for _, point in ipairs(points) do
+		most = math.max(most, point.units)
 		lowest = math.min(lowest, point.low)
 		highest = math.max(highest, point.median)
 		if point.day ~= lastDay then
@@ -247,7 +249,7 @@ function History:Summarize(points)
 	if from and to ~= from and from.median > 0 then
 		change = math.floor((to.median - from.median) / from.median * 100 + 0.5)
 	end
-	return { usual = last.median, lowest = lowest, highest = highest, change = change, scans = #points, days = days }
+	return { usual = last.median, lowest = lowest, highest = highest, change = change, scans = #points, days = days, most = most }
 end
 
 -- A price seen outside a full scan (a live check of one item). It is not a

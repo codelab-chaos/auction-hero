@@ -2,7 +2,7 @@
 ## Title: Auction Hero
 ## Notes: Browse, price and trade auctions with scan history and a compact Buy, Sell and Resell interface.
 ## Author: Wizwonk
-## Version: 0.2.0
+## Version: 0.2.1
 ## AllowLoadGameType: forever
 ## ExcludeLoadGameType: standard, classic
 ## Category: Auction House
@@ -14,6 +14,7 @@
 core.lua
 versions.lua
 age.lua
+price-text.lua
 jobs.lua
 pack.lua
 saved.lua

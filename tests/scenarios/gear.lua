@@ -102,3 +102,38 @@ PLAYER.level = 12
 FireEvent("PLAYER_LEVEL_UP")
 Tick(5)
 check("at 12 nothing for sale needs a level near it", #rows(), 0)
+
+-- The price boxes: only what costs between them.
+ButtonNamed("Near level").scripts.OnClick(ButtonNamed("Near level"))
+local function PriceBox(label)
+	return Frames(function(frame)
+		return frame.placeholder ~= nil and frame.placeholder.text == label
+	end)[1]
+end
+local function TypePrice(label, text)
+	local box = PriceBox(label)
+	box:SetText(text)
+	box.scripts.OnTextChanged(box, true)
+	Tick(5)
+end
+local all = rows()
+local prices = {}
+for _, row in ipairs(all) do
+	prices[#prices + 1] = ns.Orders.CheapestAuction(row.data)
+end
+table.sort(prices)
+checkTrue("there is a spread of prices to cut", #prices > 2 and prices[1] < prices[#prices])
+local middle = prices[math.ceil(#prices / 2)]
+TypePrice("Max", middle .. "c")
+checkTrue("a most price cuts the list", #rows() > 0 and #rows() < #all)
+for _, row in ipairs(rows()) do
+	checkTrue("to what costs no more", ns.Orders.CheapestAuction(row.data) <= middle)
+end
+TypePrice("Min", middle .. "c")
+checkTrue("with a least price too, only that price is left", #rows() > 0)
+for _, row in ipairs(rows()) do
+	check("exactly", ns.Orders.CheapestAuction(row.data), middle)
+end
+TypePrice("Min", "")
+TypePrice("Max", "")
+check("emptied, the whole list is back", #rows(), #all)

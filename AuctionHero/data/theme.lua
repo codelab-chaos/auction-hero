@@ -47,7 +47,7 @@ ns.Theme = {
 	pad = 8, -- padding around a tab's body, and the gap between its columns
 
 	-- Column widths. The middle column of each tab takes what is left.
-	buy = { rail = 34, sidebar = 176, order = 250 },
+	buy = { rail = 34, sidebar = 176, order = 250, price = 46 },
 	sell = { bags = 200, competition = 230 },
 	resell = { plan = 290 },
 	history = { list = 280 },
@@ -157,6 +157,16 @@ ns.AgeSteps = {
 	{ under = 3600, unit = 60, suffix = "m" }, -- 1m to 59m
 	{ under = 48 * 3600, unit = 3600, suffix = "h" }, -- 1h to 47h
 	{ unit = 86400, suffix = "d" }, -- 2d on
+}
+
+-- A price typed as text (see price-text.lua): the coins, largest first, each
+-- with the letter that names it and what it is worth in copper. A number with
+-- no letter is the coin after the one before it ("1g 50" is 1g 50s), and
+-- the first coin when it stands alone ("5" is 5g).
+ns.PriceUnits = {
+	{ letter = "g", copper = 10000 },
+	{ letter = "s", copper = 100 },
+	{ letter = "c", copper = 1 },
 }
 
 -- The coin drip: a few gold coins dropping in a small box, the scan card's

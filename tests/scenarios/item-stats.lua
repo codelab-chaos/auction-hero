@@ -62,3 +62,10 @@ checkTrue("with when", record.lot ~= nil)
 record.h = "1794500000:150:120:9"
 check("an older point has no count", ns.History:Points(item.key)[1].lowUnits, nil)
 check("and keeps its numbers", ns.History:Points(item.key)[1].low, 120)
+
+-- The order panel scrolls: in a short window its lines stay inside it.
+local view = Frames(function(frame)
+	return frame.content ~= nil and frame.contentHeight ~= nil and frame.bar ~= nil
+end)[1]
+checkTrue("the order panel is a scroll", view ~= nil)
+checkTrue("as tall as everything stacked in it", view.contentHeight > 200)

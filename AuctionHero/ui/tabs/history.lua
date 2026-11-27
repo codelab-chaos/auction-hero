@@ -17,7 +17,7 @@ local state = {
 	sort = { id = "units", descending = true },
 }
 
-local list, detail, prompt, ranges
+local list, detail, prompt, ranges, searchBox, filters
 local parts = {}
 local stack
 
@@ -217,6 +217,10 @@ local function BuildDetail(parent)
 	local unitsLabel = Kit.Text(parts.unitsHead, "normal", C.accent)
 	unitsLabel:SetPoint("LEFT")
 	unitsLabel:SetText(L.HISTORY_FOR_SALE)
+	-- How often the scans found it, and the most they found at once. The
+	-- bars are not added up: one auction is counted by every scan it is in.
+	parts.seen = Kit.Text(parts.unitsHead, "small", C.muted, "RIGHT")
+	parts.seen:SetPoint("RIGHT")
 
 	parts.units = CreateFrame("Frame", nil, parent)
 	parts.units:SetHeight(84)
@@ -280,6 +284,13 @@ DrawDetail = function(rows)
 	stack:Add(parts.priceHead, 10)
 	stack:Add(parts.price, 2)
 	parts.priceChart:Draw(points, { lines = ns.HistorySeries })
+	local record, scans = ns.History:Get(item.key), ns.History:ScanCount() or 0
+	local seen = record and record.n or summary.scans
+	if seen <= scans then
+		parts.seen:SetText(L.HISTORY_SEEN_SCANS_OF:format(ns.Comma(seen), ns.Comma(scans), ns.Comma(summary.most)))
+	else
+		parts.seen:SetText(L.HISTORY_SEEN_SCANS:format(ns.Comma(seen), ns.Comma(summary.most)))
+	end
 	stack:Add(parts.unitsHead, 4)
 	stack:Add(parts.units, 2)
 	parts.unitsChart:Draw(points, { bars = ns.HistoryUnits })
@@ -310,6 +321,21 @@ local function Refresh()
 	PaintDetail(rows)
 end
 
+-- Opened on an item from another tab: the list narrows to it by name, so it
+-- is there to see, selected.
+local function Select(key)
+	local market = ns.Window:Market()
+	local item = market and market.byKey[key]
+	if not item then
+		return
+	end
+	state.selectedKey, state.search, state.filter = key, item.name, nil
+	if searchBox then
+		searchBox:SetValue(item.name)
+		filters:Refresh()
+	end
+end
+
 local function Create(parent)
 	local pad = Theme.pad
 	local side = Kit.Panel(parent)
@@ -320,14 +346,14 @@ local function Create(parent)
 		ns.Window:RefreshActive()
 	end })
 
-	local search = Kit.Input(side, { height = 26, placeholder = L.BUY_SEARCH, onChange = function(text)
+	searchBox = Kit.Input(side, { height = 26, placeholder = L.BUY_SEARCH, onChange = function(text)
 		state.search = text
 		PaintList()
 	end })
-	search:SetPoint("TOPLEFT", 8, -8)
-	search:SetPoint("TOPRIGHT", -8, -8)
+	searchBox:SetPoint("TOPLEFT", 8, -8)
+	searchBox:SetPoint("TOPRIGHT", -8, -8)
+	searchBox:SetValue(state.search)
 
-	local filters
 	filters = Kit.Choices(side, {
 		items = ns.HistoryFilters,
 		padding = 14,
@@ -340,7 +366,7 @@ local function Create(parent)
 			PaintList()
 		end,
 	})
-	filters:SetPoint("TOPLEFT", search, "BOTTOMLEFT", 0, -6)
+	filters:SetPoint("TOPLEFT", searchBox, "BOTTOMLEFT", 0, -6)
 
 	list = Kit.List(side, {
 		id = "history",
@@ -410,4 +436,4 @@ local function Create(parent)
 	return { Refresh = Refresh }
 end
 
-ns.Window:RegisterTab({ id = "history", label = L.TAB_HISTORY, order = 6, align = "right", Create = Create })
+ns.Window:RegisterTab({ id = "history", label = L.TAB_HISTORY, order = 6, align = "right", Create = Create, Select = Select })

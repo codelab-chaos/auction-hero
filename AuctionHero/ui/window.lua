@@ -284,6 +284,35 @@ local function ShowTab(id)
 	ns.Bus:Fire("TAB_SHOWN", chosen.id)
 end
 
+-- Opens a tab on one thing, such as the Graphs tab on an item picked on the
+-- Buy tab. The tab says how it takes the thing (Select, given to
+-- RegisterTab), so the tab asking knows nothing of the tab asked.
+function Window:OpenTab(id, subject)
+	for _, tab in ipairs(VisibleTabs()) do
+		if tab.id == id and Openable(tab) then
+			if tab.Select then
+				tab.Select(subject)
+			end
+			ShowTab(id)
+		end
+	end
+end
+
+-- The right click menu for an item (ns.ItemMenu), as entries for Kit.Menu.
+function Window:ItemMenu(key)
+	local entries = {}
+	for _, entry in ipairs(ns.ItemMenu) do
+		for _, tab in ipairs(VisibleTabs()) do
+			if tab.id == entry.tab and tab.id ~= ns.charDb.tab and Openable(tab) then
+				entries[#entries + 1] = { label = entry.label, onPick = function()
+					Window:OpenTab(entry.tab, key)
+				end }
+			end
+		end
+	end
+	return entries
+end
+
 -- ========= Scan status ======================================================
 local StatusText = {
 	waiting = function(state)

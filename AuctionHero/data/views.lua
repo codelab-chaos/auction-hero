@@ -100,6 +100,13 @@ ns.Views = {
 	},
 }
 
+-- What a right click on an item offers, top to bottom: each entry opens
+-- another tab on that item (the tab takes it with its Select). An entry for
+-- the tab the player is on, or one that cannot be opened now, is left out.
+ns.ItemMenu = {
+	{ label = L.MENU_GRAPH, tab = "history" },
+}
+
 ns.ViewById = {}
 for _, view in ipairs(ns.Views) do
 	ns.ViewById[view.id] = view

@@ -137,6 +137,75 @@ function Kit.Tip(frame, lines)
 	end)
 end
 
+-- ========= Menu ============================================================
+-- A short menu at the mouse, as a right click opens. entries: a list of
+-- { label, onPick }. One menu is shared. Picking an entry or clicking
+-- anywhere else closes it. Nothing opens for no entries.
+local menu
+function Kit.Menu(entries)
+	if not entries or #entries == 0 then
+		return
+	end
+	if not menu then
+		menu = CreateFrame("Frame", nil, UIParent)
+		menu:SetFrameStrata("FULLSCREEN_DIALOG")
+		menu:EnableMouse(true)
+		Kit.Fill(menu, C.panel)
+		Kit.Border(menu, C.inputBorder)
+		menu.rows = {}
+		-- A click that misses the menu lands here.
+		menu.away = CreateFrame("Button", nil, UIParent)
+		menu.away:SetFrameStrata("FULLSCREEN")
+		menu.away:SetAllPoints(UIParent)
+		menu.away:RegisterForClicks("AnyUp")
+		menu.away:SetScript("OnClick", function()
+			menu:Hide()
+		end)
+		menu:SetScript("OnHide", function()
+			menu.away:Hide()
+		end)
+	end
+	local height, width = Theme.controlHeight, 120
+	for index, entry in ipairs(entries) do
+		local row = menu.rows[index]
+		if not row then
+			row = CreateFrame("Button", nil, menu)
+			row:SetHeight(height)
+			row:SetPoint("TOPLEFT", 1, -1 - (index - 1) * height)
+			row:SetPoint("TOPRIGHT", -1, -1 - (index - 1) * height)
+			row.hover = Kit.Fill(row, C.rowHover, "BACKGROUND")
+			row.hover:Hide()
+			row.label = Kit.Text(row, "normal", C.text)
+			row.label:SetPoint("LEFT", 10, 0)
+			row:SetScript("OnEnter", function(self)
+				self.hover:Show()
+			end)
+			row:SetScript("OnLeave", function(self)
+				self.hover:Hide()
+			end)
+			row:SetScript("OnClick", function(self)
+				menu:Hide()
+				self.entry.onPick()
+			end)
+			menu.rows[index] = row
+		end
+		row.entry = entry
+		row.label:SetText(entry.label)
+		row:Show()
+		width = math.max(width, (row.label:GetStringWidth() or 0) + 20)
+	end
+	for index = #entries + 1, #menu.rows do
+		menu.rows[index]:Hide()
+	end
+	menu:SetSize(width + 2, #entries * height + 2)
+	local x, y = GetCursorPosition()
+	local scale = UIParent:GetEffectiveScale()
+	menu:ClearAllPoints()
+	menu:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", x / scale, y / scale)
+	menu.away:Show()
+	menu:Show()
+end
+
 -- ========= Buttons =========================================================
 -- Looks, as data: gradient, border and text color when idle and when active.
 local BUTTON_LOOKS = {
@@ -933,6 +1002,7 @@ end
 --                                                 it, and a second item beside it
 --   rowHeight, empty (text when there are no rows), gap (between columns, 8)
 --   onClick(row), isSelected(row), tip(row) -> lines, link(row) -> item link
+--   menu(row) -> entries for Kit.Menu, opened by a right click on the row
 --   onSort(columnId)
 -- Returns the frame with :SetRows(rows, keepScroll) and :SetSort(id, descending).
 function Kit.List(parent, options)
@@ -1387,7 +1457,11 @@ function Kit.List(parent, options)
 			self:SetScript("OnUpdate", nil)
 			HideTips()
 		end)
-		row:SetScript("OnMouseUp", function(self)
+		row:SetScript("OnMouseUp", function(self, button)
+			if button == "RightButton" and options.menu then
+				Kit.Menu(options.menu(self.data))
+				return
+			end
 			if options.onClick then
 				options.onClick(self.data)
 			end
