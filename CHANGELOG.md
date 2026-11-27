@@ -4,6 +4,18 @@ Features and fixes shipped in each release. Copy a version's section into
 CurseForge's changelog field using Markdown formatting, and into the GitHub
 release notes.
 
+## 0.2.1 - 2026-11-27
+
+### Improved
+
+- **Buy tab:** right-click an item and pick View graph to see its graph on the Graphs tab.
+- **Graphs:** says how many scans found the item, and the most for sale at once.
+- **Buy tab:** Min and Max price boxes beside the search box. Type 5g, 20s or 1g 50s to list only items in that range.
+
+### Fixed
+
+- **Buy tab:** in a short window, the right panel's lines ran out past the bottom of the window. The panel now scrolls.
+
 ## 0.2.0 - 2026-11-25
 
 Your scans and price history are converted the first time you log out. Versions before 0.2.0 cannot read them afterwards, so going back starts with none.
